@@ -1,37 +1,15 @@
 {
+  "name": "meta-command-center",
+  "version": "1.0.0",
   "scripts": {
-    "start": "node server.js",
-    "build": "vite build",
-    "dev": "concurrently \"npm start\" \"vite\"",
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "dependencies": {
-    "@socket.io/redis-adapter": "^8.3.0",
-    "axios": "^1.13.2",
-    "clsx": "^2.1.1",
-    "cors": "^2.8.5",
-    "dotenv": "^17.2.3",
-    "express": "^5.2.1",
-    "form-data": "^4.0.5",
-    "ioredis": "^5.9.0",
-    "jsonwebtoken": "^9.0.3",
-    "lucide-react": "^0.562.0",
-    "multer": "^2.0.2",
-    "pg": "^8.16.3",
-    "redis": "^5.10.0",
-    "socket.io": "^4.8.3",
-    "tailwind-merge": "^3.4.0"
+    "start": "concurrently \"npm run backend\" \"npm run frontend\"",
+    "backend": "cd backend && npm start",
+    "frontend": "cd frontend && npm run dev",
+    "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install",
+    "migrate": "node backend/scripts/migrate.js",
+    "build": "cd frontend && npm run build"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4.1.18",
-    "@vitejs/plugin-react": "^5.1.2",
-    "autoprefixer": "^10.4.23",
-    "concurrently": "^9.2.1",
-    "postcss": "^8.5.6",
-    "react": "^19.2.3",
-    "react-dom": "^19.2.3",
-    "socket.io-client": "^4.8.3",
-    "tailwindcss": "^4.1.18",
-    "vite": "^7.3.1"
+    "concurrently": "^9.2.1"
   }
 }

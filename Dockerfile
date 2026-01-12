@@ -2,25 +2,23 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Install dependencies
-COPY package*.json ./
+# 1. Build Frontend
+WORKDIR /app/frontend
+COPY frontend/package*.json ./
 RUN npm install
-
-# Copy source code
-COPY . .
-
-# Build frontend
+COPY frontend/ .
 RUN npm run build
+# Clean up frontend node_modules to keep image size down
+RUN rm -rf node_modules
 
-# Remove devDependencies to reduce image size
-RUN npm prune --production
+# 2. Setup Backend
+WORKDIR /app/backend
+COPY backend/package*.json ./
+RUN npm install --production
+COPY backend/ .
 
-# Expose port (DigitalOcean App Platform expects 8080 by default, but we use 3000. 
-# We can configure this in App Platform settings)
+# Expose port
 EXPOSE 3000
 
-# Set environment to production
-ENV NODE_ENV=production
-
-# Start server
+# Start the application
 CMD ["npm", "start"]
