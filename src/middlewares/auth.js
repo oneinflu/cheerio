@@ -18,7 +18,8 @@ const jwt = require('jsonwebtoken');
 const JWT_SECRET = process.env.JWT_SECRET || '';
 
 function requireAuth(req, res, next) {
-  if (process.env.NODE_ENV !== 'production') {
+  // Allow bypassing auth for demo/dev purposes if explicitly configured
+  if (process.env.NODE_ENV !== 'production' || process.env.DISABLE_AUTH === 'true') {
     req.user = {
       id: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
       role: 'admin',

@@ -1,6 +1,7 @@
 {
   "scripts": {
     "start": "node server.js",
+    "build": "vite build",
     "dev": "concurrently \"npm start\" \"vite\"",
     "test": "echo \"Error: no test specified\" && exit 1"
   },

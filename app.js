@@ -14,6 +14,7 @@
  */
 
 const express = require('express');
+const path = require('path');
 const whatsappWebhookRouter = require('./src/webhooks/whatsapp');
 const whatsappOutboundRouter = require('./src/routes/whatsappOutbound');
 const conversationsRouter = require('./src/routes/conversations');
@@ -92,6 +93,19 @@ function createApp() {
   app.use('/api', messagesRouter);
   app.use('/api/templates', templatesRouter);
   app.use('/api/media', mediaRouter);
+
+  /**
+   * Serve static assets in production.
+   * Vite builds to the 'dist' folder.
+   */
+  if (NODE_ENV === 'production') {
+    app.use(express.static(path.join(__dirname, 'dist')));
+
+    // Handle SPA routing: serve index.html for any unknown non-API routes
+    app.get('*', (req, res) => {
+      res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+    });
+  }
 
   /**
    * 404 handler
