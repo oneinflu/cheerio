@@ -102,8 +102,8 @@ function createApp() {
     app.use(express.static(path.join(__dirname, '../frontend/dist')));
 
     // Handle SPA routing: serve index.html for any unknown non-API routes
-    // Use named wildcard parameter for Express 5 compatibility
-    app.get('/:splat(.*)', (req, res) => {
+    // Use RegExp to match all paths, compatible with Express 5
+    app.get(/.*/, (req, res) => {
       res.sendFile(path.join(__dirname, '../frontend/dist', 'index.html'));
     });
   }
