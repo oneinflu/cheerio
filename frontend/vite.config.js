@@ -14,12 +14,13 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://localhost:3000',
+        target: 'https://seal-app-6t78w.ondigitalocean.app',
         changeOrigin: true,
       },
       '/socket.io': {
-        target: 'http://localhost:3000',
+        target: 'https://seal-app-6t78w.ondigitalocean.app',
         ws: true,
+        changeOrigin: true,
       },
     },
   },
