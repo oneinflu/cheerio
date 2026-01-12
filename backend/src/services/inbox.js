@@ -60,7 +60,10 @@ async function listConversations(teamId, userId, filter = 'open') {
     ORDER BY is_pinned DESC, c.last_message_at DESC NULLS LAST, c.created_at DESC
     `,
     params
-  );
+  ).catch(err => {
+    console.error('Error executing listConversations query:', err);
+    throw err;
+  });
 
   return res.rows.map((r) => ({
     id: r.id,
