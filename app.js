@@ -102,7 +102,8 @@ function createApp() {
     app.use(express.static(path.join(__dirname, 'dist')));
 
     // Handle SPA routing: serve index.html for any unknown non-API routes
-    app.get('*', (req, res) => {
+    // Use regular expression to match all routes
+    app.get('(.*)', (req, res) => {
       res.sendFile(path.join(__dirname, 'dist', 'index.html'));
     });
   }
