@@ -4,42 +4,62 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Badge } from './ui/Badge';
-import { Plus, Search, Smartphone, Image as ImageIcon, CheckCircle, Clock, AlertCircle, ChevronRight, FileText, MoreVertical } from 'lucide-react';
+import { Plus, Search, Smartphone, Image as ImageIcon, CheckCircle, Clock, AlertCircle, ChevronRight, FileText, MoreVertical, RefreshCw, Send } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { getTemplates, createTemplate, sendTestTemplate } from '../api';
 
 export default function TemplatesPage() {
-  const [selectedId, setSelectedId] = useState('t1');
+  const [selectedId, setSelectedId] = useState(null);
   const [isCreating, setIsCreating] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState('ALL');
+  const [loading, setLoading] = useState(false);
 
-  // Mock Data
-  const [templates, setTemplates] = useState([
-    {
-      id: 't1',
-      name: 'proposal_invoice',
-      language: 'en_US',
-      status: 'approved',
-      category: 'MARKETING',
-      headerType: 'NONE',
-      headerText: '',
-      bodyText: 'Here is your proposal for {{1}} package {{2}}. Total: {{3}}',
-      footerText: '',
-      buttons: [{ type: 'URL', text: 'Pay Now' }]
-    },
-    {
-      id: 't2',
-      name: 'welcome_message',
-      language: 'en_US',
-      status: 'pending',
-      category: 'UTILITY',
-      headerType: 'IMAGE',
-      headerText: '',
-      bodyText: 'Welcome to our service, {{1}}! We are glad to have you.',
-      footerText: 'Reply STOP to unsubscribe',
-      buttons: []
+  // Test Modal State
+  const [isTestModalOpen, setIsTestModalOpen] = useState(false);
+  const [testPhoneNumber, setTestPhoneNumber] = useState('');
+  const [testSelectedTemplate, setTestSelectedTemplate] = useState('');
+  const [sendingTest, setSendingTest] = useState(false);
+
+  // Templates Data
+  const [templates, setTemplates] = useState([]);
+
+  const fetchTemplatesData = async () => {
+    setLoading(true);
+    try {
+      const res = await getTemplates();
+      if (res && res.data) {
+        const mapped = res.data.map(t => {
+          const bodyComp = t.components.find(c => c.type === 'BODY');
+          const headerComp = t.components.find(c => c.type === 'HEADER');
+          const footerComp = t.components.find(c => c.type === 'FOOTER');
+          const buttonsComp = t.components.find(c => c.type === 'BUTTONS');
+
+          return {
+            id: t.id,
+            name: t.name,
+            language: t.language,
+            status: t.status, // Meta returns APPROVED, PENDING, REJECTED (uppercase)
+            category: t.category,
+            headerType: headerComp ? headerComp.format : 'NONE',
+            headerText: headerComp && headerComp.format === 'TEXT' ? headerComp.text : '',
+            bodyText: bodyComp ? bodyComp.text : '',
+            footerText: footerComp ? footerComp.text : '',
+            buttons: buttonsComp ? buttonsComp.buttons : []
+          };
+        });
+        setTemplates(mapped);
+      }
+    } catch (err) {
+      console.error('Failed to fetch templates', err);
+    } finally {
+      setLoading(false);
     }
-  ]);
+  };
+
+  React.useEffect(() => {
+    fetchTemplatesData();
+  }, []);
 
   // Editor State
   const [formData, setFormData] = useState(null);
@@ -65,14 +85,53 @@ export default function TemplatesPage() {
     }
   }, [selectedId, isCreating, templates]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (isCreating) {
-      const newId = `t${Date.now()}`;
-      setTemplates([...templates, { ...formData, id: newId, status: 'pending' }]);
-      setIsCreating(false);
-      setSelectedId(newId);
+      const components = [];
+      
+      // Header
+      if (formData.headerType !== 'NONE') {
+        const header = { type: 'HEADER', format: formData.headerType };
+        if (formData.headerType === 'TEXT') header.text = formData.headerText;
+        components.push(header);
+      }
+      
+      // Body
+      components.push({ type: 'BODY', text: formData.bodyText });
+      
+      // Footer
+      if (formData.footerText) {
+        components.push({ type: 'FOOTER', text: formData.footerText });
+      }
+      
+      // Buttons
+      if (formData.buttons && formData.buttons.length > 0) {
+        components.push({ type: 'BUTTONS', buttons: formData.buttons });
+      }
+
+      const payload = {
+        name: formData.name,
+        category: formData.category,
+        language: formData.language,
+        components
+      };
+      
+      try {
+        setLoading(true);
+        await createTemplate(payload);
+        setIsCreating(false);
+        setSelectedId(null);
+        alert('Template submitted for approval!');
+        await fetchTemplatesData();
+      } catch (err) {
+        console.error('Error creating template:', err);
+        alert('Failed to create template. Check console for details.');
+      } finally {
+        setLoading(false);
+      }
     } else {
-      setTemplates(templates.map(t => t.id === formData.id ? formData : t));
+      // setTemplates(templates.map(t => t.id === formData.id ? formData : t));
+      alert('Editing existing templates is not fully supported in this demo yet.');
     }
   };
 
@@ -82,16 +141,100 @@ export default function TemplatesPage() {
     return matchesSearch && matchesCategory;
   });
 
+  const handleTestSend = async () => {
+    if (!testPhoneNumber || !testSelectedTemplate) {
+      alert('Please enter a phone number and select a template.');
+      return;
+    }
+    
+    setSendingTest(true);
+    try {
+      // Find language code for selected template
+      const tmpl = templates.find(t => t.name === testSelectedTemplate);
+      const lang = tmpl ? tmpl.language : 'en_US';
+      
+      await sendTestTemplate(testPhoneNumber, testSelectedTemplate, lang);
+      alert('Test message sent successfully!');
+      setIsTestModalOpen(false);
+      setTestPhoneNumber('');
+      setTestSelectedTemplate('');
+    } catch (err) {
+      console.error('Failed to send test message:', err);
+      alert('Failed to send test message. Check console.');
+    } finally {
+      setSendingTest(false);
+    }
+  };
+
   return (
-    <div className="flex h-full w-full bg-slate-50">
+    <div className="flex-1 flex h-full bg-slate-50 relative">
+      {/* Test Modal Overlay */}
+      {isTestModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-lg shadow-xl w-[400px] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+              <h3 className="font-semibold text-slate-900">Send Test Message</h3>
+              <button 
+                onClick={() => setIsTestModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">Template</label>
+                <select 
+                  className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-2"
+                  value={testSelectedTemplate}
+                  onChange={e => setTestSelectedTemplate(e.target.value)}
+                >
+                  <option value="">Select a template...</option>
+                  {templates.filter(t => t.status === 'APPROVED').map(t => (
+                    <option key={t.id} value={t.name}>
+                      {t.name} ({t.language})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">Phone Number</label>
+                <Input 
+                  placeholder="e.g. 919876543210" 
+                  value={testPhoneNumber}
+                  onChange={e => setTestPhoneNumber(e.target.value.replace(/[^0-9]/g, ''))}
+                />
+                <p className="text-xs text-slate-500">Enter number with country code, no + sign.</p>
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setIsTestModalOpen(false)}>Cancel</Button>
+                <Button onClick={handleTestSend} disabled={sendingTest}>
+                  {sendingTest ? 'Sending...' : 'Send Test'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* LEFT SIDEBAR: LIST */}
-      <div className="w-80 border-r border-slate-200 bg-white flex flex-col">
+      <div className="w-80 border-r border-slate-200 bg-white flex flex-col z-0 flex-shrink-0">
         <div className="p-4 border-b border-slate-100 space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="font-semibold text-slate-900">Templates</h2>
-            <Button size="sm" onClick={() => { setIsCreating(true); setSelectedId(null); }}>
-              <Plus size={16} className="mr-1" /> New
-            </Button>
+            <div className="flex gap-1">
+              <Button size="icon" variant="ghost" onClick={() => setIsTestModalOpen(true)} title="Send Test Message">
+                <Send size={16} className="text-slate-500" />
+              </Button>
+              <Button size="icon" variant="ghost" onClick={fetchTemplatesData} title="Refresh Status">
+                <RefreshCw size={16} className={cn("text-slate-500", loading && "animate-spin")} />
+              </Button>
+              <Button size="sm" onClick={() => { setIsCreating(true); setSelectedId(null); }}>
+                <Plus size={16} className="mr-1" /> New
+              </Button>
+            </div>
           </div>
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
@@ -134,9 +277,9 @@ export default function TemplatesPage() {
             >
               <div className="flex justify-between items-start mb-1">
                 <span className="font-medium text-sm text-slate-900 truncate pr-2">{t.name}</span>
-                {t.status === 'approved' && <CheckCircle size={14} className="text-green-500 flex-shrink-0" />}
-                {t.status === 'pending' && <Clock size={14} className="text-amber-500 flex-shrink-0" />}
-                {t.status === 'rejected' && <AlertCircle size={14} className="text-red-500 flex-shrink-0" />}
+                {t.status === 'APPROVED' && <CheckCircle size={14} className="text-green-500 flex-shrink-0" />}
+                {t.status === 'PENDING' && <Clock size={14} className="text-amber-500 flex-shrink-0" />}
+                {t.status === 'REJECTED' && <AlertCircle size={14} className="text-red-500 flex-shrink-0" />}
               </div>
               <div className="flex items-center gap-2 text-xs text-slate-500 mb-2">
                 <Badge variant="outline" className="text-[10px] h-5 px-1">{t.category}</Badge>
@@ -171,15 +314,15 @@ export default function TemplatesPage() {
                      {isCreating ? 'New Template' : formData.name}
                    </h1>
                    <div className="flex items-center gap-2 text-xs text-slate-500">
-                     <span>{isCreating ? 'Draft' : formData.status}</span>
-                     {formData.status === 'approved' && <span className="text-green-600">• Live</span>}
-                   </div>
+                      <span>{isCreating ? 'Draft' : formData.status}</span>
+                      {formData.status === 'APPROVED' && <span className="text-green-600">• Live</span>}
+                    </div>
                  </div>
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" onClick={() => { /* cancel logic */ }}>Discard</Button>
-                <Button onClick={handleSave}>
-                  {isCreating ? 'Submit for Approval' : 'Save Changes'}
+                <Button variant="outline" onClick={() => { setIsCreating(false); setSelectedId(null); }}>Discard</Button>
+                <Button onClick={handleSave} disabled={loading}>
+                  {loading ? 'Submitting...' : (isCreating ? 'Submit for Approval' : 'Save Changes')}
                 </Button>
               </div>
             </div>
@@ -188,8 +331,8 @@ export default function TemplatesPage() {
             <div className="flex-1 overflow-hidden flex">
               
               {/* Form / Editor */}
-              <div className="w-[900px] overflow-y-auto p-6 bg-slate-50/50 border-r border-slate-200 flex-shrink-0">
-                <div className="max-w-full space-y-6">
+              <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50 border-r border-slate-200 min-w-[500px]">
+                <div className="max-w-3xl space-y-6 mx-auto">
                   {/* Metadata */}
                   <Card className="border-slate-200 shadow-sm">
                     <CardHeader className="pb-3 border-b border-slate-100 bg-white">
@@ -203,7 +346,10 @@ export default function TemplatesPage() {
                          <label className="text-sm font-medium text-slate-700">Template Name</label>
                          <Input 
                            value={formData.name} 
-                           onChange={e => setFormData({...formData, name: e.target.value})}
+                           onChange={e => {
+                             const val = e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '_');
+                             setFormData({...formData, name: val});
+                           }}
                            placeholder="e.g. shipping_update"
                            className="bg-white"
                          />
@@ -364,10 +510,10 @@ export default function TemplatesPage() {
               </div>
 
               {/* Preview */}
-              <div className="flex-1 bg-slate-100 flex flex-col items-center justify-center p-8 relative overflow-hidden">
+              <div className="w-[450px] bg-slate-100 flex flex-col items-center justify-center p-8 relative overflow-hidden flex-shrink-0 border-l border-slate-200">
                 <div className="absolute top-4 right-4 text-xs text-slate-400 font-mono">LIVE PREVIEW</div>
                 
-                <div className="w-[350px] bg-white rounded-[2rem] border-8 border-slate-800 shadow-2xl overflow-hidden relative h-[700px] flex flex-col transform scale-90 sm:scale-100 transition-transform">
+                <div className="w-[320px] bg-white rounded-[2rem] border-8 border-slate-800 shadow-2xl overflow-hidden relative h-[650px] flex flex-col transform transition-transform">
                   {/* Status Bar */}
                   <div className="h-6 bg-slate-800 w-full flex items-center justify-center">
                     <div className="w-20 h-4 bg-black rounded-b-xl" />

@@ -2,9 +2,9 @@
 import React, { useState } from 'react';
 import { cn } from '../lib/utils';
 import { Badge } from './ui/Badge';
-import { MessageCircle, Instagram } from 'lucide-react';
+import { MessageCircle, Instagram, Pin } from 'lucide-react';
 
-export default function Inbox({ conversations, selectedId, onSelect }) {
+export default function Inbox({ conversations, selectedId, onSelect, onPin }) {
   const [filter, setFilter] = useState('ALL'); // ALL, whatsapp, instagram
 
   const filteredConversations = conversations.filter(c => {
@@ -63,25 +63,44 @@ export default function Inbox({ conversations, selectedId, onSelect }) {
               <li
                 key={c.id}
                 className={cn(
-                  "px-4 py-4 cursor-pointer transition-colors relative",
+                  "px-4 py-4 cursor-pointer transition-colors relative group",
                   isSelected ? "bg-slate-100" : "hover:bg-slate-50"
                 )}
                 onClick={() => onSelect(c.id)}
               >
                 {isSelected && <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-600" />}
                 <div className="flex items-center justify-between mb-1">
-                  <span className={cn("text-sm font-semibold", isSelected ? "text-slate-900" : "text-slate-700")}>
+                  <span className={cn("text-sm font-semibold flex items-center gap-1", isSelected ? "text-slate-900" : "text-slate-700")}>
+                    {c.isPinned && <Pin size={12} className="text-slate-500 rotate-45" fill="currentColor" />}
                     {c.contactName}
                   </span>
-                  <span className="text-xs text-slate-400">
-                    {c.lastMessageAt ? new Date(c.lastMessageAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : ''}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-400">
+                      {c.lastMessageAt ? new Date(c.lastMessageAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : ''}
+                    </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onPin(c.id);
+                      }}
+                      className={cn(
+                        "p-1 rounded-full hover:bg-slate-200 transition-colors",
+                        c.isPinned ? "text-blue-600" : "text-slate-300 opacity-0 group-hover:opacity-100"
+                      )}
+                    >
+                      <Pin size={12} fill={c.isPinned ? "currentColor" : "none"} />
+                    </button>
+                  </div>
                 </div>
                 <div className="flex items-center justify-between">
                    <p className="text-xs text-slate-500 line-clamp-1 max-w-[70%]">
                      {c.lastMessage || "No messages yet"}
                    </p>
-                   {c.status === 'open' && (
+                   {c.unreadCount > 0 ? (
+                      <div className="flex h-5 w-5 items-center justify-center rounded-full bg-green-500 text-[10px] font-bold text-white shadow-sm">
+                        {c.unreadCount}
+                      </div>
+                   ) : c.status === 'open' && (
                       <div className="h-2 w-2 rounded-full bg-blue-600" />
                    )}
                 </div>

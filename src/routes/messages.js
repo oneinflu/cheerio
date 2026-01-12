@@ -15,6 +15,16 @@ router.get('/conversations/:conversationId/messages', auth.requireRole('admin','
   }
 });
 
+router.post('/conversations/:conversationId/read', auth.requireRole('admin','agent','supervisor'), async (req, res, next) => {
+  try {
+    const conversationId = req.params.conversationId;
+    await svc.markAsRead(conversationId);
+    res.status(200).json({ success: true });
+  } catch (err) {
+    return next(err);
+  }
+});
+
 router.get('/conversations/:conversationId/notes', auth.requireRole('admin','agent','supervisor'), async (req, res, next) => {
   try {
     const conversationId = req.params.conversationId;

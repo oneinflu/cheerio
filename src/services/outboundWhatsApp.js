@@ -145,31 +145,31 @@ async function finalizeOutboundMessage(clientConn, messageId, conversationId, ex
 function emitStatus(conversationId, messageId, status, extra) {
   const io = getIO();
   if (!io) return;
-  io.to(`conversation:${conversationId}`).emit('message:status', {
+  const payload = {
     conversationId,
     messageId,
     status,
     ...(extra || {}),
-  });
+  };
+  io.to(`conversation:${conversationId}`).emit('message:status', payload);
+  io.emit('message:status', payload);
 }
 
-function emitMessage(conversationId, messageId, contentType, textBody) {
+function emitMessage(conversationId, messageId, contentType, textBody, rawPayload, attachments) {
   const io = getIO();
   if (!io) return;
   
-  // For templates, we might need to send the full payload or let the client fetch it.
-  // But since we updated insertOutboundMessage to store raw_payload, we can't easily access it here 
-  // without passing it through. For now, we rely on the client refreshing or just using the textBody placeholder.
-  // Ideally, we should pass rawPayload here too if we want immediate correct rendering without refresh.
-  // Let's assume the client will fetch full details or handle the 'template' type.
-  
-  io.to(`conversation:${conversationId}`).emit('message:new', {
+  const payload = {
     conversationId,
     messageId,
     contentType,
     textBody,
     direction: 'outbound',
-  });
+    rawPayload,
+    attachments: attachments || [],
+  };
+  io.to(`conversation:${conversationId}`).emit('message:new', payload);
+  io.emit('message:new', payload);
 }
 
 async function sendText(conversationId, text) {
@@ -207,7 +207,7 @@ async function sendText(conversationId, text) {
     await finalizeOutboundMessage(clientConn, messageId, details.conversationId, externalId, true);
     await clientConn.query('COMMIT');
     emitStatus(details.conversationId, messageId, 'sent', { externalMessageId: externalId });
-    return { messageId, externalMessageId: externalId };
+    return { conversationId: details.conversationId, messageId, externalMessageId: externalId };
   } catch (err) {
     try {
       await clientConn.query('ROLLBACK');
@@ -233,7 +233,19 @@ async function sendMedia(conversationId, kind, link, caption) {
       caption || null,
       { type: 'media', kind, link, caption }
     );
-    emitMessage(details.conversationId, messageId, kind, caption || null);
+
+    // Attachments record referencing the sent media link.
+    const attRes = await clientConn.query(
+      `
+      INSERT INTO attachments (id, message_id, kind, url, mime_type, created_at)
+      VALUES (gen_random_uuid(), $1, $2, $3, NULL, NOW())
+      RETURNING id, kind, url, mime_type
+      `,
+      [messageId, kind, link]
+    );
+    const attachment = attRes.rows[0];
+
+    emitMessage(details.conversationId, messageId, kind, caption || null, null, [attachment]);
     emitStatus(details.conversationId, messageId, 'sending');
 
     const resp = await client.sendMedia(details.phoneNumberId, details.toWaId, kind, link, caption);
@@ -241,15 +253,6 @@ async function sendMedia(conversationId, kind, link, caption) {
       resp.data && Array.isArray(resp.data.messages) && resp.data.messages[0]
         ? resp.data.messages[0].id
         : null;
-
-    // Attachments record referencing the sent media link.
-    await clientConn.query(
-      `
-      INSERT INTO attachments (id, message_id, kind, url, mime_type, created_at)
-      VALUES (gen_random_uuid(), $1, $2, $3, NULL, NOW())
-      `,
-      [messageId, kind, link]
-    );
 
     await clientConn.query(
       `
@@ -262,7 +265,7 @@ async function sendMedia(conversationId, kind, link, caption) {
     await finalizeOutboundMessage(clientConn, messageId, details.conversationId, externalId, true);
     await clientConn.query('COMMIT');
     emitStatus(details.conversationId, messageId, 'sent', { externalMessageId: externalId });
-    return { messageId, externalMessageId: externalId };
+    return { conversationId: details.conversationId, messageId, externalMessageId: externalId };
   } catch (err) {
     try {
       await clientConn.query('ROLLBACK');
@@ -280,15 +283,16 @@ async function sendTemplate(conversationId, name, languageCode, components) {
     const details = await getConversationDetails(clientConn, conversationId);
     // Template messages are allowed regardless of 24h window.
 
+    const rawPayload = { type: 'template', name, languageCode, components };
     const messageId = await insertOutboundMessage(
       clientConn,
       details.conversationId,
       details.channelId,
       'text',
       `Template: ${name}`,
-      { type: 'template', name, languageCode, components }
+      rawPayload
     );
-    emitMessage(details.conversationId, messageId, 'text', `Template: ${name}`);
+    emitMessage(details.conversationId, messageId, 'text', `Template: ${name}`, rawPayload);
     emitStatus(details.conversationId, messageId, 'sending');
 
     const resp = await client.sendTemplate(
@@ -314,7 +318,7 @@ async function sendTemplate(conversationId, name, languageCode, components) {
     await finalizeOutboundMessage(clientConn, messageId, details.conversationId, externalId, true);
     await clientConn.query('COMMIT');
     emitStatus(details.conversationId, messageId, 'sent', { externalMessageId: externalId });
-    return { messageId, externalMessageId: externalId };
+    return { conversationId: details.conversationId, messageId, externalMessageId: externalId };
   } catch (err) {
     try {
       await clientConn.query('ROLLBACK');
@@ -325,8 +329,38 @@ async function sendTemplate(conversationId, name, languageCode, components) {
   }
 }
 
+async function sendTypingIndicator(conversationId, action) {
+  const clientConn = await db.getClient();
+  try {
+    const details = await getConversationDetails(clientConn, conversationId);
+    // Best effort, no db persistence or 24h check needed for typing indicators
+    await client.sendSenderAction(details.phoneNumberId, details.toWaId, action);
+  } catch (err) {
+    // silently fail for typing indicators
+    console.warn(`[sendTypingIndicator] failed for conv=${conversationId}`, err.message);
+  } finally {
+    clientConn.release();
+  }
+}
+
+async function uploadMedia(conversationId, fileBuffer, mimeType, filename) {
+  const clientConn = await db.getClient();
+  try {
+    const details = await getConversationDetails(clientConn, conversationId);
+    // 24h check technically not needed for upload, but good to check if we can even message this person?
+    // Actually upload is just stashing media. We check 24h when sending.
+    
+    const result = await client.uploadMedia(details.phoneNumberId, fileBuffer, mimeType, filename);
+    return result; // { id: '...' }
+  } finally {
+    clientConn.release();
+  }
+}
+
 module.exports = {
   sendText,
   sendMedia,
   sendTemplate,
+  sendTypingIndicator,
+  uploadMedia,
 };

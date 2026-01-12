@@ -20,6 +20,8 @@ const conversationsRouter = require('./src/routes/conversations');
 const staffNotesRouter = require('./src/routes/staffNotes');
 const inboxRouter = require('./src/routes/inbox');
 const messagesRouter = require('./src/routes/messages');
+const templatesRouter = require('./src/routes/templates');
+const mediaRouter = require('./src/routes/media');
 const auth = require('./src/middlewares/auth');
 
 // Read environment-based config for HTTP concerns. Defaults are safe for dev.
@@ -88,6 +90,8 @@ function createApp() {
   app.use('/api', staffNotesRouter);
   app.use('/api', inboxRouter);
   app.use('/api', messagesRouter);
+  app.use('/api/templates', templatesRouter);
+  app.use('/api/media', mediaRouter);
 
   /**
    * 404 handler

@@ -56,7 +56,27 @@ async function init(server) {
     }
 
     socket.on('join:conversation', (conversationId) => {
+      console.log(`[io] Socket ${socket.id} joining conversation:${conversationId}`);
       socket.join(`conversation:${conversationId}`);
+    });
+
+    socket.on('conversation:typing', async ({ conversationId, isTyping }) => {
+      console.log(`[io] conversation:typing conv=${conversationId} user=${userId} isTyping=${isTyping}`);
+      // Broadcast to others in the room
+      socket.to(`conversation:${conversationId}`).emit('conversation:typing', {
+        conversationId,
+        userId: userId || 'unknown',
+        isTyping
+      });
+
+      // Send to WhatsApp (throttled logic could be added here, but for now direct call)
+      try {
+        // Dynamic require to avoid potential circular dependency issues at top level
+        const { sendTypingIndicator } = require('../services/outboundWhatsApp');
+        await sendTypingIndicator(conversationId, isTyping ? 'typing_on' : 'typing_off');
+      } catch (e) {
+        console.error('Failed to trigger WhatsApp typing indicator:', e.message);
+      }
     });
 
     socket.on('presence:get:team', async (teamId, cb) => {

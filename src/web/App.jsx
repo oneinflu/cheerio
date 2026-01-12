@@ -3,23 +3,35 @@ import React, { useEffect, useMemo, useState } from 'react';
 import Inbox from './components/Inbox.jsx';
 import Chat from './components/Chat.jsx';
 import NotesPanel from './components/NotesPanel.jsx';
-import TemplatePanel from './components/TemplatePanel.jsx';
+import CustomerCard from './components/CustomerCard.jsx';
 import DashboardPage from './components/DashboardPage.jsx';
 import TeamPage from './components/TeamPage.jsx';
 import SettingsPage from './components/SettingsPage.jsx';
 import TemplatesPage from './components/TemplatesPage.jsx';
+import LoginPage from './components/LoginPage.jsx';
+import ConversationFilters from './components/ConversationFilters.jsx';
 import { connectSocket } from './socket.js';
-import { getInbox, getMessages, claimConversation, reassignConversation, releaseConversation } from './api.js';
+import { getInbox, getMessages, claimConversation, reassignConversation, releaseConversation, markAsRead, resolveConversation, pinConversation, getInboxCounts } from './api.js';
 import { LayoutDashboard, MessageSquare, Users, Settings, LogOut, Search, Bell, FileText } from 'lucide-react';
 import { Button } from './components/ui/Button';
 import { Badge } from './components/ui/Badge';
 
 export default function App() {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [socket, setSocket] = useState(null);
   const [activePage, setActivePage] = useState('inbox');
+  const [filter, setFilter] = useState('open');
   const [conversations, setConversations] = useState([]);
+  const [counts, setCounts] = useState({});
   const [selectedId, setSelectedId] = useState(null);
+  const selectedIdRef = React.useRef(selectedId);
   const [messages, setMessages] = useState([]);
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+
+  useEffect(() => {
+    selectedIdRef.current = selectedId;
+  }, [selectedId]);
+
   const currentUser = useMemo(() => ({
     id: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
     role: 'admin',
@@ -44,37 +56,96 @@ export default function App() {
 
   const loadInbox = async () => {
     try {
-      const res = await getInbox(currentUser.teamIds[0]);
-      setConversations(res.conversations || []);
-      if (!selectedId && res.conversations && res.conversations.length > 0) {
-        setSelectedId(res.conversations[0].id);
+      const res = await getInbox(currentUser.teamIds[0], filter);
+      const currentId = selectedIdRef.current;
+      const nextConversations = (res.conversations || []).map(c => 
+        c.id === currentId ? { ...c, unreadCount: 0 } : c
+      );
+      setConversations(nextConversations);
+      
+      if (!currentId && nextConversations.length > 0) {
+        setSelectedId(nextConversations[0].id);
       }
     } catch (err) {
       console.error('Failed to load inbox:', err);
     }
   };
 
-  useEffect(() => {
-    loadInbox();
-  }, []);
-
-  const loadMessages = async () => {
-    if (!selectedId) return;
+  const loadCounts = async () => {
     try {
-      const res = await getMessages(selectedId);
-      setMessages(res.messages || []);
+      const c = await getInboxCounts(currentUser.teamIds[0]);
+      setCounts(c);
     } catch (err) {
-      console.error('Failed to load messages:', err);
+      console.error('Failed to load counts:', err);
     }
   };
 
   useEffect(() => {
+    loadInbox();
+    loadCounts();
+  }, [filter]);
+
+  const loadMessages = async (silent = false) => {
+    if (!selectedId) return;
+    if (!silent) setIsLoadingMessages(true);
+    try {
+      const res = await getMessages(selectedId);
+      setMessages(res.messages || []);
+      
+      // Mark as read and update local state
+      await markAsRead(selectedId);
+      setConversations(prev => prev.map(c => 
+        c.id === selectedId ? { ...c, unreadCount: 0 } : c
+      ));
+    } catch (err) {
+      console.error('Failed to load messages:', err);
+    } finally {
+      if (!silent) setIsLoadingMessages(false);
+    }
+  };
+
+  useEffect(() => {
+    setMessages([]);
     loadMessages();
   }, [selectedId]);
 
   useEffect(() => {
     if (!socket) return;
-    const onNewMessage = () => loadInbox();
+    const onNewMessage = (payload) => {
+      // Play notification sound for inbound messages
+      if (payload && payload.direction === 'inbound') {
+        try {
+          const audio = new Audio('/notification.mp3');
+          audio.play().catch(e => console.error('Error playing notification sound:', e));
+        } catch (err) {
+          console.error('Failed to initialize audio:', err);
+        }
+      }
+
+      loadInbox();
+      const currentId = selectedIdRef.current;
+      if (currentId && payload && payload.conversationId === currentId) {
+        // Mark as read immediately since we are viewing it
+        markAsRead(currentId).catch(console.error);
+
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === payload.messageId)) return prev;
+          return [
+            ...prev,
+            {
+              id: payload.messageId,
+              conversationId: payload.conversationId,
+              direction: payload.direction,
+              textBody: payload.textBody,
+              contentType: payload.contentType || 'text',
+              createdAt: payload.createdAt || new Date().toISOString(),
+              rawPayload: payload.rawPayload || {},
+              attachments: payload.attachments || [] // Handle optimistic attachments
+            },
+          ];
+        });
+      }
+    };
     const onClaimed = () => loadInbox();
     const onReassigned = () => loadInbox();
     const onReleased = () => loadInbox();
@@ -88,7 +159,7 @@ export default function App() {
       socket.off('assignment:reassigned', onReassigned);
       socket.off('assignment:released', onReleased);
     };
-  }, [socket]);
+  }, [socket, selectedId]);
 
   const handleClaim = async () => {
     if (!selectedId) return;
@@ -113,9 +184,24 @@ export default function App() {
     loadInbox();
   };
 
+  const handleResolve = async () => {
+    if (!selectedId) return;
+    await resolveConversation(selectedId);
+    loadInbox();
+  };
+
+  const handlePin = async (conversationId) => {
+    await pinConversation(conversationId);
+    loadInbox();
+  };
+
   const selectedConversation = conversations.find((c) => c.id === selectedId);
   const isAssignedToMe = Boolean(selectedConversation?.assigneeUserId && selectedConversation.assigneeUserId === currentUser.id);
   const isAssigned = Boolean(selectedConversation?.assigneeUserId);
+
+  if (!isLoggedIn) {
+    return <LoginPage onLogin={() => setIsLoggedIn(true)} />;
+  }
 
   return (
     <div className="flex h-screen w-full bg-slate-50 text-slate-950 font-sans">
@@ -170,7 +256,7 @@ export default function App() {
            <div className="w-8 h-8 bg-slate-200 rounded-full flex items-center justify-center text-xs font-medium">
              JD
            </div>
-           <Button variant="ghost" size="icon" className="w-10 h-10 text-slate-500 hover:text-red-600">
+           <Button variant="ghost" size="icon" className="w-10 h-10 text-slate-500 hover:text-red-600" onClick={() => setIsLoggedIn(false)}>
              <LogOut size={20} />
            </Button>
         </div>
@@ -196,6 +282,7 @@ export default function App() {
 
         {activePage === 'inbox' && (
           <>
+            <ConversationFilters activeFilter={filter} onSelectFilter={setFilter} counts={counts} />
             <div className="w-80 flex-none border-r border-slate-200 bg-white flex flex-col">
               <div className="h-16 border-b border-slate-200 flex items-center px-4 justify-between">
                 <h1 className="font-semibold text-lg">Inbox</h1>
@@ -208,29 +295,37 @@ export default function App() {
                   </Button>
                 </div>
               </div>
-              <Inbox conversations={conversations} selectedId={selectedId} onSelect={(id) => setSelectedId(id)} />
+              <Inbox 
+                conversations={conversations} 
+                selectedId={selectedId} 
+                onSelect={(id) => setSelectedId(id)} 
+                onPin={handlePin}
+              />
             </div>
 
             <main className="flex-1 flex flex-col min-w-0 bg-white">
-              <div className="h-16 border-b border-slate-200 flex items-center justify-between px-6 bg-white/80 backdrop-blur-sm sticky top-0 z-10">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 font-medium text-sm">
-                    {selectedConversation?.contactName?.substring(0, 2).toUpperCase() || 'UN'}
+              {selectedId && (
+                <div className="h-16 border-b border-slate-200 flex items-center justify-between px-6 bg-white/80 backdrop-blur-sm sticky top-0 z-10">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 font-medium text-sm">
+                      {selectedConversation?.contactName?.substring(0, 2).toUpperCase() || 'UN'}
+                    </div>
+                    <div>
+                      <h2 className="font-semibold text-sm text-slate-900 leading-tight">
+                        {selectedConversation?.contactName || 'Unknown Contact'}
+                      </h2>
+                      <p className="text-xs text-slate-500">
+                        {selectedConversation?.status === 'open' ? 'Open Conversation' : 'Closed'}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h2 className="font-semibold text-sm text-slate-900 leading-tight">
-                      {selectedConversation?.contactName || 'Unknown Contact'}
-                    </h2>
-                    <p className="text-xs text-slate-500">
-                      {selectedConversation?.status === 'open' ? 'Open Conversation' : 'Closed'}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Button variant="outline" size="sm">
-                    Snooze
-                  </Button>
-                  {selectedId && (
+                  <div className="flex items-center space-x-2">
+                    <Button variant="outline" size="sm" onClick={handleResolve}>
+                      Resolve
+                    </Button>
+                    <Button variant="outline" size="sm">
+                      Snooze
+                    </Button>
                     <div className="flex items-center gap-2">
                       <Badge variant={isAssigned ? 'secondary' : 'outline'}>
                         {isAssignedToMe ? 'Assigned to you' : isAssigned ? 'Assigned' : 'Unassigned'}
@@ -266,22 +361,31 @@ export default function App() {
                         Unassign
                       </Button>
                     </div>
-                  )}
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div className="flex-1 overflow-hidden relative">
-                <Chat socket={socket} conversationId={selectedId} messages={messages} onRefresh={loadMessages} />
+                <Chat 
+                  socket={socket} 
+                  conversationId={selectedId} 
+                  messages={messages} 
+                  isLoading={isLoadingMessages}
+                  onRefresh={() => loadMessages(true)} 
+                />
               </div>
             </main>
 
-            <aside className="w-80 flex-none border-l border-slate-200 bg-slate-50 flex flex-col">
-              <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                <NotesPanel conversationId={selectedId} currentUser={currentUser} socket={socket} />
-                <div className="h-px bg-slate-200 my-4" />
-                <TemplatePanel conversationId={selectedId} />
-              </div>
-            </aside>
+            {selectedId && (
+              <aside className="w-80 flex-none border-l border-slate-200 bg-slate-50 flex flex-col overflow-hidden">
+                <div className="p-4 pb-2 flex-none">
+                  <CustomerCard conversationId={selectedId} />
+                </div>
+                <div className="flex-1 min-h-0 p-4 pt-2">
+                  <NotesPanel conversationId={selectedId} currentUser={currentUser} socket={socket} />
+                </div>
+              </aside>
+            )}
           </>
         )}
       </div>

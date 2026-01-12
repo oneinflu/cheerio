@@ -16,6 +16,8 @@ const express = require('express');
 const router = express.Router();
 const service = require('../services/outboundWhatsApp');
 const auth = require('../middlewares/auth');
+const multer = require('multer');
+const upload = multer({ storage: multer.memoryStorage() });
 
 /**
  * POST /api/whatsapp/text
@@ -77,6 +79,27 @@ router.post('/template', auth.requireRole('admin','agent','supervisor'), async (
       throw err;
     }
     const result = await service.sendTemplate(conversationId, name, languageCode, components);
+    res.status(200).json(result);
+  } catch (err) {
+    return next(err);
+  }
+});
+
+/**
+ * POST /api/whatsapp/upload
+ * Form-Data: conversationId, file
+ * Uploads media to WhatsApp and returns the media ID.
+ */
+router.post('/upload', auth.requireRole('admin','agent','supervisor'), upload.single('file'), async (req, res, next) => {
+  try {
+    const { conversationId } = req.body;
+    if (!conversationId || !req.file) {
+      const err = new Error('conversationId and file are required');
+      err.status = 400;
+      err.expose = true;
+      throw err;
+    }
+    const result = await service.uploadMedia(conversationId, req.file.buffer, req.file.mimetype, req.file.originalname);
     res.status(200).json(result);
   } catch (err) {
     return next(err);

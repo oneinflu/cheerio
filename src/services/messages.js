@@ -43,5 +43,16 @@ async function listMessages(conversationId) {
   }));
 }
 
-module.exports = { listMessages };
+async function markAsRead(conversationId) {
+  await db.query(
+    `UPDATE messages
+     SET read_at = NOW()
+     WHERE conversation_id = $1
+       AND direction = 'inbound'
+       AND read_at IS NULL`,
+    [conversationId]
+  );
+}
+
+module.exports = { listMessages, markAsRead };
 

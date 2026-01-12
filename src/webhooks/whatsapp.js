@@ -218,31 +218,38 @@ router.post('/', async (req, res, next) => {
             }
 
             // Insert attachment if media present and message was newly recorded.
+            const attachments = [];
             if (messageId) {
               if (type === 'image' && msg.image) {
-                await client.query(
+                const attRes = await client.query(
                   `
                   INSERT INTO attachments (id, message_id, kind, url, mime_type, created_at)
                   VALUES (gen_random_uuid(), $1, 'image', $2, $3, NOW())
+                  RETURNING id, kind, url, mime_type
                   `,
                   [messageId, msg.image.id, msg.image.mime_type || null]
                 );
+                attachments.push(attRes.rows[0]);
               } else if (type === 'audio' && msg.audio) {
-                await client.query(
+                const attRes = await client.query(
                   `
                   INSERT INTO attachments (id, message_id, kind, url, mime_type, created_at)
                   VALUES (gen_random_uuid(), $1, 'audio', $2, $3, NOW())
+                  RETURNING id, kind, url, mime_type
                   `,
                   [messageId, msg.audio.id, msg.audio.mime_type || null]
                 );
+                attachments.push(attRes.rows[0]);
               } else if (type === 'document' && msg.document) {
-                await client.query(
+                const attRes = await client.query(
                   `
                   INSERT INTO attachments (id, message_id, kind, url, mime_type, created_at)
                   VALUES (gen_random_uuid(), $1, 'document', $2, $3, NOW())
+                  RETURNING id, kind, url, mime_type
                   `,
                   [messageId, msg.document.id, msg.document.mime_type || null]
                 );
+                attachments.push(attRes.rows[0]);
               }
             }
 
@@ -262,13 +269,17 @@ router.post('/', async (req, res, next) => {
             // Emit realtime event to notify agents.
             const io = getIO();
             if (io && messageId) {
-              io.to(`conversation:${conversationId}`).emit('message:new', {
+              const payload = {
                 conversationId,
                 messageId,
                 contentType,
                 textBody,
                 direction: 'inbound',
-              });
+                attachments,
+                rawPayload: msg
+              };
+              io.to(`conversation:${conversationId}`).emit('message:new', payload);
+              io.emit('message:new', payload);
             }
           } catch (err) {
             // On any error, rollback so the transaction does not leave partial state.
