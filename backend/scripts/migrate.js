@@ -115,11 +115,11 @@ async function runMigrations() {
     await client.query('COMMIT');
     console.log('[migrate] Migration applied successfully');
 
-    console.log('[seed] Applying seed data');
-    await client.query('BEGIN');
-    await runSQLFile(client, path.join(__dirname, '..', 'db', 'seeds', '001_demo_data.sql'));
-    await client.query('COMMIT');
-    console.log('[seed] Seed data applied successfully');
+    // console.log('[seed] Applying seed data');
+    // await client.query('BEGIN');
+    // await runSQLFile(client, path.join(__dirname, '..', 'db', 'seeds', '001_demo_data.sql'));
+    // await client.query('COMMIT');
+    // console.log('[seed] Seed data applied successfully');
   } catch (err) {
     try {
       await client.query('ROLLBACK');
