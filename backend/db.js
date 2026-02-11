@@ -24,10 +24,9 @@ const DATABASE_URL = process.env.DATABASE_URL || '';
  * `rejectUnauthorized: true` ensures the certificate is valid.
  * For local dev, SSL is usually off.
  */
-const ssl = { rejectUnauthorized: false };
-// Note: If connectionString contains sslmode=require, pg might ignore the ssl object above.
-// However, passing ssl: { rejectUnauthorized: false } usually overrides the validation behavior.
-
+const ssl = process.env.DATABASE_URL && process.env.DATABASE_URL.includes('sslmode=disable') 
+  ? false 
+  : { rejectUnauthorized: false };
 
 /**
  * Construct a single shared connection pool.

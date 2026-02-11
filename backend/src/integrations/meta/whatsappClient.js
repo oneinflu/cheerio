@@ -19,7 +19,7 @@ const https = require('https');
 const axios = require('axios');
 const FormData = require('form-data');
 
-const GRAPH_BASE = process.env.WHATSAPP_GRAPH_BASE || 'https://graph.facebook.com/v18.0';
+const GRAPH_BASE = process.env.WHATSAPP_GRAPH_BASE || 'https://graph.facebook.com/v21.0';
 const TOKEN = process.env.WHATSAPP_TOKEN || '';
 const USE_MOCK = String(process.env.WHATSAPP_USE_MOCK || '').toLowerCase() === 'true';
 
@@ -80,7 +80,8 @@ async function postJSON(url, body) {
           if (res.statusCode >= 200 && res.statusCode < 300) {
             return resolve({ status: res.statusCode, data: json });
           }
-          const err = new Error(`WhatsApp API error ${res.statusCode}`);
+          const msg = json.error && json.error.message ? json.error.message : 'Unknown error';
+          const err = new Error(`WhatsApp API error ${res.statusCode}: ${msg}`);
           err.status = res.statusCode;
           err.response = json;
           return reject(err);
@@ -119,6 +120,7 @@ async function sendTemplateMessage(to, templateName, languageCode = 'en_US', pho
       }
     }
   };
+  console.log(`[WhatsAppClient] sending to URL: ${url}`);
   return postJSON(url, body);
 }
 
@@ -306,6 +308,38 @@ async function uploadMedia(phoneNumberId, fileBuffer, mimeType, filename) {
   }
 }
 
+/**
+ * Upload media specifically for Message Templates (to get a handle).
+ * @param {string} wabaId - WhatsApp Business Account ID
+ * @param {Buffer} fileBuffer
+ * @param {string} mimeType
+ * @param {string} filename
+ */
+async function uploadMessageTemplateMedia(wabaId, fileBuffer, mimeType, filename) {
+  if (USE_MOCK) {
+    console.log('[Mock WhatsApp Client] Skipping real template media upload.');
+    return { h: 'mock_handle_' + Date.now() };
+  }
+  if (!TOKEN) throw new Error('WHATSAPP_TOKEN required');
+
+  const url = `${GRAPH_BASE}/${wabaId}/message_template_media`;
+  const form = new FormData();
+  form.append('file', fileBuffer, { filename, contentType: mimeType });
+  
+  try {
+    const res = await axios.post(url, form, {
+      headers: {
+        ...form.getHeaders(),
+        'Authorization': `Bearer ${TOKEN}`
+      }
+    });
+    // Response should contain { "h": "<HEADER_HANDLE>" }
+    return res.data; 
+  } catch (err) {
+    throw new Error(`Template Media Upload failed: ${err.response?.data?.error?.message || err.message}`);
+  }
+}
+
 module.exports = {
   sendText,
   sendMedia,
@@ -316,4 +350,5 @@ module.exports = {
   sendTemplateMessage,
   getMedia,
   uploadMedia,
+  uploadMessageTemplateMedia,
 };

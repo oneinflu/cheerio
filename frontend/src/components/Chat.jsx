@@ -277,22 +277,70 @@ export default function Chat({ socket, conversationId, messages, onRefresh, isLo
                       ? "bg-[#d9fdd3] text-slate-900 rounded-tr-sm"
                       : "bg-white text-slate-900 rounded-tl-sm"
                   )}>
+                {/* Reply Context */}
+                {m.rawPayload?.context && (
+                  <div className="mb-2 text-xs bg-black/5 p-1.5 rounded border-l-2 border-slate-400 opacity-80">
+                     <div className="font-semibold text-[10px] text-slate-600 flex items-center gap-1">
+                       <MessageSquare size={10} /> 
+                       Replying to a message
+                     </div>
+                  </div>
+                )}
                 {m.contentType === 'text' ? (
                   m.rawPayload?.type === 'template' ? (
                     <div className="space-y-3 min-w-[250px]">
                       {/* Template Body */}
                       <div className="text-sm">
-                        {m.rawPayload?.components?.find(c => c.type === 'body')?.parameters ? (
+                        {m.rawPayload.name === 'proposal_invoice' && m.rawPayload?.components?.find(c => c.type === 'body')?.parameters ? (
                            // Render constructed text from params if available
                            <div className="space-y-1">
                              <div className="font-semibold text-base mb-2">Proposal Invoice</div>
-                             <p>Course: <b>{m.rawPayload.components[0].parameters[0].text}</b></p>
-                             <p>Package: {m.rawPayload.components[0].parameters[1].text}</p>
+                             <p>Course: <b>{m.rawPayload.components[0].parameters[0]?.text}</b></p>
+                             <p>Package: {m.rawPayload.components[0].parameters[1]?.text}</p>
                              <div className="h-px bg-white/20 my-2" />
-                             <p className="text-lg font-bold">Total: {m.rawPayload.components[0].parameters[2].text}</p>
+                             <p className="text-lg font-bold">Total: {m.rawPayload.components[0].parameters[2]?.text}</p>
                            </div>
                         ) : (
-                          <div className="italic opacity-80">{m.textBody || 'Template Message'}</div>
+                          <div className="space-y-2">
+                             {/* Only show Template name if no parameters to show, or as a small label? 
+                                 User requested "Delete the template", likely referring to the big header.
+                                 We will hide the header but ensure we don't show an empty bubble.
+                             */}
+                             
+                             {/* Render Header Parameters */}
+                             {m.rawPayload?.components?.find(c => c.type === 'header')?.parameters?.map((p, i) => (
+                               <div key={`h-${i}`} className="flex items-center gap-2 text-xs opacity-90 bg-black/5 p-1 rounded">
+                                 <span className="font-bold">Header:</span> 
+                                 {p.type === 'image' ? (
+                                    <span className="flex items-center gap-1"><ImageIcon size={12}/> Image</span>
+                                 ) : (
+                                    <span>{p.text || p.type}</span>
+                                 )}
+                               </div>
+                             ))}
+                             {/* Render Body Parameters */}
+                             {m.rawPayload?.components?.find(c => c.type === 'body')?.parameters?.length > 0 && (
+                               <div className="text-xs opacity-90">
+                                 <span className="font-bold block mb-1">Parameters:</span>
+                                 <ul className="list-disc pl-4 space-y-0.5">
+                                   {m.rawPayload.components.find(c => c.type === 'body').parameters.map((p, i) => (
+                                     <li key={`b-${i}`}>{p.text || p.type}</li>
+                                   ))}
+                                 </ul>
+                               </div>
+                             )}
+
+                             {/* Fallback: if no visual components, show the name so bubble isn't empty */}
+                             {(!m.rawPayload?.components?.some(c => c.parameters?.length > 0)) && (
+                                <div className="text-xs text-slate-500 italic">
+                                  Template: {m.rawPayload?.name}
+                                </div>
+                             )}
+                             
+                             {m.rawPayload?.status && (
+                                 <div className="text-[10px] text-slate-400">Status: {m.rawPayload.status}</div>
+                             )}
+                          </div>
                         )}
                       </div>
                       
@@ -309,7 +357,13 @@ export default function Chat({ socket, conversationId, messages, onRefresh, isLo
                       </div>
                    </div>
                   ) : (
-                    <div className="whitespace-pre-wrap leading-relaxed">{m.textBody}</div>
+                    <div className="whitespace-pre-wrap leading-relaxed">
+                      {m.textBody || 
+                        (m.rawPayload?.type === 'interactive' && m.rawPayload.interactive?.button_reply?.title) ||
+                        (m.rawPayload?.type === 'interactive' && m.rawPayload.interactive?.list_reply?.title) ||
+                        (m.rawPayload?.type === 'button' && m.rawPayload.button?.text) ||
+                        null}
+                    </div>
                   )
                 ) : (
                   <div className="space-y-2">

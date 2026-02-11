@@ -18,6 +18,7 @@ const http = require('http');
 const app = require('./app');
 const db = require('./db');
 const { init: initIO } = require('./src/realtime/io');
+const { runMigrations } = require('./scripts/migrate');
 
 // Read environment configuration with sensible defaults for local development.
 const NODE_ENV = process.env.NODE_ENV || 'development';
@@ -33,12 +34,24 @@ const server = http.createServer(app);
  * Start listening for incoming requests.
  * We log minimal operational info (no secrets) so ops can confirm the app is up.
  */
-server.listen(PORT, () => {
-  // Avoid logging sensitive data. Only environment and port are printed.
-  console.log(`[server] Listening on port ${PORT} (env=${NODE_ENV})`);
-  // Initialize Socket.IO after HTTP server starts.
-  initIO(server);
-});
+async function start() {
+  try {
+    // Auto-run migrations on startup to support self-bootstrapping deployments (e.g. DigitalOcean)
+    await runMigrations();
+  } catch (err) {
+    console.error('[server] Startup failed during migration:', err);
+    process.exit(1);
+  }
+
+  server.listen(PORT, () => {
+    // Avoid logging sensitive data. Only environment and port are printed.
+    console.log(`[server] Listening on port ${PORT} (env=${NODE_ENV})`);
+    // Initialize Socket.IO after HTTP server starts.
+    initIO(server);
+  });
+}
+
+start();
 
 /**
  * Helper: Graceful shutdown

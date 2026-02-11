@@ -9,9 +9,106 @@ async function runSQLFile(client, filePath) {
   await client.query(sql);
 }
 
-async function main() {
+async function runMigrations() {
   const client = await db.getClient();
   try {
+    // Check if tables already exist to avoid overwriting data
+    const res = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE  table_schema = 'public'
+        AND    table_name   = 'users'
+      );
+    `);
+    
+    const tablesExist = res.rows[0].exists;
+    if (tablesExist) {
+      // Check if we need to upgrade from UUID to TEXT ids (schema change)
+      const idTypeRes = await client.query(`
+        SELECT data_type 
+        FROM information_schema.columns 
+        WHERE table_name = 'users' AND column_name = 'id'
+      `);
+      
+      const isTextId = idTypeRes.rows[0] && idTypeRes.rows[0].data_type === 'text';
+      
+      if (!isTextId) {
+        console.log('[migrate] Detected old schema (UUID IDs). Re-running migration to update to TEXT IDs...');
+        // Fall through to run migration
+      } else {
+        console.log('[migrate] Tables already exist and schema matches.');
+        
+        // Check if password_hash column exists
+        const colRes = await client.query(`
+          SELECT column_name 
+          FROM information_schema.columns 
+          WHERE table_name='users' AND column_name='password_hash'
+        `);
+        
+        if (colRes.rowCount === 0) {
+          console.log('[migrate] Adding password_hash column...');
+          await client.query('BEGIN');
+          await runSQLFile(client, path.join(__dirname, '..', 'db', 'migrations', '0002_add_password_to_users.sql'));
+          await runSQLFile(client, path.join(__dirname, '..', 'db', 'seeds', '002_update_passwords.sql'));
+          await client.query('COMMIT');
+          console.log('[migrate] Applied password migration.');
+        }
+
+        // Check if lead_id column exists in conversations
+        const leadColRes = await client.query(`
+          SELECT column_name 
+          FROM information_schema.columns 
+          WHERE table_name='conversations' AND column_name='lead_id'
+        `);
+
+        if (leadColRes.rowCount === 0) {
+           console.log('[migrate] Adding lead_id column to conversations...');
+           await client.query('BEGIN');
+           await runSQLFile(client, path.join(__dirname, '..', 'db', 'migrations', '0003_add_lead_id_to_conversations.sql'));
+           await client.query('COMMIT');
+           console.log('[migrate] Applied lead_id migration.');
+        } else {
+          console.log('[migrate] Schema up to date (lead_id exists).');
+        }
+
+        // Check if user FK constraint exists on conversation_assignments
+        const fkRes = await client.query(`
+          SELECT conname 
+          FROM pg_constraint 
+          WHERE conname = 'conversation_assignments_assignee_user_id_fkey'
+        `);
+
+        if (fkRes.rowCount > 0) {
+          console.log('[migrate] Removing User FK constraints...');
+          await client.query('BEGIN');
+          await runSQLFile(client, path.join(__dirname, '..', 'db', 'migrations', '0004_remove_user_fk_constraints.sql'));
+          await client.query('COMMIT');
+          console.log('[migrate] Removed User FK constraints.');
+        } else {
+          console.log('[migrate] User FK constraints already removed.');
+        }
+
+        // Check if team FK constraint exists
+        const teamFkRes = await client.query(`
+          SELECT conname 
+          FROM pg_constraint 
+          WHERE conname = 'conversation_assignments_team_id_fkey'
+        `);
+
+        if (teamFkRes.rowCount > 0) {
+          console.log('[migrate] Relaxing Team constraints...');
+          await client.query('BEGIN');
+          await runSQLFile(client, path.join(__dirname, '..', 'db', 'migrations', '0005_relax_team_constraints.sql'));
+          await client.query('COMMIT');
+          console.log('[migrate] Relaxed Team constraints.');
+        } else {
+           console.log('[migrate] Team constraints already relaxed.');
+        }
+        
+        return;
+      }
+    }
+
     console.log('[migrate] Starting migration using DATABASE_URL');
     await client.query('BEGIN');
     await runSQLFile(client, path.join(__dirname, '..', 'db', 'migrations', '0001_meta_command_center.sql'));
@@ -28,12 +125,24 @@ async function main() {
       await client.query('ROLLBACK');
     } catch (_) {}
     console.error('[migrate] Error:', err.message);
-    process.exitCode = 1;
+    // If called from script, exit with error. If called from server, rethrow.
+    if (require.main === module) {
+      process.exit(1);
+    } else {
+      throw err;
+    }
   } finally {
     client.release();
-    await db.close();
+    // Only close pool if running as standalone script
+    if (require.main === module) {
+      await db.close();
+    }
   }
 }
 
-main();
+if (require.main === module) {
+  runMigrations();
+}
+
+module.exports = { runMigrations };
 

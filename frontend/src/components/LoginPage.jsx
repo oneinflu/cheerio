@@ -3,20 +3,62 @@ import React, { useState } from 'react';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { ArrowRight, Lock, Mail, Command } from 'lucide-react';
+import { login, syncUser } from '../api';
 
 export default function LoginPage({ onLogin }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    // Simulate API call
-    setTimeout(() => {
+    setError('');
+    
+    try {
+      const res = await login(email, password);
+      if (res.success) {
+        const externalUser = res.data.user;
+        const accessToken = res.data.accessToken;
+
+        // Map external user to internal format
+        const roleMap = {
+            'super_admin': 'admin',
+            'admin': 'admin',
+            'team_lead': 'supervisor',
+            'agent': 'agent'
+        };
+        
+        const internalUser = {
+            id: externalUser._id || externalUser.id,
+            name: `${externalUser.firstname} ${externalUser.lastname}`,
+            email: externalUser.email,
+            role: roleMap[externalUser.role] || 'agent',
+            teamIds: [] 
+        };
+
+        // Store in localStorage
+        localStorage.setItem('accessToken', accessToken);
+        localStorage.setItem('user', JSON.stringify(internalUser));
+        
+        // Sync user to backend so foreign keys work
+        try {
+            await syncUser(externalUser);
+        } catch (syncErr) {
+            console.error('Background user sync failed:', syncErr);
+        }
+
+        onLogin(internalUser);
+      } else {
+        setError(res.message || 'Login failed. Please check your credentials.');
+      }
+    } catch (err) {
+      console.error('Login error:', err);
+      setError('An unexpected error occurred. Please try again.');
+    } finally {
       setLoading(false);
-      onLogin();
-    }, 1500);
+    }
   };
 
   return (
@@ -69,6 +111,11 @@ export default function LoginPage({ onLogin }) {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
+            {error && (
+              <div className="p-3 text-sm text-red-500 bg-red-50 border border-red-200 rounded-lg">
+                {error}
+              </div>
+            )}
             <div className="space-y-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-700" htmlFor="email">

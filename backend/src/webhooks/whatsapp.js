@@ -39,6 +39,7 @@ const router = express.Router();
 const db = require('../../db');
 const { getIO } = require('../realtime/io');
 const crypto = require('crypto');
+const axios = require('axios');
 
 // Verify token for GET challenge.
 const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN || '';
@@ -156,6 +157,13 @@ router.post('/', async (req, res, next) => {
             );
             const contactId = contactResult.rows[0].id;
 
+            // Check if this is the first message for this contact (Global check)
+            const historyRes = await client.query(
+              `SELECT 1 FROM messages m JOIN conversations c ON m.conversation_id = c.id WHERE c.contact_id = $1 LIMIT 1`,
+              [contactId]
+            );
+            const isFirstMessage = (historyRes.rowCount === 0);
+
             // Find an open conversation for (channel, contact); else create one.
             let conversationId;
             const existingConv = await client.query(
@@ -190,7 +198,21 @@ router.post('/', async (req, res, next) => {
             else contentType = 'text';
 
             const externalMessageId = msg.id; // e.g., "wamid.XXXX"
-            const textBody = msg.text && msg.text.body ? msg.text.body : null;
+            
+            let textBody = null;
+            if (msg.type === 'text' && msg.text) {
+              textBody = msg.text.body;
+            } else if (msg.type === 'interactive' && msg.interactive) {
+               // Handle Quick Replies and List Replies
+               if (msg.interactive.type === 'button_reply' && msg.interactive.button_reply) {
+                 textBody = msg.interactive.button_reply.title;
+               } else if (msg.interactive.type === 'list_reply' && msg.interactive.list_reply) {
+                 textBody = msg.interactive.list_reply.title;
+               }
+             } else if (msg.type === 'button' && msg.button) {
+               // Handle Button responses (Template buttons)
+               textBody = msg.button.text;
+             }
 
             // Insert message with idempotency: unique(channel_id, external_message_id)
             const messageResult = await client.query(
@@ -281,6 +303,137 @@ router.post('/', async (req, res, next) => {
               io.to(`conversation:${conversationId}`).emit('message:new', payload);
               io.emit('message:new', payload);
             }
+
+            // Lead Webhook Integration
+            // If first message AND it's a Quick Reply (Course selection), send to external API
+            const isQuickReply = (msg.type === 'interactive' || msg.type === 'button');
+            
+            console.log('[Lead Webhook] Check:', { 
+              isFirstMessage, 
+              isQuickReply, 
+              textBody: textBody || 'empty',
+              senderWaId 
+            });
+
+            if (isFirstMessage && isQuickReply && textBody) {
+               try {
+                 // Format mobile: remove '91' prefix if present
+                 let mobile = senderWaId;
+                 if (mobile.startsWith('91') && mobile.length > 10) {
+                   mobile = mobile.slice(2);
+                 }
+
+                 console.log(`[Lead Webhook] Sending lead: mobile=${mobile}, name=${profileName}, course=${textBody}`);
+
+                 // Update local DB contact profile with course
+                 await db.query(
+                   `UPDATE contacts 
+                    SET profile = jsonb_set(COALESCE(profile, '{}'), '{course}', to_jsonb($1::text), true),
+                        updated_at = NOW()
+                    WHERE channel_id = $2 AND external_id = $3`,
+                   [textBody, channelId, senderWaId]
+                 );
+                 console.log(`[Lead Webhook] Updated local contact course to: ${textBody}`);
+
+                 // Fire and forget - do not await strictly or fail if this fails
+                 axios.post('https://api.starforze.com/api/webhook/whatsapp-lead', {
+                   mobile: mobile,
+                   name: profileName || 'Unknown',
+                   course: textBody
+                 }).then(async response => {
+                    console.log(`[Lead Webhook] Success: ${response.status} ${response.statusText}`);
+                    console.log('[Lead Webhook] Response Body:', JSON.stringify(response.data, null, 2));
+                    
+                    // Emit event to frontend for debugging
+                    const io = getIO();
+                    if (io) {
+                      io.emit('debug:lead_api_response', response.data);
+                    }
+
+                    // Auto-assignment logic based on Lead API response
+                    const leadData = response.data?.data;
+                    const assignedTo = leadData?.assignedTo;
+                    
+                    // Save lead_id to conversation
+                    const leadId = leadData?.lead?._id;
+                    if (leadId) {
+                        try {
+                           await db.query('UPDATE conversations SET lead_id = $1 WHERE id = $2', [leadId, conversationId]);
+                           console.log(`[Lead Webhook] Linked lead ${leadId} to conversation ${conversationId}`);
+                        } catch (leadUpdateErr) {
+                           console.error(`[Lead Webhook] Failed to link lead ${leadId}:`, leadUpdateErr.message);
+                        }
+                    }
+
+                    if (assignedTo && (assignedTo._id || assignedTo.id || assignedTo.email)) {
+                       // Prioritize ID match as requested
+                       const targetUserId = assignedTo._id || assignedTo.id;
+                       const targetEmail = assignedTo.email;
+                       
+                       console.log(`[Lead Webhook] Attempting auto-assignment to: ID=${targetUserId}, Email=${targetEmail}`);
+
+                       try {
+                         // Use ID directly if available, otherwise ignore email fallback for now as ID is preferred
+                         const userId = targetUserId; 
+
+                         if (userId) {
+                           // Use lead.teamId if available, otherwise null (DB allows null now)
+                           const teamId = leadData.teamId || null;
+                             
+                           // Check if already assigned
+                           const checkRes = await db.query(
+                             'SELECT 1 FROM conversation_assignments WHERE conversation_id = $1 AND released_at IS NULL', 
+                             [conversationId]
+                           );
+                             
+                           if (checkRes.rowCount === 0) {
+                              await db.query(
+                                `INSERT INTO conversation_assignments (id, conversation_id, team_id, assignee_user_id, claimed_at)
+                                 VALUES (gen_random_uuid(), $1, $2, $3, NOW())`,
+                                [conversationId, teamId, userId]
+                              );
+                              console.log(`[Lead Webhook] Auto-assigned conversation ${conversationId} to user ${userId}`);
+                                
+                              if (io) {
+                                io.to(`conversation:${conversationId}`).emit('assignment:claimed', { conversationId, userId });
+                                io.emit('assignment:claimed', { conversationId, userId }); 
+                                io.emit('debug:lead_api_response', { 
+                                  message: `Auto-assigned to ${userId}`, 
+                                  success: true 
+                                });
+                              }
+                           } else {
+                              console.log(`[Lead Webhook] Conversation ${conversationId} already assigned. Skipping auto-assignment.`);
+                              if (io) io.emit('debug:lead_api_response', { message: 'Already assigned', skipped: true });
+                           }
+                         } else {
+                           console.log(`[Lead Webhook] No User ID provided in webhook.`);
+                           if (io) io.emit('debug:lead_api_response', { error: `No User ID found` });
+                         }
+                       } catch (assignErr) {
+                         console.error('[Lead Webhook] Auto-assignment error:', assignErr);
+                         if (io) io.emit('debug:lead_api_response', { error: assignErr.message });
+                       }
+                     } else {
+                        if (io) io.emit('debug:lead_api_response', { message: 'No assignedTo info in response', data: leadData });
+                     }
+
+                 }).catch(err => {
+                    console.error('[Lead Webhook] Error (Async):', err.message);
+                    if (err.response) {
+                        console.error('[Lead Webhook] Response data:', err.response.data);
+                        // Emit error to frontend for debugging
+                        const io = getIO();
+                        if (io) {
+                          io.emit('debug:lead_api_response', { error: err.message, details: err.response.data });
+                        }
+                    }
+                 });
+               } catch (e) {
+                 console.error('[Lead Webhook] Error:', e.message);
+               }
+             }
+
           } catch (err) {
             // On any error, rollback so the transaction does not leave partial state.
             try {

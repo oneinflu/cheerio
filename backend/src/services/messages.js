@@ -4,7 +4,7 @@ const db = require('../../db');
 async function listMessages(conversationId) {
   const msgs = await db.query(
     `
-    SELECT id, conversation_id, direction, content_type, text_body, raw_payload, created_at
+    SELECT id, conversation_id, direction, content_type, text_body, raw_payload, created_at, external_message_id
     FROM messages
     WHERE conversation_id = $1
     ORDER BY created_at ASC
@@ -39,6 +39,7 @@ async function listMessages(conversationId) {
     textBody: m.text_body,
     rawPayload: m.raw_payload,
     createdAt: m.created_at,
+    externalMessageId: m.external_message_id,
     attachments: attByMsg.get(m.id) || [],
   }));
 }

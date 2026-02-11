@@ -2,61 +2,75 @@
 import React, { useState } from 'react';
 import { cn } from '../lib/utils';
 import { Badge } from './ui/Badge';
-import { MessageCircle, Instagram, Pin } from 'lucide-react';
+import { Pin, MessageCircle, Instagram, Check } from 'lucide-react';
 
-export default function Inbox({ conversations, selectedId, onSelect, onPin }) {
-  const [filter, setFilter] = useState('ALL'); // ALL, whatsapp, instagram
-
-  const filteredConversations = conversations.filter(c => {
-    if (filter === 'ALL') return true;
-    return c.channelType === filter;
-  });
-
+export default function Inbox({ conversations, selectedId, onSelect, onPin, onResolve, currentUser, filter, setFilter }) {
+  
   return (
     <div className="flex flex-col h-full">
       {/* Filter Chips */}
-      <div className="px-4 py-3 flex gap-2 border-b border-slate-100 overflow-x-auto">
+      <div className="px-4 py-3 flex gap-2 border-b border-slate-100 overflow-x-auto no-scrollbar">
         <button
-          onClick={() => setFilter('ALL')}
+          onClick={() => setFilter('all')}
           className={cn(
-            "px-3 py-1 rounded-full text-xs font-medium transition-colors whitespace-nowrap",
-            filter === 'ALL' 
-              ? "bg-slate-900 text-white" 
-              : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+            "px-3 py-1 rounded-full text-xs font-medium transition-colors whitespace-nowrap border",
+            filter === 'all' 
+              ? "bg-slate-900 text-white border-slate-900" 
+              : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
           )}
         >
           All
         </button>
         <button
-          onClick={() => setFilter('whatsapp')}
+          onClick={() => setFilter('open')}
           className={cn(
-            "flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors whitespace-nowrap",
-            filter === 'whatsapp' 
-              ? "bg-green-600 text-white" 
-              : "bg-green-50 text-green-700 hover:bg-green-100"
+            "px-3 py-1 rounded-full text-xs font-medium transition-colors whitespace-nowrap border",
+            filter === 'open' 
+              ? "bg-green-600 text-white border-green-600" 
+              : "bg-white text-slate-600 border-slate-200 hover:bg-green-50 hover:text-green-700 hover:border-green-200"
           )}
         >
-          <MessageCircle size={12} />
-          WhatsApp
+          Open
         </button>
         <button
-          onClick={() => setFilter('instagram')}
+          onClick={() => setFilter('unassigned')}
           className={cn(
-            "flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors whitespace-nowrap",
-            filter === 'instagram' 
-              ? "bg-pink-600 text-white" 
-              : "bg-pink-50 text-pink-700 hover:bg-pink-100"
+            "px-3 py-1 rounded-full text-xs font-medium transition-colors whitespace-nowrap border",
+            filter === 'unassigned' 
+              ? "bg-orange-500 text-white border-orange-500" 
+              : "bg-white text-slate-600 border-slate-200 hover:bg-orange-50 hover:text-orange-700 hover:border-orange-200"
           )}
         >
-          <Instagram size={12} />
-          Instagram
+          Unassigned
+        </button>
+        <button
+          onClick={() => setFilter('pinned')}
+          className={cn(
+            "px-3 py-1 rounded-full text-xs font-medium transition-colors whitespace-nowrap border",
+            filter === 'pinned' 
+              ? "bg-blue-600 text-white border-blue-600" 
+              : "bg-white text-slate-600 border-slate-200 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200"
+          )}
+        >
+          Pinned
+        </button>
+        <button
+          onClick={() => setFilter('closed')}
+          className={cn(
+            "px-3 py-1 rounded-full text-xs font-medium transition-colors whitespace-nowrap border",
+            filter === 'closed' 
+              ? "bg-slate-600 text-white border-slate-600" 
+              : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-slate-800"
+          )}
+        >
+          Closed
         </button>
       </div>
 
       {/* List */}
       <div className="flex-1 overflow-y-auto">
         <ul className="divide-y divide-slate-100">
-          {filteredConversations.map((c) => {
+          {conversations.map((c) => {
              const isSelected = selectedId === c.id;
              const isInsta = c.channelType === 'instagram';
              return (
@@ -84,24 +98,35 @@ export default function Inbox({ conversations, selectedId, onSelect, onPin }) {
                         onPin(c.id);
                       }}
                       className={cn(
-                        "p-1 rounded-full hover:bg-slate-200 transition-colors",
-                        c.isPinned ? "text-blue-600" : "text-slate-300 opacity-0 group-hover:opacity-100"
+                        "p-1.5 rounded-full hover:bg-slate-200 transition-colors",
+                        c.isPinned ? "text-blue-600 bg-blue-50" : "text-slate-400 hover:text-slate-600"
                       )}
+                      title={c.isPinned ? "Unpin" : "Pin"}
                     >
-                      <Pin size={12} fill={c.isPinned ? "currentColor" : "none"} />
+                      <Pin size={14} fill={c.isPinned ? "currentColor" : "none"} />
                     </button>
+                    {c.status !== 'closed' && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onResolve(c.id);
+                        }}
+                        className="p-1.5 rounded-full hover:bg-slate-200 transition-colors text-slate-400 hover:text-green-600"
+                        title="Resolve"
+                      >
+                        <Check size={14} />
+                      </button>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center justify-between">
                    <p className="text-xs text-slate-500 line-clamp-1 max-w-[70%]">
                      {c.lastMessage || "No messages yet"}
                    </p>
-                   {c.unreadCount > 0 ? (
+                   {c.unreadCount > 0 && (
                       <div className="flex h-5 w-5 items-center justify-center rounded-full bg-green-500 text-[10px] font-bold text-white shadow-sm">
                         {c.unreadCount}
                       </div>
-                   ) : c.status === 'open' && (
-                      <div className="h-2 w-2 rounded-full bg-blue-600" />
                    )}
                 </div>
                 <div className="mt-2 flex gap-2">
@@ -122,7 +147,7 @@ export default function Inbox({ conversations, selectedId, onSelect, onPin }) {
               </li>
             );
           })}
-          {filteredConversations.length === 0 && (
+          {conversations.length === 0 && (
             <div className="p-8 text-center text-slate-500 text-sm">
               No conversations found.
             </div>

@@ -4,9 +4,9 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Badge } from './ui/Badge';
-import { Plus, Search, Smartphone, Image as ImageIcon, CheckCircle, Clock, AlertCircle, ChevronRight, FileText, MoreVertical, RefreshCw, Send } from 'lucide-react';
+import { Plus, Search, Smartphone, Image as ImageIcon, CheckCircle, Clock, AlertCircle, ChevronRight, FileText, MoreVertical, RefreshCw, Send, Upload } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { getTemplates, createTemplate, sendTestTemplate } from '../api';
+import { getTemplates, createTemplate, sendTestTemplate, uploadTemplateExampleMedia } from '../api';
 
 export default function TemplatesPage() {
   const [selectedId, setSelectedId] = useState(null);
@@ -14,6 +14,7 @@ export default function TemplatesPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState('ALL');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   // Test Modal State
   const [isTestModalOpen, setIsTestModalOpen] = useState(false);
@@ -24,8 +25,13 @@ export default function TemplatesPage() {
   // Templates Data
   const [templates, setTemplates] = useState([]);
 
+  // Variable Editor State
+  const [newVarName, setNewVarName] = useState('');
+  const [newVarExample, setNewVarExample] = useState('');
+
   const fetchTemplatesData = async () => {
     setLoading(true);
+    setError(null);
     try {
       const res = await getTemplates();
       if (res && res.data) {
@@ -49,9 +55,15 @@ export default function TemplatesPage() {
           };
         });
         setTemplates(mapped);
+      } else if (res && res.error) {
+        throw new Error(res.error);
+      } else {
+        // Handle empty or unexpected response
+        setTemplates([]);
       }
     } catch (err) {
       console.error('Failed to fetch templates', err);
+      setError('Failed to load templates. Please check your connection and try again.');
     } finally {
       setLoading(false);
     }
@@ -76,56 +88,135 @@ export default function TemplatesPage() {
         headerType: 'NONE',
         headerText: '',
         bodyText: 'Hello {{1}}, ...',
+        variables: [],
         footerText: '',
         buttons: []
       });
     } else if (selectedId) {
       const t = templates.find(t => t.id === selectedId);
-      if (t) setFormData({ ...t });
+      if (t) setFormData({ ...t, variables: [] }); // Start with empty variables for edit
     }
   }, [selectedId, isCreating, templates]);
 
+  const handleImageUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Create a local preview URL
+    const previewUrl = URL.createObjectURL(file);
+    
+    setFormData(prev => ({
+      ...prev,
+      headerFile: file,
+      headerFileName: file.name,
+      headerPreviewUrl: previewUrl,
+      headerHandle: null // Clear previous handle as we have a new file to upload on save
+    }));
+  };
+
   const handleSave = async () => {
     if (isCreating) {
-      const components = [];
+      // Validation
+      if (!formData.name) { alert('Please enter a template name'); return; }
+      if (!formData.bodyText) { alert('Please enter body text'); return; }
       
-      // Header
-      if (formData.headerType !== 'NONE') {
-        const header = { type: 'HEADER', format: formData.headerType };
-        if (formData.headerType === 'TEXT') header.text = formData.headerText;
-        components.push(header);
-      }
-      
-      // Body
-      components.push({ type: 'BODY', text: formData.bodyText });
-      
-      // Footer
-      if (formData.footerText) {
-        components.push({ type: 'FOOTER', text: formData.footerText });
-      }
-      
-      // Buttons
+      // Validate Buttons
       if (formData.buttons && formData.buttons.length > 0) {
-        components.push({ type: 'BUTTONS', buttons: formData.buttons });
+        const hasQuickReply = formData.buttons.some(b => b.type === 'QUICK_REPLY');
+        const hasCTA = formData.buttons.some(b => ['URL', 'PHONE_NUMBER'].includes(b.type));
+        
+        if (hasQuickReply && hasCTA) {
+          alert('You cannot mix Quick Reply buttons with Call to Action buttons (URL/Phone). Please use only one type.');
+          return;
+        }
+        
+        if (hasCTA && formData.buttons.length > 2) {
+           alert('You can only have up to 2 Call to Action buttons.');
+           return;
+        }
       }
 
-      const payload = {
-        name: formData.name,
-        category: formData.category,
-        language: formData.language,
-        components
-      };
+      const components = [];
       
       try {
         setLoading(true);
-        await createTemplate(payload);
+
+        // Header
+        if (formData.headerType !== 'NONE') {
+          const header = { type: 'HEADER', format: formData.headerType };
+          if (formData.headerType === 'TEXT') {
+              header.text = formData.headerText;
+          } else if (formData.headerType === 'IMAGE') {
+              let handle = formData.headerHandle;
+              
+              // If we have a file to upload, do it now
+              if (formData.headerFile) {
+                  try {
+                      const uploadRes = await uploadTemplateExampleMedia(formData.headerFile);
+                      if (uploadRes.h) {
+                          handle = uploadRes.h;
+                      } else {
+                          throw new Error('Image upload failed: No handle returned');
+                      }
+                  } catch (uploadErr) {
+                      throw new Error(`Failed to upload image header: ${uploadErr.message}`);
+                  }
+              }
+
+              if (!handle) {
+                  alert('Please upload an example image for the header.');
+                  setLoading(false);
+                  return;
+              }
+              header.example = { header_handle: [handle] };
+          }
+          components.push(header);
+        }
+        
+        // Body
+        const bodyComponent = { type: 'BODY', text: formData.bodyText };
+        if (formData.variables && formData.variables.length > 0) {
+            bodyComponent.example = {
+                body_text_named_params: formData.variables.map(v => ({
+                    param_name: v.name,
+                    example: v.example
+                }))
+            };
+        }
+        components.push(bodyComponent);
+        
+        // Footer
+        if (formData.footerText) {
+          components.push({ type: 'FOOTER', text: formData.footerText });
+        }
+        
+        // Buttons
+        if (formData.buttons && formData.buttons.length > 0) {
+          components.push({ type: 'BUTTONS', buttons: formData.buttons });
+        }
+
+        const payload = {
+          name: formData.name,
+          category: formData.category,
+          language: formData.language,
+          components
+        };
+        
+        if (formData.variables && formData.variables.length > 0) {
+            payload.parameter_format = "named";
+        }
+        
+        const res = await createTemplate(payload);
+        if (res.error) {
+            throw new Error(res.error.message || JSON.stringify(res.error));
+        }
         setIsCreating(false);
         setSelectedId(null);
         alert('Template submitted for approval!');
         await fetchTemplatesData();
       } catch (err) {
         console.error('Error creating template:', err);
-        alert('Failed to create template. Check console for details.');
+        alert(`Failed to create template: ${err.message || 'Unknown error'}`);
       } finally {
         setLoading(false);
       }
@@ -263,6 +354,11 @@ export default function TemplatesPage() {
               </button>
             ))}
           </div>
+          {error && (
+            <div className="mt-2 p-2 bg-red-50 text-red-600 text-xs rounded border border-red-100">
+              {error}
+            </div>
+          )}
         </div>
         
         <div className="flex-1 overflow-y-auto">
@@ -423,86 +519,256 @@ export default function TemplatesPage() {
                             />
                           )}
                           {formData.headerType === 'IMAGE' && (
-                             <div className="h-32 w-full max-w-md bg-slate-100 rounded-lg border-2 border-dashed border-slate-300 flex flex-col items-center justify-center text-slate-500 gap-2 hover:bg-slate-50 transition-colors cursor-pointer">
-                               <ImageIcon className="w-8 h-8 opacity-50" />
-                               <span className="text-xs font-medium">Click to upload image</span>
+                             <div className="relative">
+                               <input 
+                                 type="file" 
+                                 accept="image/*"
+                                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                                 onChange={handleImageUpload}
+                               />
+                               <div className={cn(
+                                  "h-32 w-full max-w-md bg-slate-100 rounded-lg border-2 border-dashed border-slate-300 flex flex-col items-center justify-center text-slate-500 gap-2 transition-colors relative overflow-hidden",
+                                  (formData.headerHandle || formData.headerPreviewUrl) ? "bg-blue-50 border-blue-300 text-blue-600" : "hover:bg-slate-50"
+                                )}>
+                                  {formData.headerPreviewUrl ? (
+                                      <div className="relative w-full h-full flex items-center justify-center group">
+                                          <img src={formData.headerPreviewUrl} alt="Preview" className="max-h-full max-w-full object-contain p-2" />
+                                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                              <span className="text-white text-xs font-medium bg-black/50 px-2 py-1 rounded">Click to replace</span>
+                                          </div>
+                                      </div>
+                                  ) : formData.headerHandle ? (
+                                    <>
+                                      <CheckCircle className="w-8 h-8 text-blue-500" />
+                                      <span className="text-xs font-medium">{formData.headerFileName || 'Image Uploaded'}</span>
+                                      <span className="text-[10px] text-blue-400">Click to replace</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      {loading ? <RefreshCw className="w-8 h-8 animate-spin opacity-50" /> : <Upload className="w-8 h-8 opacity-50" />}
+                                      <span className="text-xs font-medium">{loading ? 'Uploading...' : 'Click to upload image example'}</span>
+                                    </>
+                                  )}
+                                </div>
                              </div>
                           )}
                         </div>
                       </div>
 
-                      <div className="h-px bg-slate-100" />
-
                       {/* Body */}
                       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                         <div className="md:col-span-1">
-                          <label className="text-sm font-medium text-slate-700 block mb-1">Body Text</label>
-                          <span className="text-xs text-slate-500">Main message content. Use {'{{1}}'} for variables.</span>
+                          <label className="text-sm font-medium text-slate-700 block mb-1">Body</label>
+                          <span className="text-xs text-slate-500">Main message text. Use named variables like {'{{name}}'}.</span>
                         </div>
-                        <div className="md:col-span-3">
-                          <textarea
-                            className="flex min-h-[160px] w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-2 shadow-sm resize-y"
-                            value={formData.bodyText}
-                            onChange={e => setFormData({...formData, bodyText: e.target.value})}
-                            placeholder="Hello {{1}}, we have an update regarding your order {{2}}..."
-                          />
+                        <div className="md:col-span-3 space-y-4">
+                          <div className="relative">
+                            <textarea 
+                              className="w-full min-h-[120px] rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-2 resize-y font-mono"
+                              value={formData.bodyText}
+                              onChange={e => setFormData({...formData, bodyText: e.target.value})}
+                              placeholder="Hello {{name}}, your order {{order_id}} is ready."
+                            />
+                          </div>
+
+                          {/* Variable Manager */}
+                          <div className="bg-slate-50 p-3 rounded-md border border-slate-200 space-y-3">
+                            <div className="flex gap-2 items-end">
+                                <div className="flex-1">
+                                    <label className="text-xs text-slate-500 font-medium mb-1 block">Variable Name</label>
+                                    <Input 
+                                        placeholder="e.g. name" 
+                                        value={newVarName}
+                                        onChange={e => setNewVarName(e.target.value)}
+                                        className="h-8 bg-white"
+                                    />
+                                </div>
+                                <div className="flex-1">
+                                    <label className="text-xs text-slate-500 font-medium mb-1 block">Example Value</label>
+                                    <Input 
+                                        placeholder="e.g. John Doe" 
+                                        value={newVarExample}
+                                        onChange={e => setNewVarExample(e.target.value)}
+                                        className="h-8 bg-white"
+                                    />
+                                </div>
+                                <Button 
+                                    size="sm"
+                                    className="h-8"
+                                    disabled={!newVarName || !newVarExample}
+                                    onClick={() => {
+                                        if (!newVarName || !newVarExample) return;
+                                        const newVar = { name: newVarName, example: newVarExample };
+                                        setFormData(prev => ({
+                                            ...prev,
+                                            variables: [...(prev.variables || []), newVar]
+                                        }));
+                                        setNewVarName('');
+                                        setNewVarExample('');
+                                    }}
+                                >
+                                    Add
+                                </Button>
+                            </div>
+
+                            {formData.variables && formData.variables.length > 0 && (
+                                <div className="space-y-2 pt-2 border-t border-slate-200">
+                                    <label className="text-xs text-slate-500 font-medium">Defined Variables</label>
+                                    <div className="flex flex-wrap gap-2">
+                                        {formData.variables.map((v, idx) => (
+                                            <div key={idx} className="flex items-center gap-1 bg-white border border-blue-200 rounded-md px-2 py-1 shadow-sm">
+                                                <div className="flex flex-col">
+                                                    <span className="text-xs font-mono text-blue-700 font-bold">{`{{${v.name}}}`}</span>
+                                                    <span className="text-[10px] text-slate-500 truncate max-w-[80px]">{v.example}</span>
+                                                </div>
+                                                <div className="flex flex-col gap-0.5 ml-1 border-l border-slate-100 pl-1">
+                                                    <button 
+                                                        className="text-[10px] text-slate-400 hover:text-blue-600"
+                                                        title="Insert into text"
+                                                        onClick={() => setFormData(prev => ({
+                                                            ...prev,
+                                                            bodyText: prev.bodyText + ` {{${v.name}}}`
+                                                        }))}
+                                                    >
+                                                        <Plus size={10} />
+                                                    </button>
+                                                    <button 
+                                                        className="text-[10px] text-slate-400 hover:text-red-600"
+                                                        title="Remove"
+                                                        onClick={() => {
+                                                            const newVars = formData.variables.filter((_, i) => i !== idx);
+                                                            setFormData(prev => ({...prev, variables: newVars}));
+                                                        }}
+                                                    >
+                                                        ✕
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                          </div>
                         </div>
                       </div>
-
-                      <div className="h-px bg-slate-100" />
 
                       {/* Footer */}
                       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                         <div className="md:col-span-1">
                           <label className="text-sm font-medium text-slate-700 block mb-1">Footer</label>
-                          <span className="text-xs text-slate-500">Small text at the bottom</span>
+                          <span className="text-xs text-slate-500">Optional small text at bottom</span>
                         </div>
                         <div className="md:col-span-3">
                           <Input 
                             value={formData.footerText} 
                             onChange={e => setFormData({...formData, footerText: e.target.value})}
                             placeholder="e.g. Reply STOP to unsubscribe"
-                            className="max-w-md"
                           />
                         </div>
                       </div>
 
-                      <div className="h-px bg-slate-100" />
-
                       {/* Buttons */}
                       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                         <div className="md:col-span-1">
-                           <label className="text-sm font-medium text-slate-700 block mb-1">Buttons</label>
-                           <span className="text-xs text-slate-500">Interactive elements</span>
-                         </div>
-                         <div className="md:col-span-3 space-y-3">
-                           {formData.buttons.map((btn, idx) => (
-                             <div key={idx} className="flex gap-2 max-w-md">
-                               <Input value={btn.text} readOnly className="flex-1 bg-slate-50" />
-                               <Button size="icon" variant="ghost" className="hover:bg-red-50 hover:text-red-600" onClick={() => {
-                                 const newBtns = [...formData.buttons];
-                                 newBtns.splice(idx, 1);
-                                 setFormData({...formData, buttons: newBtns});
-                               }}>
-                                 <AlertCircle size={16} />
-                               </Button>
-                             </div>
-                           ))}
-                           <div className="flex gap-2">
-                             <Button 
-                               variant="outline" 
-                               size="sm" 
-                               className="border-dashed border-slate-300 text-slate-600 hover:border-slate-400 hover:bg-slate-50"
-                               onClick={() => setFormData({
-                                 ...formData, 
-                                 buttons: [...formData.buttons, { type: 'QUICK_REPLY', text: 'New Button' }]
-                               })}
-                             >
-                               <Plus size={16} className="mr-1" /> Add Button
-                             </Button>
-                           </div>
-                         </div>
+                        <div className="md:col-span-1">
+                          <label className="text-sm font-medium text-slate-700 block mb-1">Buttons</label>
+                          <span className="text-xs text-slate-500">Up to 3 buttons (Quick Reply) or 2 (Call to Action)</span>
+                        </div>
+                        <div className="md:col-span-3 space-y-4">
+                          {formData.buttons.map((btn, idx) => (
+                            <div key={idx} className="flex gap-2 items-start bg-white p-3 rounded-md border border-slate-200 shadow-sm">
+                              <div className="flex-1 space-y-2">
+                                <div className="flex gap-2">
+                                  <select 
+                                    className="h-9 rounded-md border border-slate-200 text-sm px-2 bg-slate-50"
+                                    value={btn.type}
+                                    onChange={e => {
+                                      const newButtons = [...formData.buttons];
+                                      newButtons[idx] = { ...newButtons[idx], type: e.target.value };
+                                      // Reset fields based on type
+                                      if (e.target.value === 'QUICK_REPLY') {
+                                        delete newButtons[idx].url;
+                                        delete newButtons[idx].phone_number;
+                                      } else if (e.target.value === 'URL') {
+                                        newButtons[idx].url = '';
+                                        delete newButtons[idx].phone_number;
+                                      } else if (e.target.value === 'PHONE_NUMBER') {
+                                        newButtons[idx].phone_number = '';
+                                        delete newButtons[idx].url;
+                                      }
+                                      setFormData({...formData, buttons: newButtons});
+                                    }}
+                                  >
+                                    <option value="QUICK_REPLY">Quick Reply</option>
+                                    <option value="URL">URL</option>
+                                    <option value="PHONE_NUMBER">Phone Number</option>
+                                  </select>
+                                  <Input 
+                                    className="h-9 flex-1"
+                                    value={btn.text}
+                                    onChange={e => {
+                                      const newButtons = [...formData.buttons];
+                                      newButtons[idx].text = e.target.value;
+                                      setFormData({...formData, buttons: newButtons});
+                                    }}
+                                    placeholder="Button Text"
+                                  />
+                                </div>
+                                
+                                {btn.type === 'URL' && (
+                                  <Input 
+                                    className="h-9"
+                                    value={btn.url || ''}
+                                    onChange={e => {
+                                      const newButtons = [...formData.buttons];
+                                      newButtons[idx].url = e.target.value;
+                                      setFormData({...formData, buttons: newButtons});
+                                    }}
+                                    placeholder="https://example.com"
+                                  />
+                                )}
+                                
+                                {btn.type === 'PHONE_NUMBER' && (
+                                  <Input 
+                                    className="h-9"
+                                    value={btn.phone_number || ''}
+                                    onChange={e => {
+                                      const newButtons = [...formData.buttons];
+                                      newButtons[idx].phone_number = e.target.value;
+                                      setFormData({...formData, buttons: newButtons});
+                                    }}
+                                    placeholder="+15550000000"
+                                  />
+                                )}
+                              </div>
+                              <button 
+                                onClick={() => {
+                                  const newButtons = formData.buttons.filter((_, i) => i !== idx);
+                                  setFormData({...formData, buttons: newButtons});
+                                }}
+                                className="text-slate-400 hover:text-red-500 p-1"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          ))}
+                          
+                          {formData.buttons.length < 3 && (
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="border-dashed border-slate-300 text-slate-600 hover:border-slate-400 hover:bg-slate-50 w-full"
+                              onClick={() => setFormData({
+                                ...formData, 
+                                buttons: [...formData.buttons, { type: 'QUICK_REPLY', text: '' }]
+                              })}
+                            >
+                              <Plus size={16} className="mr-1" /> Add Button
+                            </Button>
+                          )}
+                        </div>
                       </div>
+
+
 
                     </CardContent>
                   </Card>

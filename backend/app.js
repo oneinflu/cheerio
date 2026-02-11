@@ -15,6 +15,7 @@
 
 const express = require('express');
 const path = require('path');
+const cors = require('cors'); // Added for widget support
 const whatsappWebhookRouter = require('./src/webhooks/whatsapp');
 const whatsappOutboundRouter = require('./src/routes/whatsappOutbound');
 const conversationsRouter = require('./src/routes/conversations');
@@ -23,6 +24,10 @@ const inboxRouter = require('./src/routes/inbox');
 const messagesRouter = require('./src/routes/messages');
 const templatesRouter = require('./src/routes/templates');
 const mediaRouter = require('./src/routes/media');
+const dashboardRouter = require('./src/routes/dashboard');
+const workflowsRouter = require('./src/routes/workflows');
+const authRouter = require('./src/routes/auth');
+const teamRouter = require('./src/routes/team');
 const auth = require('./src/middlewares/auth');
 
 // Read environment-based config for HTTP concerns. Defaults are safe for dev.
@@ -53,6 +58,13 @@ function createApp() {
       }
     }
   }));
+  
+  // Enable CORS for all routes (allows widget to be loaded from other domains)
+  app.use(cors());
+
+  // Serve static files for the widget
+  app.use('/widget', express.static(path.join(__dirname, 'public')));
+
   app.use((req, res, next) => {
     // Minimal per-request context; do not attach sensitive info.
     req.locals = { env: NODE_ENV };
@@ -86,6 +98,8 @@ function createApp() {
   // app.use('/api/conversations', conversationsRouter);
   // app.use('/api/messages', messagesRouter);
   app.use('/webhooks/whatsapp', whatsappWebhookRouter);
+  app.use('/api/auth', authRouter); // Login
+  app.use('/api/team-users', teamRouter); // Team Users
   app.use('/api/whatsapp', whatsappOutboundRouter);
   app.use('/api/conversations', conversationsRouter);
   app.use('/api', staffNotesRouter);
@@ -93,6 +107,8 @@ function createApp() {
   app.use('/api', messagesRouter);
   app.use('/api/templates', templatesRouter);
   app.use('/api/media', mediaRouter);
+  app.use('/api/workflows', workflowsRouter);
+  app.use('/api', dashboardRouter);
 
   /**
    * Serve static assets in production.

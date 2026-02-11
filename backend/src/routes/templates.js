@@ -2,6 +2,8 @@
 const express = require('express');
 const router = express.Router();
 const whatsappClient = require('../integrations/meta/whatsappClient');
+const multer = require('multer');
+const upload = multer({ storage: multer.memoryStorage() });
 
 const WABA_ID = process.env.WHATSAPP_BUSINESS_ACCOUNT_ID;
 
@@ -16,6 +18,7 @@ router.get('/', async (req, res, next) => {
     return res.json({ data: [] });
   }
   try {
+    console.log('[templates] Fetching templates for WABA:', WABA_ID);
     const resp = await whatsappClient.getTemplates(WABA_ID);
     res.json(resp.data);
   } catch (err) {
@@ -37,6 +40,36 @@ router.post('/', async (req, res, next) => {
   try {
     const resp = await whatsappClient.createTemplate(WABA_ID, req.body);
     res.json(resp.data);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/templates/upload-example
+ * Upload media for template example (returns handle).
+ */
+router.post('/upload-example', upload.single('file'), async (req, res, next) => {
+  if (!WABA_ID) {
+    const err = new Error('WHATSAPP_BUSINESS_ACCOUNT_ID is not configured');
+    err.status = 500;
+    return next(err);
+  }
+  if (!req.file) {
+    const err = new Error('File is required');
+    err.status = 400;
+    return next(err);
+  }
+  
+  try {
+    const resp = await whatsappClient.uploadMessageTemplateMedia(
+      WABA_ID, 
+      req.file.buffer, 
+      req.file.mimetype, 
+      req.file.originalname
+    );
+    // resp should be { h: "..." }
+    res.json(resp);
   } catch (err) {
     next(err);
   }

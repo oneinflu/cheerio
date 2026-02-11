@@ -190,7 +190,17 @@ async function sendText(conversationId, text) {
     emitMessage(details.conversationId, messageId, 'text', text);
     emitStatus(details.conversationId, messageId, 'sending');
 
-    const resp = await client.sendText(details.phoneNumberId, details.toWaId, text);
+    let resp;
+    try {
+      resp = await client.sendText(details.phoneNumberId, details.toWaId, text);
+    } catch (apiErr) {
+      console.error('[sendText] Meta API failed:', apiErr.response?.data || apiErr.message);
+      await finalizeOutboundMessage(clientConn, messageId, details.conversationId, null, false);
+      await clientConn.query('COMMIT');
+      emitStatus(details.conversationId, messageId, 'failed');
+      throw new Error(apiErr.response?.data?.error?.message || apiErr.message || 'Failed to send text');
+    }
+
     const externalId =
       resp.data && Array.isArray(resp.data.messages) && resp.data.messages[0]
         ? resp.data.messages[0].id
@@ -248,7 +258,17 @@ async function sendMedia(conversationId, kind, link, caption) {
     emitMessage(details.conversationId, messageId, kind, caption || null, null, [attachment]);
     emitStatus(details.conversationId, messageId, 'sending');
 
-    const resp = await client.sendMedia(details.phoneNumberId, details.toWaId, kind, link, caption);
+    let resp;
+    try {
+      resp = await client.sendMedia(details.phoneNumberId, details.toWaId, kind, link, caption);
+    } catch (apiErr) {
+      console.error('[sendMedia] Meta API failed:', apiErr.response?.data || apiErr.message);
+      await finalizeOutboundMessage(clientConn, messageId, details.conversationId, null, false);
+      await clientConn.query('COMMIT');
+      emitStatus(details.conversationId, messageId, 'failed');
+      throw new Error(apiErr.response?.data?.error?.message || apiErr.message || 'Failed to send media');
+    }
+
     const externalId =
       resp.data && Array.isArray(resp.data.messages) && resp.data.messages[0]
         ? resp.data.messages[0].id
@@ -295,13 +315,23 @@ async function sendTemplate(conversationId, name, languageCode, components) {
     emitMessage(details.conversationId, messageId, 'text', `Template: ${name}`, rawPayload);
     emitStatus(details.conversationId, messageId, 'sending');
 
-    const resp = await client.sendTemplate(
-      details.phoneNumberId,
-      details.toWaId,
-      name,
-      languageCode,
-      components
-    );
+    let resp;
+    try {
+      resp = await client.sendTemplate(
+        details.phoneNumberId,
+        details.toWaId,
+        name,
+        languageCode,
+        components
+      );
+    } catch (apiErr) {
+      console.error('[sendTemplate] Meta API failed:', apiErr.response?.data || apiErr.message);
+      await finalizeOutboundMessage(clientConn, messageId, details.conversationId, null, false);
+      await clientConn.query('COMMIT');
+      emitStatus(details.conversationId, messageId, 'failed');
+      throw new Error(apiErr.response?.data?.error?.message || apiErr.message || 'Failed to send template');
+    }
+
     const externalId =
       resp.data && Array.isArray(resp.data.messages) && resp.data.messages[0]
         ? resp.data.messages[0].id

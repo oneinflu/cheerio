@@ -8,7 +8,8 @@ router.get('/inbox', auth.requireRole('admin','agent','supervisor'), async (req,
   try {
     const teamId = (req.query && req.query.teamId) || (req.user.teamIds && req.user.teamIds[0]) || null;
     const filter = req.query.filter || 'open';
-    const list = await svc.listConversations(teamId, req.user.id, filter);
+    console.log(`[InboxRoute] GET /inbox teamId=${teamId} filter=${filter} query=${JSON.stringify(req.query)}`);
+    const list = await svc.listConversations(teamId, req.user.id, req.user.role, filter);
     res.status(200).json({ conversations: list });
   } catch (err) {
     return next(err);

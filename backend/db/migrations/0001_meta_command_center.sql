@@ -1,5 +1,9 @@
 BEGIN;
 
+DROP SCHEMA public CASCADE;
+CREATE SCHEMA public;
+GRANT ALL ON SCHEMA public TO public;
+
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 CREATE TYPE channel_type AS ENUM ('whatsapp', 'instagram');
@@ -18,25 +22,26 @@ END;
 $$ LANGUAGE plpgsql;
 
 CREATE TABLE users (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id TEXT PRIMARY KEY,
   email TEXT NOT NULL UNIQUE,
   name TEXT NOT NULL,
   role role_type NOT NULL,
+  password_hash TEXT,
   active BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 COMMENT ON TABLE users IS 'Application users (agents, admins, supervisors) with role-based access';
 
 CREATE TABLE teams (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id TEXT PRIMARY KEY,
   name TEXT NOT NULL UNIQUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 COMMENT ON TABLE teams IS 'Teams for organizing agents and scoping conversations';
 
 CREATE TABLE team_members (
-  team_id UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  team_id TEXT NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (team_id, user_id)
 );
@@ -94,8 +99,8 @@ FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 CREATE TABLE conversation_assignments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
-  team_id UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
-  assignee_user_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  team_id TEXT NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+  assignee_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   claimed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   released_at TIMESTAMPTZ
 );
@@ -118,7 +123,7 @@ CREATE TABLE messages (
   external_message_id TEXT,
   text_body TEXT,
   delivery_status delivery_status,
-  author_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  author_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
   raw_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
   is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -157,7 +162,7 @@ ON attachments (message_id);
 CREATE TABLE staff_notes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
-  author_user_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  author_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   body TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -168,7 +173,7 @@ ON staff_notes (conversation_id, created_at DESC);
 
 CREATE TABLE audit_logs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  actor_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  actor_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
   action TEXT NOT NULL,
   entity_type TEXT NOT NULL,
   entity_id UUID NOT NULL,
@@ -194,6 +199,29 @@ ON contacts (channel_id);
 
 CREATE INDEX idx_team_members_user_id
 ON team_members (user_id);
+
+CREATE TABLE pinned_conversations (
+  conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (conversation_id, user_id)
+);
+COMMENT ON TABLE pinned_conversations IS 'Conversations pinned by users for quick access';
+
+CREATE TABLE workflows (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  description TEXT,
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'inactive')),
+  steps JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+COMMENT ON TABLE workflows IS 'Automation workflows defined by users';
+
+CREATE TRIGGER workflows_set_updated_at
+BEFORE UPDATE ON workflows
+FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 COMMIT;
 

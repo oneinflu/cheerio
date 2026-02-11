@@ -93,8 +93,10 @@ export default function CustomerCard({ conversationId }) {
                 onChange={e => setFormData({...formData, course: e.target.value})}
               >
                 <option value="">Select Course</option>
-                <option value="CPA">CPA</option>
-                <option value="CMA">CMA</option>
+               
+                <option value="CPA US">CPA US</option>
+             
+                <option value="CMA US">CMA US</option>
                 <option value="ACCA">ACCA</option>
                 <option value="EA">EA</option>
               </select>

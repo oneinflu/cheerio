@@ -1,33 +1,48 @@
 'use strict';
-import React, { useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
 import { Badge } from './ui/Badge';
-import { MessageSquare, Users, Clock, TrendingUp } from 'lucide-react';
+import { MessageSquare, Users, Clock, TrendingUp, Loader2 } from 'lucide-react';
+import { getDashboardData } from '../api';
 
-export default function DashboardPage({ conversations, agents }) {
-  const stats = useMemo(() => {
-    const total = conversations.length;
-    const assigned = conversations.filter((c) => Boolean(c.assigneeUserId)).length;
-    const unassigned = total - assigned;
-    const open = conversations.filter((c) => c.status === 'open').length;
-    const snoozed = conversations.filter((c) => c.status === 'snoozed').length;
-    return { total, assigned, unassigned, open, snoozed };
-  }, [conversations]);
+export default function DashboardPage({ teamId, role }) {
+  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState({
+    stats: { total: 0, open: 0, snoozed: 0, assigned: 0, unassigned: 0 },
+    volume: [],
+    agents: [],
+    kpi: { medianFirstReply: '-', slaCompliance: '-' }
+  });
 
-  const volume = useMemo(
-    () => [
-      { label: 'Mon', value: 18 },
-      { label: 'Tue', value: 25 },
-      { label: 'Wed', value: 22 },
-      { label: 'Thu', value: 31 },
-      { label: 'Fri', value: 27 },
-      { label: 'Sat', value: 12 },
-      { label: 'Sun', value: 9 },
-    ],
-    []
-  );
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        setLoading(true);
+        const res = await getDashboardData(teamId);
+        setData(res);
+      } catch (err) {
+        console.error('Failed to load dashboard data:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchData();
+  }, [teamId]);
 
-  const maxVolume = Math.max(...volume.map((v) => v.value));
+  const maxVolume = useMemo(() => {
+    if (!data.volume || data.volume.length === 0) return 1;
+    return Math.max(...data.volume.map((v) => v.value));
+  }, [data.volume]);
+
+  if (loading) {
+    return (
+      <div className="flex-1 flex items-center justify-center h-full">
+        <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+      </div>
+    );
+  }
+
+  const { stats, volume, agents, kpi } = data;
 
   return (
     <div className="flex-1 overflow-y-auto">
@@ -35,11 +50,13 @@ export default function DashboardPage({ conversations, agents }) {
         <div className="px-8 py-6 flex items-center justify-between">
           <div>
             <h1 className="text-lg font-semibold text-slate-900">Dashboard</h1>
-            <p className="text-sm text-slate-500">Live overview with demo KPIs</p>
+            <p className="text-sm text-slate-500">
+              Live overview • Role: <span className="font-medium capitalize text-slate-700">{(role || 'Agent').replace(/_/g, ' ')}</span>
+            </p>
           </div>
           <div className="flex items-center gap-2">
             <Badge variant="secondary">WhatsApp</Badge>
-            <Badge variant="outline">Demo Mode</Badge>
+            <Badge variant="outline">Live</Badge>
           </div>
         </div>
       </div>
@@ -80,7 +97,7 @@ export default function DashboardPage({ conversations, agents }) {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-semibold text-slate-900">2m 14s</div>
+              <div className="text-3xl font-semibold text-slate-900">{kpi.medianFirstReply}</div>
               <div className="mt-1 text-xs text-slate-500">Demo KPI</div>
             </CardContent>
           </Card>
@@ -93,7 +110,7 @@ export default function DashboardPage({ conversations, agents }) {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-semibold text-slate-900">96%</div>
+              <div className="text-3xl font-semibold text-slate-900">{kpi.slaCompliance}</div>
               <div className="mt-1 text-xs text-slate-500">Demo KPI</div>
             </CardContent>
           </Card>
@@ -106,22 +123,28 @@ export default function DashboardPage({ conversations, agents }) {
             </CardHeader>
             <CardContent>
               <div className="flex items-end gap-3 h-40">
-                {volume.map((v) => (
-                  <div key={v.label} className="flex-1 flex flex-col items-center gap-2">
-                    <div
-                      className="w-full rounded-md bg-blue-600/80"
-                      style={{ height: `${Math.max(8, Math.round((v.value / maxVolume) * 160))}px` }}
-                    />
-                    <div className="text-[11px] text-slate-500">{v.label}</div>
+                {volume.length > 0 ? (
+                  volume.map((v) => (
+                    <div key={v.label} className="flex-1 flex flex-col items-center gap-2">
+                      <div
+                        className="w-full rounded-md bg-blue-600/80"
+                        style={{ height: `${Math.max(8, Math.round((v.value / maxVolume) * 160))}px` }}
+                      />
+                      <div className="text-[11px] text-slate-500">{v.label}</div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="flex-1 flex items-center justify-center text-slate-400 text-sm">
+                    No volume data
                   </div>
-                ))}
+                )}
               </div>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader>
-              <CardTitle>Agents (Demo)</CardTitle>
+              <CardTitle>Agents</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
@@ -147,4 +170,3 @@ export default function DashboardPage({ conversations, agents }) {
     </div>
   );
 }
-

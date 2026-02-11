@@ -36,7 +36,38 @@ async function claimConversation(conversationId, teamId, userId) {
   try {
     await client.query('BEGIN');
 
-    // Step 1/2: Lock the conversation row to serialize concurrent claim attempts.
+    // Step 1.5: Ensure user exists in local DB
+    // Since users are managed in external system, we must sync them on the fly
+    // to satisfy foreign key constraints.
+    try {
+        const checkUser = await client.query('SELECT id FROM users WHERE id = $1', [userId]);
+        if (checkUser.rowCount === 0) {
+            // We need to fetch user details to insert properly.
+            // Since this function doesn't have the user object, we insert a placeholder
+            // assuming the ID is valid from the upstream caller.
+            // Ideally, the caller should have synced the user already.
+            // Inserting a minimal placeholder to satisfy FK.
+            await client.query(
+                `INSERT INTO users (id, name, email, role, active)
+                 VALUES ($1, 'Synced User', $1 || '@placeholder', 'agent', true)
+                 ON CONFLICT (id) DO NOTHING`,
+                [userId]
+            );
+            
+            // Also ensure they are in the team
+            await client.query(
+                `INSERT INTO team_members (team_id, user_id)
+                 VALUES ($1, $2)
+                 ON CONFLICT (team_id, user_id) DO NOTHING`,
+                [teamId, userId]
+            );
+        }
+    } catch (userSyncErr) {
+        console.error('Error auto-syncing user during claim:', userSyncErr);
+        // Continue and let FK fail if strictly required
+    }
+
+    // Step 2: Lock the conversation row to serialize concurrent claim attempts.
     const conv = await client.query(
       `SELECT id FROM conversations WHERE id = $1 FOR UPDATE`,
       [conversationId]
@@ -138,6 +169,9 @@ async function reassignConversation(conversationId, teamId, newAssigneeUserId, a
       err.expose = true;
       throw err;
     }
+
+    // Step 0: Removed auto-sync since we dropped FK constraints.
+    // We now support external User IDs directly without local syncing.
 
     // Lock conversation to serialize with other claim/reassign operations.
     const conv = await client.query(
