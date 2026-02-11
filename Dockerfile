@@ -20,5 +20,8 @@ COPY backend/ .
 # Expose port
 EXPOSE 3000
 
+# Set environment to production
+ENV NODE_ENV=production
+
 # Start the application
 CMD ["npm", "start"]

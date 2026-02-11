@@ -115,12 +115,15 @@ function createApp() {
    * Vite builds to the 'dist' folder.
    */
   if (NODE_ENV === 'production') {
-    app.use(express.static(path.join(__dirname, '../frontend/dist')));
+    const frontendDist = path.join(__dirname, '../frontend/dist');
+    console.log(`[app] Serving static files from: ${frontendDist}`);
+    
+    app.use(express.static(frontendDist));
 
     // Handle SPA routing: serve index.html for any unknown non-API routes
     // Use RegExp to match all paths, compatible with Express 5
     app.get(/.*/, (req, res) => {
-      res.sendFile(path.join(__dirname, '../frontend/dist', 'index.html'));
+      res.sendFile(path.join(frontendDist, 'index.html'));
     });
   }
 
