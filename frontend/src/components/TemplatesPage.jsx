@@ -4,13 +4,14 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Badge } from './ui/Badge';
-import { Plus, Search, Smartphone, Image as ImageIcon, CheckCircle, Clock, AlertCircle, ChevronRight, FileText, MoreVertical, RefreshCw, Send, Upload } from 'lucide-react';
+import { Plus, Search, Smartphone, Image as ImageIcon, CheckCircle, Clock, AlertCircle, ChevronRight, FileText, MoreVertical, RefreshCw, Send, Upload, Megaphone, Ticket, Timer, ShoppingBag, Bell, ShieldCheck, ArrowLeft } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { getTemplates, createTemplate, sendTestTemplate, uploadTemplateExampleMedia } from '../api';
 
 export default function TemplatesPage() {
   const [selectedId, setSelectedId] = useState(null);
   const [isCreating, setIsCreating] = useState(false);
+  const [showTypeSelection, setShowTypeSelection] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState('ALL');
   const [loading, setLoading] = useState(false);
@@ -20,14 +21,52 @@ export default function TemplatesPage() {
   const [isTestModalOpen, setIsTestModalOpen] = useState(false);
   const [testPhoneNumber, setTestPhoneNumber] = useState('');
   const [testSelectedTemplate, setTestSelectedTemplate] = useState('');
+  const [testVariables, setTestVariables] = useState({});
   const [sendingTest, setSendingTest] = useState(false);
 
   // Templates Data
   const [templates, setTemplates] = useState([]);
+  const [creationStep, setCreationStep] = useState('MAIN_CATEGORY'); // MAIN_CATEGORY, SUB_CATEGORY, FORM
+  const [selectedMainCategory, setSelectedMainCategory] = useState(null);
 
   // Variable Editor State
   const [newVarName, setNewVarName] = useState('');
   const [newVarExample, setNewVarExample] = useState('');
+
+  const MAIN_CATEGORIES = [
+    {
+      id: 'MARKETING',
+      label: 'Marketing',
+      description: 'Promote products, services, and offers to your customers.',
+      icon: Megaphone,
+      color: 'bg-blue-50 text-blue-600'
+    },
+    {
+      id: 'UTILITY',
+      label: 'Utility',
+      description: 'Confirm transactions, update orders, and deliver alerts.',
+      icon: Bell,
+      color: 'bg-emerald-50 text-emerald-600'
+    },
+    {
+      id: 'AUTHENTICATION',
+      label: 'Authentication',
+      description: 'Send one-time passwords for account verification.',
+      icon: ShieldCheck,
+      color: 'bg-slate-50 text-slate-600'
+    }
+  ];
+
+  const MARKETING_SUB_TYPES = [
+    { value: 'CUSTOM', label: 'Custom Marketing', description: 'Flexible message for any promotion.', icon: Megaphone },
+    { value: 'COUPON', label: 'Coupon Code', description: 'Send exclusive discount codes.', icon: Ticket },
+    { value: 'LIMITED_TIME', label: 'Limited-time Offer', description: 'Create urgency with expiration.', icon: Timer },
+    { value: 'CATALOG', label: 'Catalog Message', description: 'Showcase your product catalog.', icon: ShoppingBag },
+    { value: 'CAROUSEL', label: 'Product Carousel', description: 'Scrollable cards for multiple products.', icon: ImageIcon },
+    { value: 'MULTI_PRODUCT', label: 'Multi-product', description: 'Highlight a selection of items.', icon: ShoppingBag },
+    { value: 'SINGLE_PRODUCT', label: 'Single-product', description: 'Feature one specific product.', icon: ShoppingBag },
+    { value: 'CALL_PERMISSION', label: 'Call Permission', description: 'Request permission to call.', icon: Smartphone },
+  ];
 
   const fetchTemplatesData = async () => {
     setLoading(true);
@@ -41,6 +80,15 @@ export default function TemplatesPage() {
           const footerComp = t.components.find(c => c.type === 'FOOTER');
           const buttonsComp = t.components.find(c => c.type === 'BUTTONS');
 
+          let examples = {};
+          if (bodyComp && bodyComp.example) {
+              if (t.parameter_format === 'NAMED' && bodyComp.example.body_text_named_params) {
+                  bodyComp.example.body_text_named_params.forEach(p => examples[p.param_name] = p.example);
+              } else if (bodyComp.example.body_text && Array.isArray(bodyComp.example.body_text[0])) {
+                  bodyComp.example.body_text[0].forEach((ex, i) => examples[(i+1).toString()] = ex);
+              }
+          }
+
           return {
             id: t.id,
             name: t.name,
@@ -51,7 +99,9 @@ export default function TemplatesPage() {
             headerText: headerComp && headerComp.format === 'TEXT' ? headerComp.text : '',
             bodyText: bodyComp ? bodyComp.text : '',
             footerText: footerComp ? footerComp.text : '',
-            buttons: buttonsComp ? buttonsComp.buttons : []
+            buttons: buttonsComp ? buttonsComp.buttons : [],
+            parameterFormat: t.parameter_format || 'POSITIONAL',
+            examples
           };
         });
         setTemplates(mapped);
@@ -78,25 +128,102 @@ export default function TemplatesPage() {
 
   // Initialize editor when selection changes
   React.useEffect(() => {
-    if (isCreating) {
+    // If we are creating but haven't selected a type yet, don't set formData
+    if (isCreating && showTypeSelection) {
+        setFormData(null);
+        return;
+    }
+
+    if (isCreating && !formData) {
+       // This case is handled by handleTypeSelect now
+    } else if (selectedId) {
+      const t = templates.find(t => t.id === selectedId);
+      if (t) setFormData({ ...t, variables: [], subCategory: 'CUSTOM', parameterFormat: 'POSITIONAL' }); // Default legacy to positional
+    }
+  }, [selectedId, isCreating, templates, showTypeSelection]);
+
+  const handleMainCategorySelect = (category) => {
+      setSelectedMainCategory(category);
+      if (category.id === 'MARKETING') {
+          setCreationStep('SUB_CATEGORY');
+      } else {
+          // Initialize for Utility/Authentication
+          const defaultBody = category.id === 'UTILITY' 
+              ? 'Hello {{name}}, your order {{order_id}} has been updated.' 
+              : category.id === 'AUTHENTICATION'
+              ? '*{{1}}* is your verification code. For your security, do not share this code.'
+              : ''; 
+          
+          const defaultVariables = category.id === 'UTILITY'
+              ? [{ name: 'name', example: 'John' }, { name: 'order_id', example: '#12345' }]
+              : category.id === 'AUTHENTICATION'
+              ? [{ name: '1', example: '123456' }]
+              : []; // Authentication templates use preset variables
+          
+          const defaultButtons = category.id === 'AUTHENTICATION' 
+              ? [{ type: 'COPY_CODE', text: 'Copy Code', otp_type: 'COPY_CODE' }]
+              : [];
+
+          setFormData({
+            id: 'new',
+            name: '',
+            language: 'en_US',
+            status: 'draft',
+            category: category.id,
+            subCategory: 'CUSTOM',
+            parameterFormat: category.id === 'AUTHENTICATION' ? 'POSITIONAL' : 'NAMED',
+            headerType: 'NONE',
+            headerText: '',
+            bodyText: defaultBody,
+            variables: defaultVariables,
+            footerText: '',
+            buttons: defaultButtons
+          });
+          setShowTypeSelection(false);
+      }
+  };
+
+  const handleSubCategorySelect = (subType) => {
+      // Initialize form based on sub-type
+      let defaultBody = 'Hello {{name}}, check out our latest offers!';
+      let defaultButtons = [];
+      let defaultVariables = [{ name: 'name', example: 'John' }];
+      
+      if (subType.value === 'COUPON') {
+          defaultBody = 'Here is your exclusive code {{code}} for {{discount}} off!';
+          defaultButtons = [{ type: 'COPY_CODE', example: 'SAVE20' }];
+          defaultVariables = [{ name: 'code', example: 'SAVE20' }, { name: 'discount', example: '20%' }];
+      } else if (subType.value === 'LIMITED_TIME') {
+          defaultBody = 'Hurry! Offer expires in {{hours}} hours.';
+          defaultButtons = [{ type: 'URL', text: 'Shop Now', url: 'https://example.com' }];
+          defaultVariables = [{ name: 'hours', example: '24' }];
+      } else if (subType.value === 'CATALOG') {
+          defaultBody = 'Hello! Check out our new catalog.';
+      } else if (subType.value === 'CAROUSEL') {
+           defaultBody = 'Check out these items specially picked for you!';
+      } else if (subType.value === 'CALL_PERMISSION') {
+           defaultBody = 'We would like to call you to help support your order.';
+           defaultButtons = [];
+           defaultVariables = [];
+      }
+
       setFormData({
         id: 'new',
         name: '',
         language: 'en_US',
         status: 'draft',
         category: 'MARKETING',
+        subCategory: subType.value,
+        parameterFormat: 'NAMED',
         headerType: 'NONE',
         headerText: '',
-        bodyText: 'Hello {{1}}, ...',
-        variables: [],
+        bodyText: defaultBody,
+        variables: defaultVariables,
         footerText: '',
-        buttons: []
+        buttons: defaultButtons
       });
-    } else if (selectedId) {
-      const t = templates.find(t => t.id === selectedId);
-      if (t) setFormData({ ...t, variables: [] }); // Start with empty variables for edit
-    }
-  }, [selectedId, isCreating, templates]);
+      setShowTypeSelection(false);
+  };
 
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
@@ -120,20 +247,55 @@ export default function TemplatesPage() {
       if (!formData.name) { alert('Please enter a template name'); return; }
       if (!formData.bodyText) { alert('Please enter body text'); return; }
       
+      // Validate Variable Position
+      const trimmedBody = formData.bodyText.trim();
+      // Check for variable at start: {{...}} at index 0
+      if (/^\{\{[^}]+\}\}/.test(trimmedBody)) {
+          alert('Variables cannot be at the very start of the body text. Please add some text before the variable.');
+          return;
+      }
+      // Check for variable at end: {{...}} at the end
+      if (/\{\{[^}]+\}\}$/.test(trimmedBody)) {
+          alert('Variables cannot be at the very end of the body text. Please add some text or punctuation after the variable.');
+          return;
+      }
+      
       // Validate Buttons
       if (formData.buttons && formData.buttons.length > 0) {
+        if (formData.subCategory === 'CALL_PERMISSION') {
+            alert('Call Permission templates cannot have additional buttons.');
+            return;
+        }
+
         const hasQuickReply = formData.buttons.some(b => b.type === 'QUICK_REPLY');
         const hasCTA = formData.buttons.some(b => ['URL', 'PHONE_NUMBER'].includes(b.type));
+        const hasCopyCode = formData.buttons.some(b => b.type === 'COPY_CODE');
         
-        if (hasQuickReply && hasCTA) {
-          alert('You cannot mix Quick Reply buttons with Call to Action buttons (URL/Phone). Please use only one type.');
+        if (hasQuickReply && (hasCTA || hasCopyCode)) {
+          alert('You cannot mix Quick Reply buttons with Call to Action / Copy Code buttons.');
           return;
+        }
+
+        if (formData.subCategory === 'COUPON' && !hasCopyCode) {
+           alert('Coupon templates must have a Copy Code button.');
+           return;
+        }
+
+        if (hasCopyCode) {
+            const copyBtn = formData.buttons.find(b => b.type === 'COPY_CODE');
+            if (!copyBtn.example) {
+                alert('Please provide an example code for the Copy Code button.');
+                return;
+            }
         }
         
         if (hasCTA && formData.buttons.length > 2) {
            alert('You can only have up to 2 Call to Action buttons.');
            return;
         }
+      } else if (formData.subCategory === 'COUPON') {
+          alert('Coupon templates must have a Copy Code button.');
+          return;
       }
 
       const components = [];
@@ -141,58 +303,133 @@ export default function TemplatesPage() {
       try {
         setLoading(true);
 
-        // Header
-        if (formData.headerType !== 'NONE') {
-          const header = { type: 'HEADER', format: formData.headerType };
-          if (formData.headerType === 'TEXT') {
-              header.text = formData.headerText;
-          } else if (formData.headerType === 'IMAGE') {
-              let handle = formData.headerHandle;
-              
-              // If we have a file to upload, do it now
-              if (formData.headerFile) {
-                  try {
-                      const uploadRes = await uploadTemplateExampleMedia(formData.headerFile);
-                      if (uploadRes.h) {
-                          handle = uploadRes.h;
-                      } else {
-                          throw new Error('Image upload failed: No handle returned');
-                      }
-                  } catch (uploadErr) {
-                      throw new Error(`Failed to upload image header: ${uploadErr.message}`);
-                  }
-              }
-
-              if (!handle) {
-                  alert('Please upload an example image for the header.');
-                  setLoading(false);
-                  return;
-              }
-              header.example = { header_handle: [handle] };
-          }
-          components.push(header);
-        }
-        
-        // Body
-        const bodyComponent = { type: 'BODY', text: formData.bodyText };
-        if (formData.variables && formData.variables.length > 0) {
-            bodyComponent.example = {
-                body_text_named_params: formData.variables.map(v => ({
-                    param_name: v.name,
-                    example: v.example
-                }))
+        if (formData.category === 'AUTHENTICATION') {
+            // Authentication Preset Logic
+            const bodyComp = { 
+                type: 'BODY', 
+                add_security_recommendation: true 
             };
-        }
-        components.push(bodyComponent);
-        
-        // Footer
-        if (formData.footerText) {
-          components.push({ type: 'FOOTER', text: formData.footerText });
-        }
-        
-        // Buttons
-        if (formData.buttons && formData.buttons.length > 0) {
-          components.push({ type: 'BUTTONS', buttons: formData.buttons });
+            
+            // Add examples if variables exist
+            if (formData.variables && formData.variables.length > 0) {
+                if (formData.parameterFormat === 'NAMED') {
+                    bodyComp.example = {
+                        body_text_named_params: formData.variables.map(v => ({
+                            param_name: v.name,
+                            example: v.example
+                        }))
+                    };
+                } else {
+                    // POSITIONAL
+                    bodyComp.example = {
+                        body_text: [formData.variables.map(v => v.example)]
+                    };
+                }
+            }
+            components.push(bodyComp);
+            
+            // Buttons - strictly OTP type
+            if (formData.buttons && formData.buttons.length > 0) {
+                const btn = formData.buttons[0]; // Take first button
+                components.push({
+                    type: 'BUTTONS',
+                    buttons: [{
+                        type: 'OTP',
+                        otp_type: 'COPY_CODE',
+                        text: btn.text || 'Copy Code'
+                    }]
+                });
+            }
+        } else {
+            // Header
+            if (formData.headerType !== 'NONE') {
+              const header = { type: 'HEADER', format: formData.headerType };
+              if (formData.headerType === 'TEXT') {
+                  header.text = formData.headerText;
+              } else if (formData.headerType === 'IMAGE') {
+                  let handle = formData.headerHandle;
+                  
+                  // If we have a file to upload, do it now
+                  if (formData.headerFile) {
+                      try {
+                          const uploadRes = await uploadTemplateExampleMedia(formData.headerFile);
+                          if (uploadRes.h) {
+                              handle = uploadRes.h;
+                          } else {
+                              throw new Error('Image upload failed: No handle returned');
+                          }
+                      } catch (uploadErr) {
+                          throw new Error(`Failed to upload image header: ${uploadErr.message}`);
+                      }
+                  }
+
+                  if (!handle) {
+                      alert('Please upload an example image for the header.');
+                      setLoading(false);
+                      return;
+                  }
+                  header.example = { header_handle: [handle] };
+              }
+              components.push(header);
+            }
+            
+            // Body
+            const bodyComponent = { type: 'BODY', text: formData.bodyText };
+            if (formData.variables && formData.variables.length > 0) {
+                if (formData.parameterFormat === 'NAMED') {
+                    bodyComponent.example = {
+                        body_text_named_params: formData.variables.map(v => ({
+                            param_name: v.name,
+                            example: v.example
+                        }))
+                    };
+                } else {
+                    // POSITIONAL
+                    bodyComponent.example = {
+                        body_text: [formData.variables.map(v => v.example)]
+                    };
+                }
+            }
+            components.push(bodyComponent);
+            
+            // Footer
+            if (formData.footerText) {
+              components.push({ type: 'FOOTER', text: formData.footerText });
+            }
+            
+            // Buttons
+            if (formData.buttons && formData.buttons.length > 0) {
+              const cleanedButtons = formData.buttons.map(btn => {
+                const cleanBtn = { type: btn.type };
+                if (btn.type !== 'COPY_CODE') {
+                    cleanBtn.text = btn.text;
+                }
+                
+                if (btn.type === 'URL') {
+                    // Remove backticks, quotes, and whitespace
+                    cleanBtn.url = btn.url ? btn.url.replace(/[`'"]/g, '').trim() : '';
+                    
+                    // Only include example if the URL is dynamic (has variables)
+                    if (cleanBtn.url.includes('{{')) {
+                        // Meta expects an array of URLs for dynamic URL examples
+                        // Since we don't have an explicit input for URL example in UI, we construct one or use existing
+                        cleanBtn.example = [btn.example || 'https://example.com/page']; 
+                    }
+                } else if (btn.type === 'PHONE_NUMBER') {
+                    cleanBtn.phone_number = btn.phone_number;
+                } else if (btn.type === 'COPY_CODE') {
+                    cleanBtn.example = btn.example;
+                }
+                
+                return cleanBtn;
+              });
+              components.push({ type: 'BUTTONS', buttons: cleanedButtons });
+            }
+
+            // Add Call Permission Component
+            if (formData.subCategory === 'CALL_PERMISSION') {
+                components.push({ type: 'call_permission_request' });
+            }
         }
 
         const payload = {
@@ -203,7 +440,11 @@ export default function TemplatesPage() {
         };
         
         if (formData.variables && formData.variables.length > 0) {
-            payload.parameter_format = "named";
+            if (formData.parameterFormat === 'NAMED') {
+                payload.parameter_format = "NAMED";
+            } else {
+                payload.parameter_format = "POSITIONAL";
+            }
         }
         
         const res = await createTemplate(payload);
@@ -244,17 +485,99 @@ export default function TemplatesPage() {
       const tmpl = templates.find(t => t.name === testSelectedTemplate);
       const lang = tmpl ? tmpl.language : 'en_US';
       
-      await sendTestTemplate(testPhoneNumber, testSelectedTemplate, lang);
+      const components = [];
+      
+      // 1. Handle Body Variables
+      if (tmpl && tmpl.bodyText) {
+          // Match {{var}} or {{1}}
+          const regex = /{{([a-zA-Z0-9_]+)}}/g;
+          const matches = [...tmpl.bodyText.matchAll(regex)];
+          if (matches.length > 0) {
+              const bodyParams = matches.map(m => {
+                  const param = {
+                      type: 'text',
+                      text: testVariables[m[1]] || `[${m[1]}]` 
+                  };
+                  
+                  if (tmpl.parameterFormat === 'NAMED') {
+                      param.parameter_name = m[1];
+                  }
+                  
+                  return param;
+              });
+              
+              components.push({
+                  type: 'body',
+                  parameters: bodyParams
+              });
+          }
+      }
+      
+      // 2. Handle Buttons (Copy Code)
+      if (tmpl && tmpl.buttons) {
+          tmpl.buttons.forEach((btn, idx) => {
+              if (btn.type === 'COPY_CODE') {
+                  // Try to find a variable that looks like 'code' or 'coupon'
+                  let codeValue = 'TESTCODE';
+                  
+                  // 1. First check if we have a variable named 'code' or similar
+                  const codeVarName = Object.keys(testVariables).find(k => 
+                      k.toLowerCase().includes('code') || 
+                      k.toLowerCase().includes('coupon') ||
+                      k.toLowerCase() === 'promocode'
+                  );
+                  
+                  if (codeVarName && testVariables[codeVarName]) {
+                      codeValue = testVariables[codeVarName];
+                  } else if (tmpl.examples) {
+                      // 2. Fallback to example if available
+                      const exampleKey = Object.keys(tmpl.examples).find(k => 
+                          k.toLowerCase().includes('code') || 
+                          k.toLowerCase().includes('coupon')
+                      );
+                      if (exampleKey) codeValue = tmpl.examples[exampleKey];
+                  }
+
+                  components.push({
+                      type: 'button',
+                      sub_type: 'copy_code',
+                      index: idx,
+                      parameters: [
+                          {
+                              type: 'coupon_code',
+                              coupon_code: codeValue
+                          }
+                      ]
+                  });
+              }
+          });
+      }
+      
+      await sendTestTemplate(testPhoneNumber, testSelectedTemplate, lang, components);
       alert('Test message sent successfully!');
       setIsTestModalOpen(false);
       setTestPhoneNumber('');
       setTestSelectedTemplate('');
+      setTestVariables({});
     } catch (err) {
       console.error('Failed to send test message:', err);
       alert('Failed to send test message. Check console.');
     } finally {
       setSendingTest(false);
     }
+  };
+
+  const getPreviewBodyText = () => {
+    if (!formData || !formData.bodyText) return '';
+    let text = formData.bodyText;
+    if (formData.variables) {
+        formData.variables.forEach(v => {
+            if (v.name && v.example) {
+                text = text.split(`{{${v.name}}}`).join(v.example);
+            }
+        });
+    }
+    return text;
   };
 
   return (
@@ -278,7 +601,20 @@ export default function TemplatesPage() {
                 <select 
                   className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-2"
                   value={testSelectedTemplate}
-                  onChange={e => setTestSelectedTemplate(e.target.value)}
+                  onChange={e => {
+                      const val = e.target.value;
+                      setTestSelectedTemplate(val);
+                      const t = templates.find(temp => temp.name === val);
+                      if (t && t.bodyText) {
+                           const regex = /{{([a-zA-Z0-9_]+)}}/g;
+                           const matches = [...t.bodyText.matchAll(regex)];
+                           const vars = {};
+                           matches.forEach(m => vars[m[1]] = t.examples[m[1]] || '');
+                           setTestVariables(vars);
+                       } else {
+                          setTestVariables({});
+                      }
+                  }}
                 >
                   <option value="">Select a template...</option>
                   {templates.filter(t => t.status === 'APPROVED').map(t => (
@@ -298,6 +634,24 @@ export default function TemplatesPage() {
                 />
                 <p className="text-xs text-slate-500">Enter number with country code, no + sign.</p>
               </div>
+
+              {Object.keys(testVariables).length > 0 && (
+                  <div className="space-y-2 border-t pt-2 mt-2">
+                      <label className="text-sm font-medium text-slate-700">Template Variables</label>
+                      <div className="grid grid-cols-1 gap-2">
+                          {Object.keys(testVariables).map(key => (
+                            <div key={key} className="flex flex-col gap-1">
+                              <label className="text-xs text-slate-500 font-mono">{"{{" + key + "}}"}</label>
+                              <Input 
+                                  placeholder={`Value for ${key}`}
+                                  value={testVariables[key]}
+                                  onChange={e => setTestVariables(prev => ({...prev, [key]: e.target.value}))}
+                              />
+                            </div>
+                          ))}
+                      </div>
+                  </div>
+              )}
 
               <div className="pt-2 flex justify-end gap-2">
                 <Button variant="outline" onClick={() => setIsTestModalOpen(false)}>Cancel</Button>
@@ -322,7 +676,7 @@ export default function TemplatesPage() {
               <Button size="icon" variant="ghost" onClick={fetchTemplatesData} title="Refresh Status">
                 <RefreshCw size={16} className={cn("text-slate-500", loading && "animate-spin")} />
               </Button>
-              <Button size="sm" onClick={() => { setIsCreating(true); setSelectedId(null); }}>
+              <Button size="sm" onClick={() => { setIsCreating(true); setShowTypeSelection(true); setSelectedId(null); setFormData(null); setCreationStep('MAIN_CATEGORY'); }}>
                 <Plus size={16} className="mr-1" /> New
               </Button>
             </div>
@@ -396,7 +750,66 @@ export default function TemplatesPage() {
 
       {/* RIGHT MAIN AREA: EDITOR */}
       <div className="flex-1 flex flex-col h-full overflow-hidden">
-        {!formData ? (
+        {isCreating && showTypeSelection ? (
+            <div className="flex-1 overflow-y-auto bg-slate-50 p-8">
+                <div className="max-w-5xl mx-auto">
+                    <div className="mb-8">
+                        <h1 className="text-2xl font-bold text-slate-900 mb-2">Choose a Template Type</h1>
+                        <p className="text-slate-500">Select the type of message you want to send to get started with the right configuration.</p>
+                    </div>
+
+                    {creationStep === 'MAIN_CATEGORY' && (
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            {MAIN_CATEGORIES.map(cat => (
+                                <div 
+                                    key={cat.id}
+                                    onClick={() => handleMainCategorySelect(cat)}
+                                    className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md hover:border-blue-300 cursor-pointer transition-all group"
+                                >
+                                    <div className={cn("w-12 h-12 rounded-lg flex items-center justify-center mb-4 transition-colors", cat.color)}>
+                                        <cat.icon size={24} />
+                                    </div>
+                                    <h3 className="font-semibold text-slate-900 mb-2 group-hover:text-blue-600 transition-colors">{cat.label}</h3>
+                                    <p className="text-sm text-slate-500 leading-relaxed break-words">{cat.description}</p>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {creationStep === 'SUB_CATEGORY' && (
+                        <>
+                            <div className="mb-6 flex items-center gap-2">
+                                <Button variant="ghost" size="sm" onClick={() => setCreationStep('MAIN_CATEGORY')}>
+                                    <ArrowLeft size={16} className="mr-1" /> Back
+                                </Button>
+                                <h2 className="text-xl font-bold text-slate-900">Select Marketing Type</h2>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {MARKETING_SUB_TYPES.map(type => (
+                                    <div 
+                                        key={type.value}
+                                        onClick={() => handleSubCategorySelect(type)}
+                                        className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md hover:border-blue-300 cursor-pointer transition-all group"
+                                    >
+                                        <div className="w-12 h-12 rounded-lg flex items-center justify-center mb-4 transition-colors bg-blue-50 text-blue-600">
+                                            {type.icon ? <type.icon size={24} /> : <Megaphone size={24} />}
+                                        </div>
+                                        <h3 className="font-semibold text-slate-900 mb-2 group-hover:text-blue-600 transition-colors">{type.label}</h3>
+                                        <p className="text-sm text-slate-500 leading-relaxed break-words">{type.description}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </>
+                    )}
+                    
+                    <div className="mt-8 flex justify-center">
+                        <Button variant="ghost" onClick={() => { setIsCreating(false); setShowTypeSelection(false); setCreationStep('MAIN_CATEGORY'); }}>
+                            Cancel
+                        </Button>
+                    </div>
+                </div>
+            </div>
+        ) : !formData ? (
           <div className="flex-1 flex items-center justify-center text-slate-400">
             Select a template or create a new one
           </div>
@@ -405,6 +818,11 @@ export default function TemplatesPage() {
             {/* Toolbar */}
             <div className="h-16 border-b border-slate-200 bg-white px-4 flex items-center justify-between flex-shrink-0">
               <div className="flex items-center gap-4">
+                 {isCreating && (
+                     <Button variant="ghost" size="icon" onClick={() => setShowTypeSelection(true)} className="mr-2">
+                         <ArrowLeft size={18} />
+                     </Button>
+                 )}
                  <div>
                    <h1 className="font-semibold text-lg text-slate-900">
                      {isCreating ? 'New Template' : formData.name}
@@ -453,16 +871,66 @@ export default function TemplatesPage() {
                        </div>
                        <div className="space-y-2">
                          <label className="text-sm font-medium text-slate-700">Category</label>
-                         <select 
-                            className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-2 transition-all"
-                            value={formData.category}
-                            onChange={e => setFormData({...formData, category: e.target.value})}
-                         >
-                           <option value="MARKETING">Marketing</option>
-                           <option value="UTILITY">Utility</option>
-                           <option value="AUTHENTICATION">Authentication</option>
-                         </select>
+                         {isCreating ? (
+                             <div className="text-sm font-medium text-slate-900 bg-slate-100 px-3 py-2 rounded-md border border-slate-200">
+                                 {formData.category} {formData.subCategory && formData.subCategory !== 'CUSTOM' ? `• ${formData.subCategory}` : ''}
+                             </div>
+                         ) : (
+                            <select 
+                                className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-2 transition-all"
+                                value={formData.category}
+                                onChange={e => setFormData({...formData, category: e.target.value})}
+                            >
+                            <option value="MARKETING">Marketing</option>
+                            <option value="UTILITY">Utility</option>
+                            <option value="AUTHENTICATION">Authentication</option>
+                            </select>
+                         )}
                        </div>
+
+                       {formData.category === 'MARKETING' && !isCreating && (
+                         <div className="space-y-2">
+                           <label className="text-sm font-medium text-slate-700">Marketing Type</label>
+                           <select 
+                              className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-2 transition-all"
+                              value={formData.subCategory || 'CUSTOM'}
+                              onChange={e => setFormData({...formData, subCategory: e.target.value})}
+                           >
+                             {MARKETING_SUB_TYPES.map(type => (
+                               <option key={type.value} value={type.value}>{type.label}</option>
+                             ))}
+                           </select>
+                         </div>
+                       )}
+
+                       <div className="space-y-2 lg:col-span-3">
+                         <label className="text-sm font-medium text-slate-700">Parameter Format</label>
+                         <div className="flex flex-wrap gap-4 pt-2">
+                           <label className="flex items-center gap-2 text-sm cursor-pointer">
+                             <input 
+                               type="radio" 
+                               name="paramFormat"
+                               value="NAMED"
+                               checked={formData.parameterFormat === 'NAMED'}
+                               onChange={() => setFormData({...formData, parameterFormat: 'NAMED'})}
+                               className="text-blue-600"
+                             />
+                             Named <span className="text-xs text-slate-500 font-mono">{'{{name}}'}</span>
+                           </label>
+                           <label className="flex items-center gap-2 text-sm cursor-pointer">
+                             <input 
+                               type="radio" 
+                               name="paramFormat"
+                               value="POSITIONAL"
+                               checked={formData.parameterFormat === 'POSITIONAL'}
+                               onChange={() => setFormData({...formData, parameterFormat: 'POSITIONAL'})}
+                               className="text-blue-600"
+                             />
+                             Positional <span className="text-xs text-slate-500 font-mono">{'{{1}}'}</span>
+                           </label>
+                         </div>
+                       </div>
+
                        <div className="space-y-2">
                          <label className="text-sm font-medium text-slate-700">Language</label>
                          <select 
@@ -559,7 +1027,7 @@ export default function TemplatesPage() {
                       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                         <div className="md:col-span-1">
                           <label className="text-sm font-medium text-slate-700 block mb-1">Body</label>
-                          <span className="text-xs text-slate-500">Main message text. Use named variables like {'{{name}}'}.</span>
+                          <span className="text-xs text-slate-500">Main message text. Use {formData.parameterFormat === 'NAMED' ? "named variables like {{name}}" : "positional variables like {{1}}"}</span>
                         </div>
                         <div className="md:col-span-3 space-y-4">
                           <div className="relative">
@@ -567,7 +1035,7 @@ export default function TemplatesPage() {
                               className="w-full min-h-[120px] rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-2 resize-y font-mono"
                               value={formData.bodyText}
                               onChange={e => setFormData({...formData, bodyText: e.target.value})}
-                              placeholder="Hello {{name}}, your order {{order_id}} is ready."
+                              placeholder={formData.parameterFormat === 'NAMED' ? "Hello {{name}}, your order {{order_id}} is ready." : "Hello {{1}}, your order {{2}} is ready."}
                             />
                           </div>
 
@@ -575,9 +1043,11 @@ export default function TemplatesPage() {
                           <div className="bg-slate-50 p-3 rounded-md border border-slate-200 space-y-3">
                             <div className="flex gap-2 items-end">
                                 <div className="flex-1">
-                                    <label className="text-xs text-slate-500 font-medium mb-1 block">Variable Name</label>
+                                    <label className="text-xs text-slate-500 font-medium mb-1 block">
+                                      {formData.parameterFormat === 'NAMED' ? "Variable Name" : "Variable Index"}
+                                    </label>
                                     <Input 
-                                        placeholder="e.g. name" 
+                                        placeholder={formData.parameterFormat === 'NAMED' ? "e.g. name" : "e.g. 1"} 
                                         value={newVarName}
                                         onChange={e => setNewVarName(e.target.value)}
                                         className="h-8 bg-white"
@@ -617,22 +1087,34 @@ export default function TemplatesPage() {
                                     <div className="flex flex-wrap gap-2">
                                         {formData.variables.map((v, idx) => (
                                             <div key={idx} className="flex items-center gap-1 bg-white border border-blue-200 rounded-md px-2 py-1 shadow-sm">
-                                                <div className="flex flex-col">
-                                                    <span className="text-xs font-mono text-blue-700 font-bold">{`{{${v.name}}}`}</span>
-                                                    <span className="text-[10px] text-slate-500 truncate max-w-[80px]">{v.example}</span>
-                                                </div>
-                                                <div className="flex flex-col gap-0.5 ml-1 border-l border-slate-100 pl-1">
+                                                <div className="flex flex-col flex-1 min-w-0">
+                                        <span className="text-xs font-mono text-blue-700 font-bold">{`{{${v.name}}}`}</span>
+                                        <input 
+                                            type="text"
+                                            value={v.example}
+                                            onChange={(e) => {
+                                                const newVars = [...formData.variables];
+                                                newVars[idx].example = e.target.value;
+                                                setFormData({...formData, variables: newVars});
+                                            }}
+                                            className="text-[10px] text-slate-600 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-blue-500 focus:bg-white outline-none w-full transition-all"
+                                            placeholder="Example value"
+                                        />
+                                    </div>
+                                    <div className="flex flex-col gap-0.5 ml-1 border-l border-slate-100 pl-1">
                                                     <button 
+                                                        type="button"
                                                         className="text-[10px] text-slate-400 hover:text-blue-600"
                                                         title="Insert into text"
                                                         onClick={() => setFormData(prev => ({
                                                             ...prev,
-                                                            bodyText: prev.bodyText + ` {{${v.name}}}`
+                                                            bodyText: prev.bodyText + `{{${v.name}}}`
                                                         }))}
                                                     >
                                                         <Plus size={10} />
                                                     </button>
                                                     <button 
+                                                        type="button"
                                                         className="text-[10px] text-slate-400 hover:text-red-600"
                                                         title="Remove"
                                                         onClick={() => {
@@ -659,11 +1141,17 @@ export default function TemplatesPage() {
                           <span className="text-xs text-slate-500">Optional small text at bottom</span>
                         </div>
                         <div className="md:col-span-3">
-                          <Input 
-                            value={formData.footerText} 
-                            onChange={e => setFormData({...formData, footerText: e.target.value})}
-                            placeholder="e.g. Reply STOP to unsubscribe"
-                          />
+                          {formData.subCategory === 'CALL_PERMISSION' ? (
+                              <div className="bg-slate-50 text-slate-500 p-3 rounded-md text-sm border border-slate-200">
+                                  Call Permission templates use a standard system footer.
+                              </div>
+                          ) : (
+                              <Input 
+                                value={formData.footerText} 
+                                onChange={e => setFormData({...formData, footerText: e.target.value})}
+                                placeholder="e.g. Reply STOP to unsubscribe"
+                              />
+                          )}
                         </div>
                       </div>
 
@@ -674,6 +1162,12 @@ export default function TemplatesPage() {
                           <span className="text-xs text-slate-500">Up to 3 buttons (Quick Reply) or 2 (Call to Action)</span>
                         </div>
                         <div className="md:col-span-3 space-y-4">
+                          {formData.subCategory === 'CALL_PERMISSION' ? (
+                              <div className="bg-blue-50 text-blue-700 p-4 rounded-md text-sm border border-blue-200">
+                                  Call Permission templates use a standard system footer. No custom buttons are allowed.
+                              </div>
+                          ) : (
+                          <>
                           {formData.buttons.map((btn, idx) => (
                             <div key={idx} className="flex gap-2 items-start bg-white p-3 rounded-md border border-slate-200 shadow-sm">
                               <div className="flex-1 space-y-2">
@@ -701,17 +1195,24 @@ export default function TemplatesPage() {
                                     <option value="QUICK_REPLY">Quick Reply</option>
                                     <option value="URL">URL</option>
                                     <option value="PHONE_NUMBER">Phone Number</option>
+                                    <option value="COPY_CODE">Copy Code</option>
                                   </select>
-                                  <Input 
-                                    className="h-9 flex-1"
-                                    value={btn.text}
-                                    onChange={e => {
-                                      const newButtons = [...formData.buttons];
-                                      newButtons[idx].text = e.target.value;
-                                      setFormData({...formData, buttons: newButtons});
-                                    }}
-                                    placeholder="Button Text"
-                                  />
+                                  {btn.type !== 'COPY_CODE' ? (
+                                    <Input 
+                                      className="h-9 flex-1"
+                                      value={btn.text}
+                                      onChange={e => {
+                                        const newButtons = [...formData.buttons];
+                                        newButtons[idx].text = e.target.value;
+                                        setFormData({...formData, buttons: newButtons});
+                                      }}
+                                      placeholder="Button Text"
+                                    />
+                                  ) : (
+                                    <div className="h-9 flex-1 flex items-center px-3 bg-slate-100 text-slate-500 text-sm rounded-md border border-slate-200 cursor-not-allowed">
+                                        Copy Code
+                                    </div>
+                                  )}
                                 </div>
                                 
                                 {btn.type === 'URL' && (
@@ -737,6 +1238,19 @@ export default function TemplatesPage() {
                                       setFormData({...formData, buttons: newButtons});
                                     }}
                                     placeholder="+15550000000"
+                                  />
+                                )}
+
+                                {btn.type === 'COPY_CODE' && (
+                                  <Input 
+                                    className="h-9"
+                                    value={btn.example || ''}
+                                    onChange={e => {
+                                      const newButtons = [...formData.buttons];
+                                      newButtons[idx].example = e.target.value;
+                                      setFormData({...formData, buttons: newButtons});
+                                    }}
+                                    placeholder="Example Code (e.g. SAVE20)"
                                   />
                                 )}
                               </div>
@@ -765,6 +1279,9 @@ export default function TemplatesPage() {
                               <Plus size={16} className="mr-1" /> Add Button
                             </Button>
                           )}
+                          </>
+                          )}
+                          
                         </div>
                       </div>
 
@@ -809,8 +1326,8 @@ export default function TemplatesPage() {
                         )}
 
                         {/* Body */}
-                        <div className="px-3 py-2 text-sm text-slate-900 whitespace-pre-wrap leading-relaxed">
-                          {formData.bodyText}
+                        <div className="px-3 py-2 text-sm text-slate-900 whitespace-pre-wrap leading-relaxed break-words">
+                          {getPreviewBodyText()}
                         </div>
 
                         {/* Footer */}
@@ -827,13 +1344,24 @@ export default function TemplatesPage() {
                      </div>
 
                      {/* Buttons */}
-                     {formData.buttons.length > 0 && (
+                     {(formData.buttons.length > 0 || formData.subCategory === 'CALL_PERMISSION') && (
                        <div className="max-w-[90%] space-y-1">
-                         {formData.buttons.map((btn, i) => (
-                           <div key={i} className="bg-white rounded-lg shadow-sm py-2.5 text-center text-blue-500 font-medium text-sm cursor-pointer hover:bg-slate-50">
-                             {btn.text}
-                           </div>
-                         ))}
+                         {formData.subCategory === 'CALL_PERMISSION' ? (
+                           <>
+                             <div className="bg-white rounded-lg shadow-sm py-2.5 text-center text-blue-500 font-medium text-sm cursor-pointer hover:bg-slate-50">
+                               Yes, allow
+                             </div>
+                             <div className="bg-white rounded-lg shadow-sm py-2.5 text-center text-blue-500 font-medium text-sm cursor-pointer hover:bg-slate-50">
+                               No, thanks
+                             </div>
+                           </>
+                         ) : (
+                           formData.buttons.map((btn, i) => (
+                             <div key={i} className="bg-white rounded-lg shadow-sm py-2.5 text-center text-blue-500 font-medium text-sm cursor-pointer hover:bg-slate-50">
+                               {btn.type === 'COPY_CODE' ? 'Copy Code' : btn.text}
+                             </div>
+                           ))
+                         )}
                        </div>
                      )}
 

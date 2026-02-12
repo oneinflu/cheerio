@@ -101,9 +101,10 @@ async function postJSON(url, body) {
  * @param {string} to - Recipient phone number (E.164 without +)
  * @param {string} templateName - Name of the template to send
  * @param {string} languageCode - Language code (e.g., 'en_US')
+ * @param {Array} components - Optional: Template components (variables, buttons)
  * @param {string} phoneId - Optional: Phone number ID to send from
  */
-async function sendTemplateMessage(to, templateName, languageCode = 'en_US', phoneId) {
+async function sendTemplateMessage(to, templateName, languageCode = 'en_US', components = [], phoneId) {
   // Use provided phoneId or fallback to env/default
   const pid = phoneId || process.env.WHATSAPP_PHONE_NUMBER_ID || '342847945577237';
   if (!pid) throw new Error('WHATSAPP_PHONE_NUMBER_ID is required');
@@ -117,7 +118,8 @@ async function sendTemplateMessage(to, templateName, languageCode = 'en_US', pho
       name: templateName,
       language: {
         code: languageCode
-      }
+      },
+      components: components || []
     }
   };
   console.log(`[WhatsAppClient] sending to URL: ${url}`);

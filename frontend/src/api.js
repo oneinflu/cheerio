@@ -41,12 +41,12 @@ export async function createTemplate(templateData) {
   return res.json();
 }
 
-export async function sendTestTemplate(to, templateName, languageCode) {
+export async function sendTestTemplate(to, templateName, languageCode, components) {
   const headers = getAuthHeaders();
   const res = await fetch('/api/templates/send-test', {
     method: 'POST',
     headers,
-    body: JSON.stringify({ to, templateName, languageCode }),
+    body: JSON.stringify({ to, templateName, languageCode, components }),
   });
   return res.json();
 }

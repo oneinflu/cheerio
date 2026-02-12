@@ -80,7 +80,7 @@ router.post('/upload-example', upload.single('file'), async (req, res, next) => 
  * Send a test template message.
  */
 router.post('/send-test', async (req, res, next) => {
-  const { to, templateName, languageCode } = req.body;
+  const { to, templateName, languageCode, components } = req.body;
   if (!to || !templateName) {
     const err = new Error('Missing "to" or "templateName"');
     err.status = 400;
@@ -97,7 +97,7 @@ router.post('/send-test', async (req, res, next) => {
     // Let's use the whatsappClient helper if available, or implement a direct call matching their request.
     
     // Using the client helper is cleaner:
-    const resp = await whatsappClient.sendTemplateMessage(to, templateName, languageCode || 'en_US');
+    const resp = await whatsappClient.sendTemplateMessage(to, templateName, languageCode || 'en_US', components);
     res.json(resp.data);
   } catch (err) {
     next(err);
