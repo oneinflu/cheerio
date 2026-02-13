@@ -12,6 +12,7 @@ import WorkflowsPage from './components/WorkflowsPage.jsx';
 import WorkflowBuilder from './components/WorkflowBuilder.jsx';
 import TeamMembersPage from './components/TeamMembersPage.jsx';
 import LoginPage from './components/LoginPage.jsx';
+import GuestChat from './components/GuestChat.jsx';
 import { connectSocket } from './socket.js';
 import { getInbox, getMessages, claimConversation, reassignConversation, forceReassignConversation, releaseConversation, markAsRead, resolveConversation, pinConversation, updateWorkflow, getTeamUser, getTeamUsers, reassignExternalLead } from './api.js';
 import { LayoutDashboard, MessageSquare, Users, Settings, LogOut, Search, Bell, FileText, Workflow, Shield, ChevronsUpDown, Check } from 'lucide-react';

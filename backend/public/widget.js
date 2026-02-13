@@ -5,6 +5,20 @@
   const BASE_URL = SRC_URL.origin;
   const APP_URL = SCRIPT_TAG.getAttribute('data-app-url') || BASE_URL;
 
+  // Append lead source URL to APP_URL
+  const leadSourceUrl = encodeURIComponent(window.location.href);
+  const targetUrl = new URL(APP_URL);
+  
+  // Check if APP_URL already has a path, if not append /guest-chat
+  // If the user provided a specific URL like http://localhost:5173/guest-chat, use it.
+  // Otherwise, if just domain, append /guest-chat
+  if (targetUrl.pathname === '/' || targetUrl.pathname === '') {
+      targetUrl.pathname = '/guest-chat';
+  }
+  targetUrl.searchParams.set('lead_source_url', leadSourceUrl);
+  
+  const FINAL_URL = targetUrl.toString();
+
   // --- Styles & Constants ---
   const WHATSAPP_GREEN = '#008069';
   const BG_COLOR = '#ffffff';
@@ -60,8 +74,8 @@
     position: 'fixed', // Fixed relative to viewport
     bottom: '90px',
     right: '20px',
-    width: '400px',
-    height: '600px',
+    width: '350px',
+    height: '500px',
     backgroundColor: BG_COLOR,
     borderRadius: '12px',
     boxShadow: '0 5px 20px rgba(0,0,0,0.15)',
@@ -130,7 +144,7 @@
 
   // --- 4. The Iframe ---
   const iframe = document.createElement('iframe');
-  iframe.src = APP_URL;
+  iframe.src = FINAL_URL;
   Object.assign(iframe.style, {
     flex: '1',
     width: '100%',

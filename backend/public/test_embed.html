@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>E-Commerce Demo Site</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f9fafb;
+        }
+        header {
+            background-color: #fff;
+            padding: 20px 40px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .hero {
+            background-color: #4f46e5;
+            color: white;
+            padding: 60px 40px;
+            text-align: center;
+        }
+        .hero h1 { margin: 0; font-size: 3em; }
+        .hero p { font-size: 1.2em; opacity: 0.9; }
+        .content {
+            padding: 40px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .product {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div style="font-weight: bold; font-size: 1.5em; color: #4f46e5;">ShopMaster</div>
+        <nav>
+            <a href="#" style="margin-left: 20px; text-decoration: none; color: #333;">Home</a>
+            <a href="#" style="margin-left: 20px; text-decoration: none; color: #333;">Products</a>
+            <a href="#" style="margin-left: 20px; text-decoration: none; color: #333;">About</a>
+        </nav>
+    </header>
+
+    <div class="hero">
+        <h1>Summer Sale</h1>
+        <p>Get up to 50% off on selected items.</p>
+    </div>
+
+    <div class="content">
+        <div class="product">
+            <h2>Premium Headphones</h2>
+            <p>High quality noise cancelling headphones.</p>
+            <button style="background: #4f46e5; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer;">Buy Now</button>
+        </div>
+        
+        <div class="product">
+            <h2>Smart Watch</h2>
+            <p>Track your fitness goals with style.</p>
+            <button style="background: #4f46e5; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer;">Buy Now</button>
+        </div>
+    </div>
+
+    <!-- Meta Command Center Widget -->
+    <!-- Pointing to localhost:3000 for backend widget script -->
+    <script src="https://cheeriocloneproj-r35bv.ondigitalocean.app/widget/widget.js" data-app-url="https://cheeriocloneproj-r35bv.ondigitalocean.app"></script>
+
+</body>
+</html>
