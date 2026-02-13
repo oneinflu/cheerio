@@ -195,6 +195,10 @@ router.post('/', async (req, res, next) => {
             if (type === 'image') contentType = 'image';
             else if (type === 'audio') contentType = 'audio';
             else if (type === 'document') contentType = 'document';
+            else if (type === 'video') contentType = 'video';
+            else if (type === 'sticker') contentType = 'sticker';
+            else if (type === 'location') contentType = 'location';
+            else if (type === 'contacts') contentType = 'contact';
             else contentType = 'text';
 
             const externalMessageId = msg.id; // e.g., "wamid.XXXX"
@@ -270,6 +274,26 @@ router.post('/', async (req, res, next) => {
                   RETURNING id, kind, url, mime_type
                   `,
                   [messageId, msg.document.id, msg.document.mime_type || null]
+                );
+                attachments.push(attRes.rows[0]);
+              } else if (type === 'video' && msg.video) {
+                const attRes = await client.query(
+                  `
+                  INSERT INTO attachments (id, message_id, kind, url, mime_type, created_at)
+                  VALUES (gen_random_uuid(), $1, 'video', $2, $3, NOW())
+                  RETURNING id, kind, url, mime_type
+                  `,
+                  [messageId, msg.video.id, msg.video.mime_type || null]
+                );
+                attachments.push(attRes.rows[0]);
+              } else if (type === 'sticker' && msg.sticker) {
+                const attRes = await client.query(
+                  `
+                  INSERT INTO attachments (id, message_id, kind, url, mime_type, created_at)
+                  VALUES (gen_random_uuid(), $1, 'sticker', $2, $3, NOW())
+                  RETURNING id, kind, url, mime_type
+                  `,
+                  [messageId, msg.sticker.id, msg.sticker.mime_type || null]
                 );
                 attachments.push(attRes.rows[0]);
               }

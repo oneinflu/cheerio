@@ -24,7 +24,9 @@ const DATABASE_URL = process.env.DATABASE_URL || '';
  * `rejectUnauthorized: true` ensures the certificate is valid.
  * For local dev, SSL is usually off.
  */
-const ssl = false;
+const ssl = (NODE_ENV === 'production' || (DATABASE_URL && DATABASE_URL.includes('sslmode=require')))
+  ? { rejectUnauthorized: false }
+  : false;
 console.log('[db] SSL Config FORCE FALSE:', ssl);
 console.log('[db] NODE_ENV:', process.env.NODE_ENV);
 console.log('[db] DATABASE_URL exists:', !!process.env.DATABASE_URL);

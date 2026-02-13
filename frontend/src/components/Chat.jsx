@@ -5,7 +5,7 @@ import { cn } from '../lib/utils';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { ProposalModal } from './ProposalModal';
-import { Send, Paperclip, Image as ImageIcon, File, Mic, FileText, BookOpen, BarChart, DollarSign, Loader2, MessageSquare } from 'lucide-react';
+import { Send, Paperclip, Image as ImageIcon, File, Mic, FileText, BookOpen, BarChart, DollarSign, Loader2, MessageSquare, MapPin, User, Video } from 'lucide-react';
 
 export default function Chat({ socket, conversationId, messages, onRefresh, isLoading }) {
   const [text, setText] = useState('');
@@ -404,8 +404,8 @@ export default function Chat({ socket, conversationId, messages, onRefresh, isLo
                       ? "bg-[#d9fdd3] text-slate-900 rounded-tr-sm"
                       : "bg-white text-slate-900 rounded-tl-sm"
                   )}>
-                {/* Reply Context */}
-                {m.rawPayload?.context && (
+                {/* Reply Context - Hide for Interactive/Button replies to match WhatsApp UI */}
+                {m.rawPayload?.context && m.rawPayload?.type !== 'interactive' && m.rawPayload?.type !== 'button' && (
                   <div className="mb-2 text-xs bg-black/5 p-1.5 rounded border-l-2 border-slate-400 opacity-80">
                      <div className="font-semibold text-[10px] text-slate-600 flex items-center gap-1">
                        <MessageSquare size={10} /> 
@@ -430,7 +430,8 @@ export default function Chat({ socket, conversationId, messages, onRefresh, isLo
                     {m.attachments.map((a) => {
                       const isUrl = a.url && (a.url.startsWith('http') || a.url.startsWith('/'));
                       const src = isUrl ? a.url : `/api/media/${a.url}`;
-                      const isImage = m.contentType === 'image' || a.kind === 'image';
+                      const isImage = m.contentType === 'image' || a.kind === 'image' || m.contentType === 'sticker' || a.kind === 'sticker';
+                      const isVideo = m.contentType === 'video' || a.kind === 'video';
 
                       return (
                         <div key={a.id} className="rounded bg-black/5 p-2">
@@ -447,8 +448,22 @@ export default function Chat({ socket, conversationId, messages, onRefresh, isLo
                                    e.target.style.display = 'none';
                                  }}
                                />
+                               {m.contentType !== 'sticker' && a.kind !== 'sticker' && (
+                                 <div className="mt-1 flex items-center gap-1 text-[10px] opacity-70">
+                                   <ImageIcon size={12} /> Image
+                                 </div>
+                               )}
+                             </div>
+                           ) : isVideo ? (
+                             <div className="relative">
+                               <video 
+                                 src={src} 
+                                 controls 
+                                 className="rounded-md max-w-[250px] h-auto"
+                                 onLoadedData={scrollToBottom}
+                               />
                                <div className="mt-1 flex items-center gap-1 text-[10px] opacity-70">
-                                 <ImageIcon size={12} /> Image
+                                 <Video size={12} /> Video
                                </div>
                              </div>
                            ) : (
@@ -462,6 +477,45 @@ export default function Chat({ socket, conversationId, messages, onRefresh, isLo
                         </div>
                       );
                     })}
+
+                    {/* Location */}
+                    {m.contentType === 'location' && m.rawPayload?.location && (
+                       <div className="rounded bg-black/5 p-2 min-w-[200px]">
+                          <div className="flex items-start gap-2">
+                             <MapPin size={20} className="text-red-500 mt-0.5" />
+                             <div>
+                                <a 
+                                  href={`https://www.google.com/maps/search/?api=1&query=${m.rawPayload.location.latitude},${m.rawPayload.location.longitude}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-sm font-medium text-blue-600 hover:underline block"
+                                >
+                                  {m.rawPayload.location.name || 'Shared Location'}
+                                </a>
+                                <div className="text-xs text-slate-500 mt-0.5">{m.rawPayload.location.address}</div>
+                             </div>
+                          </div>
+                       </div>
+                    )}
+
+                    {/* Contact */}
+                    {m.contentType === 'contact' && m.rawPayload?.contacts && (
+                       <div className="space-y-2">
+                          {m.rawPayload.contacts.map((c, idx) => (
+                             <div key={idx} className="rounded bg-black/5 p-2 min-w-[200px] flex items-center gap-3">
+                                <div className="bg-slate-200 p-2 rounded-full">
+                                   <User size={20} className="text-slate-500" />
+                                </div>
+                                <div>
+                                   <div className="text-sm font-medium">{c.name?.formatted_name}</div>
+                                   {c.phones && c.phones[0] && (
+                                      <div className="text-xs text-slate-500">{c.phones[0].phone}</div>
+                                   )}
+                                </div>
+                             </div>
+                          ))}
+                       </div>
+                    )}
                     {m.textBody && <div className="text-xs opacity-90 pt-1">{m.textBody}</div>}
                   </div>
                 )}
