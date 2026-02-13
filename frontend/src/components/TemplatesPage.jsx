@@ -4,9 +4,9 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Badge } from './ui/Badge';
-import { Plus, Search, Smartphone, Image as ImageIcon, CheckCircle, Clock, AlertCircle, ChevronRight, FileText, MoreVertical, RefreshCw, Send, Upload, Megaphone, Ticket, Timer, ShoppingBag, Bell, ShieldCheck, ArrowLeft, Video } from 'lucide-react';
+import { Plus, Search, Smartphone, Image as ImageIcon, CheckCircle, Clock, AlertCircle, ChevronRight, FileText, MoreVertical, RefreshCw, Send, Upload, Megaphone, Ticket, Timer, ShoppingBag, Bell, ShieldCheck, ArrowLeft, Video, Trash2, Star } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { getTemplates, createTemplate, sendTestTemplate, uploadTemplateExampleMedia } from '../api';
+import { getTemplates, createTemplate, sendTestTemplate, uploadTemplateExampleMedia, deleteTemplate } from '../api';
 
 export default function TemplatesPage() {
   const [selectedId, setSelectedId] = useState(null);
@@ -467,6 +467,42 @@ export default function TemplatesPage() {
     }
   };
 
+  const handleDelete = async (template) => {
+    if (template.status === 'DISABLED') {
+      alert('Disabled templates cannot be deleted.');
+      return;
+    }
+    
+    const confirmMsg = `Warning: Deleting a template cannot be undone.
+
+- If you delete by name, ALL languages for this template will be deleted.
+- You cannot create a template with the same name for 30 days after deletion.
+- If a message using this template is undelivered, it will enter PENDING_DELETION status for 30 days.
+
+Are you sure you want to delete '${template.name}'?`;
+
+    if (!window.confirm(confirmMsg)) return;
+    
+    setLoading(true);
+    try {
+      // We try to delete by ID (hsm_id) + name for specificity if possible.
+      // The mapped template object has `id` which is the hsm_id.
+      await deleteTemplate(template.name, template.id);
+      alert('Template deleted successfully.');
+      // Clear selection if we deleted the selected one
+      if (selectedId === template.id) {
+          setSelectedId(null);
+          setFormData(null);
+      }
+      await fetchTemplatesData();
+    } catch (err) {
+      console.error('Delete failed:', err);
+      alert(`Failed to delete template: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const filteredTemplates = templates.filter(t => {
     const matchesSearch = t.name.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory = filterCategory === 'ALL' || t.category === filterCategory;
@@ -727,9 +763,21 @@ export default function TemplatesPage() {
             >
               <div className="flex justify-between items-start mb-1">
                 <span className="font-medium text-sm text-slate-900 truncate pr-2">{t.name}</span>
-                {t.status === 'APPROVED' && <CheckCircle size={14} className="text-green-500 flex-shrink-0" />}
-                {t.status === 'PENDING' && <Clock size={14} className="text-amber-500 flex-shrink-0" />}
-                {t.status === 'REJECTED' && <AlertCircle size={14} className="text-red-500 flex-shrink-0" />}
+                <div className="flex items-center gap-2">
+                  {t.status === 'APPROVED' && <CheckCircle size={14} className="text-green-500 flex-shrink-0" />}
+                  {t.status === 'PENDING' && <Clock size={14} className="text-amber-500 flex-shrink-0" />}
+                  {t.status === 'REJECTED' && <AlertCircle size={14} className="text-red-500 flex-shrink-0" />}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDelete(t);
+                    }}
+                    className="text-slate-400 hover:text-red-600 transition-colors opacity-0 group-hover:opacity-100 p-0.5"
+                    title="Delete Template"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
               </div>
               <div className="flex items-center gap-2 text-xs text-slate-500 mb-2">
                 <Badge variant="outline" className="text-[10px] h-5 px-1">{t.category}</Badge>

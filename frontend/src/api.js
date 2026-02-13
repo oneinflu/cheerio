@@ -49,6 +49,19 @@ export async function unstarTemplate(name) {
   return res.json();
 }
 
+export async function deleteTemplate(name, hsmId) {
+  const headers = getAuthHeaders();
+  const params = new URLSearchParams();
+  if (name) params.append('name', name);
+  if (hsmId) params.append('hsm_id', hsmId);
+  
+  const res = await fetch(`/api/templates?${params.toString()}`, {
+    method: 'DELETE',
+    headers,
+  });
+  return res.json();
+}
+
 export async function createTemplate(templateData) {
   const headers = getAuthHeaders();
   const res = await fetch('/api/templates', {

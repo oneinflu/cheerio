@@ -172,4 +172,32 @@ router.post('/send-test', async (req, res, next) => {
   }
 });
 
+/**
+ * DELETE /api/templates
+ * Delete a template by name (and optional hsm_id).
+ */
+router.delete('/', async (req, res, next) => {
+  if (!WABA_ID) {
+    const err = new Error('WHATSAPP_BUSINESS_ACCOUNT_ID is not configured');
+    err.status = 500;
+    return next(err);
+  }
+  
+  const { name, hsm_id } = req.query;
+  
+  if (!name) {
+    const err = new Error('Template "name" is required');
+    err.status = 400;
+    return next(err);
+  }
+  
+  try {
+    console.log(`[templates] Deleting template: ${name} (ID: ${hsm_id || 'ALL'})`);
+    const resp = await whatsappClient.deleteTemplate(WABA_ID, name, hsm_id);
+    res.json(resp.data || { success: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;

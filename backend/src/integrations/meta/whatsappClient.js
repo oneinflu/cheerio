@@ -342,6 +342,61 @@ async function uploadMessageTemplateMedia(wabaId, fileBuffer, mimeType, filename
   }
 }
 
+/**
+ * Delete a message template.
+ * @param {string} wabaId - WhatsApp Business Account ID
+ * @param {string} name - Name of the template (required)
+ * @param {string} hsmId - Optional: Template ID to delete specific version
+ */
+async function deleteTemplate(wabaId, name, hsmId) {
+  if (USE_MOCK) {
+    console.log('[Mock WhatsApp Client] Deleting template:', name, hsmId);
+    return { success: true };
+  }
+  if (!TOKEN) throw new Error('WHATSAPP_TOKEN required');
+
+  await delayUntilAvailable();
+  
+  const u = new URL(`${GRAPH_BASE}/${wabaId}/message_templates`);
+  u.searchParams.append('name', name);
+  if (hsmId) {
+    u.searchParams.append('hsm_id', hsmId);
+  }
+
+  return new Promise((resolve, reject) => {
+    const opts = {
+      method: 'DELETE',
+      hostname: u.hostname,
+      path: u.pathname + u.search,
+      headers: {
+        'Authorization': `Bearer ${TOKEN}`,
+      },
+    };
+    
+    const req = https.request(opts, (res) => {
+      let raw = '';
+      res.on('data', (chunk) => (raw += chunk));
+      res.on('end', () => {
+        try {
+          const json = raw.length ? JSON.parse(raw) : {};
+          if (res.statusCode >= 200 && res.statusCode < 300) {
+            return resolve({ status: res.statusCode, data: json });
+          }
+          const msg = json.error && json.error.message ? json.error.message : 'Unknown error';
+          const err = new Error(`WhatsApp API error ${res.statusCode}: ${msg}`);
+          err.status = res.statusCode;
+          err.response = json;
+          return reject(err);
+        } catch (e) {
+          return reject(e);
+        }
+      });
+    });
+    req.on('error', reject);
+    req.end();
+  });
+}
+
 module.exports = {
   sendText,
   sendMedia,
@@ -349,6 +404,7 @@ module.exports = {
   sendSenderAction,
   getTemplates,
   createTemplate,
+  deleteTemplate,
   sendTemplateMessage,
   getMedia,
   uploadMedia,
