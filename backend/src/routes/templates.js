@@ -2,7 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const whatsappClient = require('../integrations/meta/whatsappClient');
-const db = require('../db');
+const db = require('../../db');
 const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage() });
 
