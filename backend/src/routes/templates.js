@@ -2,6 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const whatsappClient = require('../integrations/meta/whatsappClient');
+const db = require('../db');
 const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -20,9 +21,75 @@ router.get('/', async (req, res, next) => {
   try {
     console.log('[templates] Fetching templates for WABA:', WABA_ID);
     const resp = await whatsappClient.getTemplates(WABA_ID);
-    res.json(resp.data);
+    const templates = resp.data && resp.data.data ? resp.data.data : [];
+
+    // Fetch starred settings from DB
+    const client = await db.getClient();
+    let starredMap = new Set();
+    try {
+      const res = await client.query('SELECT template_name FROM template_settings WHERE is_starred = TRUE');
+      res.rows.forEach(r => starredMap.add(r.template_name));
+    } catch (dbErr) {
+      console.error('Error fetching template settings:', dbErr);
+    } finally {
+      client.release();
+    }
+
+    // Merge info
+    const enriched = templates.map(t => ({
+      ...t,
+      is_starred: starredMap.has(t.name)
+    }));
+
+    res.json({ data: enriched });
   } catch (err) {
     next(err);
+  }
+});
+
+/**
+ * POST /api/templates/:name/star
+ * Mark a template as starred.
+ */
+router.post('/:name/star', async (req, res, next) => {
+  const { name } = req.params;
+  const client = await db.getClient();
+  try {
+    await client.query(
+      `INSERT INTO template_settings (template_name, is_starred, updated_at)
+       VALUES ($1, TRUE, NOW())
+       ON CONFLICT (template_name) 
+       DO UPDATE SET is_starred = TRUE, updated_at = NOW()`,
+      [name]
+    );
+    res.json({ success: true, name, is_starred: true });
+  } catch (err) {
+    next(err);
+  } finally {
+    client.release();
+  }
+});
+
+/**
+ * DELETE /api/templates/:name/star
+ * Unstar a template.
+ */
+router.delete('/:name/star', async (req, res, next) => {
+  const { name } = req.params;
+  const client = await db.getClient();
+  try {
+    await client.query(
+      `INSERT INTO template_settings (template_name, is_starred, updated_at)
+       VALUES ($1, FALSE, NOW())
+       ON CONFLICT (template_name) 
+       DO UPDATE SET is_starred = FALSE, updated_at = NOW()`,
+      [name]
+    );
+    res.json({ success: true, name, is_starred: false });
+  } catch (err) {
+    next(err);
+  } finally {
+    client.release();
   }
 });
 

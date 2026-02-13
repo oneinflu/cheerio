@@ -1,22 +1,23 @@
 'use strict';
 import React, { useEffect, useState, useRef } from 'react';
-import { sendText, sendMedia, sendTemplate, uploadMedia, getTemplates } from '../api';
+import { sendText, sendMedia, sendTemplate, uploadMedia, getTemplates, starTemplate, unstarTemplate } from '../api';
 import { cn } from '../lib/utils';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { ProposalModal } from './ProposalModal';
-import { Send, Paperclip, Image as ImageIcon, File, Mic, FileText, BookOpen, BarChart, DollarSign, Loader2, MessageSquare, MapPin, User, Video } from 'lucide-react';
+import { TemplateListModal } from './TemplateListModal';
+import { Send, Paperclip, Image as ImageIcon, File, Mic, FileText, BookOpen, BarChart, DollarSign, Loader2, MessageSquare, MapPin, User, Video, Star, MoreHorizontal } from 'lucide-react';
 
 export default function Chat({ socket, conversationId, messages, onRefresh, isLoading }) {
   const [text, setText] = useState('');
   const [showMediaInput, setShowMediaInput] = useState(false);
   const [showProposalModal, setShowProposalModal] = useState(false);
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [isInitiating, setIsInitiating] = useState(false);
   const [mediaLink, setMediaLink] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
   const [mediaKind, setMediaKind] = useState('image');
   const [caption, setCaption] = useState('');
-  const [disposition, setDisposition] = useState('New');
   const [sendError, setSendError] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [typingUsers, setTypingUsers] = useState(new Set());
@@ -56,7 +57,7 @@ export default function Chat({ socket, conversationId, messages, onRefresh, isLo
 
     if (!templateDef) {
        return (
-         <div className="space-y-2 min-w-[200px]">
+         <div className="space-y-2">
            <div className="text-sm italic text-slate-500">Template: {templateName}</div>
             {m.rawPayload?.components?.find(c => c.type === 'body')?.parameters?.length > 0 && (
                <div className="text-xs opacity-90">
@@ -147,7 +148,7 @@ export default function Chat({ socket, conversationId, messages, onRefresh, isLo
     }
 
     return (
-       <div className="min-w-[250px]">
+       <div className="">
           {headerContent}
           {bodyContent}
           {footerContent}
@@ -161,7 +162,6 @@ export default function Chat({ socket, conversationId, messages, onRefresh, isLo
   }, [messages]);
 
   useEffect(() => {
-    setDisposition('New');
     setSendError('');
     setIsInitiating(false);
   }, [conversationId]);
@@ -299,24 +299,50 @@ export default function Chat({ socket, conversationId, messages, onRefresh, isLo
     }
   };
 
+  const handleToggleStar = async (template) => {
+    // Optimistic update
+    const isStarred = template.is_starred;
+    setTemplates(prev => prev.map(t => 
+      t.name === template.name ? { ...t, is_starred: !isStarred } : t
+    ));
+
+    try {
+      if (isStarred) {
+        await unstarTemplate(template.name);
+      } else {
+        await starTemplate(template.name);
+      }
+    } catch (err) {
+      console.error('Failed to toggle star:', err);
+      // Revert on error
+      setTemplates(prev => prev.map(t => 
+        t.name === template.name ? { ...t, is_starred: isStarred } : t
+      ));
+    }
+  };
+
+  const handleSendStarredTemplate = async (template) => {
+    setIsSending(true);
+    setSendError('');
+    try {
+      // Default language en_US for now, or use template.language if available
+      const lang = template.language || 'en_US';
+      const resp = await sendTemplate(conversationId, template.name, lang, []);
+      if (resp && resp.error) {
+        throw new Error(resp.message || 'Failed to send template');
+      }
+      await onRefresh();
+    } catch (err) {
+      setSendError(err?.message || 'Failed to send template');
+    } finally {
+      setIsSending(false);
+    }
+  };
+
   const handleQuickAction = async (action) => {
     if (action === 'proposal') {
       setShowProposalModal(true);
       return;
-    }
-    
-    let url = '';
-    let msg = '';
-    if (action === 'brochure') {
-      url = 'https://example.com/brochure.pdf';
-      msg = 'Here is our latest brochure.';
-    } else if (action === 'placement') {
-      url = 'https://example.com/placement.pdf';
-      msg = 'Check out our placement records.';
-    }
-    
-    if (url) {
-      await sendMedia(conversationId, 'document', url, msg);
     }
   };
 
@@ -548,29 +574,29 @@ export default function Chat({ socket, conversationId, messages, onRefresh, isLo
           </div>
         ) : null}
         <div className="flex items-center gap-2 mb-3 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-slate-200">
-           <select
-             className="h-8 rounded-md border border-slate-200 bg-slate-50 px-2 text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-             value={disposition}
-             onChange={(e) => setDisposition(e.target.value)}
-           >
-             <option value="New">New Lead</option>
-             <option value="Interested">Interested</option>
-             <option value="Follow Up">Follow Up</option>
-             <option value="Enrolled">Enrolled</option>
-             <option value="Closed">Closed</option>
-           </select>
-           <div className="h-4 w-px bg-slate-200 mx-1" />
            <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5 whitespace-nowrap" onClick={() => handleQuickAction('proposal')}>
              <FileText size={14} className="text-blue-600" />
              Send Proposal
            </Button>
-           <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5 whitespace-nowrap" onClick={() => handleQuickAction('brochure')}>
-             <BookOpen size={14} className="text-orange-600" />
-             Send Brochure
-           </Button>
-           <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5 whitespace-nowrap" onClick={() => handleQuickAction('placement')}>
-             <BarChart size={14} className="text-emerald-600" />
-             Placement Report
+           
+           {templates.filter(t => t.is_starred).map(t => (
+             <Button 
+               key={t.name}
+               variant="outline" 
+               size="sm" 
+               className="h-8 text-xs gap-1.5 whitespace-nowrap" 
+               onClick={() => handleSendStarredTemplate(t)}
+               disabled={isSending}
+             >
+               <Star size={14} className="fill-yellow-400 text-yellow-400" />
+               {t.name.replace(/_/g, ' ')}
+             </Button>
+           ))}
+
+           <div className="h-4 w-px bg-slate-200 mx-1" />
+           
+           <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-slate-100" onClick={() => setShowTemplateModal(true)} title="Manage Templates">
+             <MoreHorizontal size={16} className="text-slate-500" />
            </Button>
         </div>
 
@@ -672,6 +698,12 @@ export default function Chat({ socket, conversationId, messages, onRefresh, isLo
         isOpen={showProposalModal} 
         onClose={() => setShowProposalModal(false)} 
         onSend={handleSendProposal} 
+      />
+      <TemplateListModal 
+        isOpen={showTemplateModal}
+        onClose={() => setShowTemplateModal(false)}
+        templates={templates}
+        onToggleStar={handleToggleStar}
       />
     </div>
   );

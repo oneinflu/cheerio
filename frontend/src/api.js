@@ -31,6 +31,24 @@ export async function getTemplates() {
   return res.json();
 }
 
+export async function starTemplate(name) {
+  const headers = getAuthHeaders();
+  const res = await fetch(`/api/templates/${name}/star`, {
+    method: 'POST',
+    headers,
+  });
+  return res.json();
+}
+
+export async function unstarTemplate(name) {
+  const headers = getAuthHeaders();
+  const res = await fetch(`/api/templates/${name}/star`, {
+    method: 'DELETE',
+    headers,
+  });
+  return res.json();
+}
+
 export async function createTemplate(templateData) {
   const headers = getAuthHeaders();
   const res = await fetch('/api/templates', {
