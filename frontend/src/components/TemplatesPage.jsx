@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Badge } from './ui/Badge';
-import { Plus, Search, Smartphone, Image as ImageIcon, CheckCircle, Clock, AlertCircle, ChevronRight, FileText, MoreVertical, RefreshCw, Send, Upload, Megaphone, Ticket, Timer, ShoppingBag, Bell, ShieldCheck, ArrowLeft } from 'lucide-react';
+import { Plus, Search, Smartphone, Image as ImageIcon, CheckCircle, Clock, AlertCircle, ChevronRight, FileText, MoreVertical, RefreshCw, Send, Upload, Megaphone, Ticket, Timer, ShoppingBag, Bell, ShieldCheck, ArrowLeft, Video } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { getTemplates, createTemplate, sendTestTemplate, uploadTemplateExampleMedia } from '../api';
 
@@ -346,7 +346,7 @@ export default function TemplatesPage() {
               const header = { type: 'HEADER', format: formData.headerType };
               if (formData.headerType === 'TEXT') {
                   header.text = formData.headerText;
-              } else if (formData.headerType === 'IMAGE') {
+              } else if (['IMAGE', 'DOCUMENT', 'VIDEO'].includes(formData.headerType)) {
                   let handle = formData.headerHandle;
                   
                   // If we have a file to upload, do it now
@@ -356,15 +356,15 @@ export default function TemplatesPage() {
                           if (uploadRes.h) {
                               handle = uploadRes.h;
                           } else {
-                              throw new Error('Image upload failed: No handle returned');
+                              throw new Error(`${formData.headerType} upload failed: No handle returned`);
                           }
                       } catch (uploadErr) {
-                          throw new Error(`Failed to upload image header: ${uploadErr.message}`);
+                          throw new Error(`Failed to upload ${formData.headerType.toLowerCase()} header: ${uploadErr.message}`);
                       }
                   }
 
                   if (!handle) {
-                      alert('Please upload an example image for the header.');
+                      alert(`Please upload an example ${formData.headerType.toLowerCase()} for the header.`);
                       setLoading(false);
                       return;
                   }
@@ -962,11 +962,11 @@ export default function TemplatesPage() {
                           <span className="text-xs text-slate-500">Optional media or text header</span>
                         </div>
                         <div className="md:col-span-3 space-y-4">
-                          <div className="flex gap-2">
-                            {['NONE', 'TEXT', 'IMAGE'].map(type => (
+                          <div className="flex gap-2 flex-wrap">
+                            {['NONE', 'TEXT', 'IMAGE', 'DOCUMENT', 'VIDEO'].map(type => (
                               <button
                                 key={type}
-                                onClick={() => setFormData({...formData, headerType: type})}
+                                onClick={() => setFormData({...formData, headerType: type, headerHandle: null, headerPreviewUrl: null, headerFile: null, headerFileName: null})}
                                 className={cn(
                                   "px-4 py-2 rounded-md text-sm font-medium border transition-all shadow-sm",
                                   formData.headerType === type 
@@ -986,11 +986,15 @@ export default function TemplatesPage() {
                               className="max-w-md"
                             />
                           )}
-                          {formData.headerType === 'IMAGE' && (
+                          {['IMAGE', 'DOCUMENT', 'VIDEO'].includes(formData.headerType) && (
                              <div className="relative">
                                <input 
                                  type="file" 
-                                 accept="image/*"
+                                 accept={
+                                     formData.headerType === 'IMAGE' ? "image/*" : 
+                                     formData.headerType === 'DOCUMENT' ? "application/pdf" : 
+                                     "video/mp4,video/3gpp"
+                                 }
                                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                                  onChange={handleImageUpload}
                                />
@@ -998,23 +1002,25 @@ export default function TemplatesPage() {
                                   "h-32 w-full max-w-md bg-slate-100 rounded-lg border-2 border-dashed border-slate-300 flex flex-col items-center justify-center text-slate-500 gap-2 transition-colors relative overflow-hidden",
                                   (formData.headerHandle || formData.headerPreviewUrl) ? "bg-blue-50 border-blue-300 text-blue-600" : "hover:bg-slate-50"
                                 )}>
-                                  {formData.headerPreviewUrl ? (
+                                  {formData.headerPreviewUrl && formData.headerType === 'IMAGE' ? (
                                       <div className="relative w-full h-full flex items-center justify-center group">
                                           <img src={formData.headerPreviewUrl} alt="Preview" className="max-h-full max-w-full object-contain p-2" />
                                           <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                                               <span className="text-white text-xs font-medium bg-black/50 px-2 py-1 rounded">Click to replace</span>
                                           </div>
                                       </div>
-                                  ) : formData.headerHandle ? (
+                                  ) : formData.headerHandle || formData.headerFileName ? (
                                     <>
-                                      <CheckCircle className="w-8 h-8 text-blue-500" />
-                                      <span className="text-xs font-medium">{formData.headerFileName || 'Image Uploaded'}</span>
+                                      {formData.headerType === 'DOCUMENT' ? <FileText className="w-8 h-8 text-blue-500" /> : 
+                                       formData.headerType === 'VIDEO' ? <Video className="w-8 h-8 text-blue-500" /> :
+                                       <CheckCircle className="w-8 h-8 text-blue-500" />}
+                                      <span className="text-xs font-medium">{formData.headerFileName || `${formData.headerType} Uploaded`}</span>
                                       <span className="text-[10px] text-blue-400">Click to replace</span>
                                     </>
                                   ) : (
                                     <>
                                       {loading ? <RefreshCw className="w-8 h-8 animate-spin opacity-50" /> : <Upload className="w-8 h-8 opacity-50" />}
-                                      <span className="text-xs font-medium">{loading ? 'Uploading...' : 'Click to upload image example'}</span>
+                                      <span className="text-xs font-medium">{loading ? 'Uploading...' : `Click to upload ${formData.headerType.toLowerCase()} example`}</span>
                                     </>
                                   )}
                                 </div>
