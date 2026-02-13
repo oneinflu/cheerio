@@ -250,6 +250,20 @@ async function runWorkflow(id, phoneNumber) {
               }
            }
         }
+      } else if (currentNode.type === 'send_message') {
+        const text = currentNode.data.message;
+        if (text) {
+           console.log(`[WorkflowRunner] Sending text message to ${phoneNumber}`);
+           try {
+             const conversationId = await ensureConversation(phoneNumber);
+             await outboundWhatsApp.sendText(conversationId, text);
+           } catch (err) {
+             console.error(`[WorkflowRunner] Failed to send text message: ${err.message}`);
+           }
+        }
+      } else if (currentNode.type === 'custom_code') {
+        console.log(`[WorkflowRunner] Executing custom code (mock): ${currentNode.data.code}`);
+        // In a real system, use vm2 or isolated sandbox
       } else if (currentNode.type === 'delay') {
         const duration = parseInt(currentNode.data.duration || 0, 10);
         const unit = currentNode.data.unit || 'minutes';
@@ -263,20 +277,171 @@ async function runWorkflow(id, phoneNumber) {
         console.log(`[WorkflowRunner] Waiting for ${duration} ${unit} (${ms}ms)`);
         if (ms > 0) await sleep(ms);
       } else if (currentNode.type === 'action') {
-        console.log(`[WorkflowRunner] Executing action: ${currentNode.data.action}`);
-        // TODO: Implement actual actions (e.g., update tag, add to list)
+        const actionType = currentNode.data.actionType;
+        const actionValue = currentNode.data.actionValue;
+        console.log(`[WorkflowRunner] Executing action: ${actionType} = ${actionValue}`);
+        
+        try {
+            const conversationId = await ensureConversation(phoneNumber);
+            
+            if (actionType === 'add_tag') {
+                const convRes = await db.query('SELECT contact_id FROM conversations WHERE id = $1', [conversationId]);
+                if (convRes.rowCount > 0) {
+                    const contactId = convRes.rows[0].contact_id;
+                    // Append tag to profile.tags array if not exists
+                    await db.query(`
+                        UPDATE contacts 
+                        SET profile = jsonb_set(
+                            COALESCE(profile, '{}'::jsonb), 
+                            '{tags}', 
+                            CASE 
+                              WHEN (COALESCE(profile->'tags', '[]'::jsonb) @> to_jsonb($1::text)) THEN COALESCE(profile->'tags', '[]'::jsonb)
+                              ELSE (COALESCE(profile->'tags', '[]'::jsonb) || to_jsonb($1::text))
+                            END
+                        )
+                        WHERE id = $2
+                    `, [actionValue, contactId]);
+                }
+            } else if (actionType === 'remove_tag') {
+                const convRes = await db.query('SELECT contact_id FROM conversations WHERE id = $1', [conversationId]);
+                if (convRes.rowCount > 0) {
+                    const contactId = convRes.rows[0].contact_id;
+                    // Remove tag from profile.tags array
+                    await db.query(`
+                        UPDATE contacts 
+                        SET profile = jsonb_set(
+                            COALESCE(profile, '{}'::jsonb), 
+                            '{tags}', 
+                            (SELECT COALESCE(jsonb_agg(elem), '[]'::jsonb)
+                             FROM jsonb_array_elements(COALESCE(profile->'tags', '[]'::jsonb)) elem
+                             WHERE elem::text <> to_jsonb($1::text)::text)
+                        )
+                        WHERE id = $2
+                    `, [actionValue, contactId]);
+                }
+            } else if (actionType === 'set_variable') {
+                const convRes = await db.query('SELECT contact_id FROM conversations WHERE id = $1', [conversationId]);
+                if (convRes.rowCount > 0) {
+                    const contactId = convRes.rows[0].contact_id;
+                    const varName = currentNode.data.variableName;
+                    const varValue = currentNode.data.variableValue; // stored as string or whatever
+                    
+                    if (varName) {
+                        // Store in profile.attributes
+                        await db.query(`
+                            UPDATE contacts 
+                            SET profile = jsonb_set(
+                                COALESCE(profile, '{}'::jsonb), 
+                                '{attributes}', 
+                                (COALESCE(profile->'attributes', '{}'::jsonb) || jsonb_build_object($1::text, $2::text))
+                            )
+                            WHERE id = $3
+                        `, [varName, varValue, contactId]);
+                    }
+                }
+            } else if (actionType === 'assign_agent') {
+                // Find user by email (assuming actionValue is email)
+                const userRes = await db.query('SELECT id FROM users WHERE email = $1', [actionValue]);
+                if (userRes.rowCount > 0) {
+                    const userId = userRes.rows[0].id;
+                    // Find a team for this user
+                    const teamRes = await db.query('SELECT team_id FROM team_members WHERE user_id = $1 LIMIT 1', [userId]);
+                    if (teamRes.rowCount > 0) {
+                        const teamId = teamRes.rows[0].team_id;
+                        // Upsert assignment (close old one implicitly by constraint? No, constraint is partial unique index)
+                        // We need to release old assignment first if exists, or update it?
+                        // The index is: UNIQUE (conversation_id) WHERE released_at IS NULL
+                        // So we can update the existing active assignment or insert new one.
+                        
+                        // Check for existing active assignment
+                        const existing = await db.query(
+                            'SELECT id FROM conversation_assignments WHERE conversation_id = $1 AND released_at IS NULL',
+                            [conversationId]
+                        );
+                        
+                        if (existing.rowCount > 0) {
+                            // Release it or Update it? Update is cleaner for transfer.
+                             await db.query(`
+                                UPDATE conversation_assignments
+                                SET assignee_user_id = $1, team_id = $2, claimed_at = NOW()
+                                WHERE id = $3
+                            `, [userId, teamId, existing.rows[0].id]);
+                        } else {
+                            // Insert new
+                            await db.query(`
+                                INSERT INTO conversation_assignments (conversation_id, team_id, assignee_user_id)
+                                VALUES ($1, $2, $3)
+                            `, [conversationId, teamId, userId]);
+                        }
+                        console.log(`[WorkflowRunner] Assigned conversation to ${actionValue}`);
+                    } else {
+                        console.log(`[WorkflowRunner] User ${actionValue} is not in any team`);
+                    }
+                } else {
+                    console.log(`[WorkflowRunner] User ${actionValue} not found`);
+                }
+            }
+        } catch (err) {
+            console.error(`[WorkflowRunner] Action failed: ${err.message}`);
+        }
       }
 
       // 2. Move to Next Node
       if (currentNode.type === 'condition') {
-         const conditionStr = currentNode.data.condition || '';
-         console.log(`[WorkflowRunner] Evaluating condition: ${conditionStr}`);
+         const conditionType = currentNode.data.conditionType || 'user_replied';
+         console.log(`[WorkflowRunner] Evaluating condition type: ${conditionType}`);
          
-         // Default to checking if user replied
-         // Use lastTemplateSentAt if available, else workflowStartTime
-         const since = lastTemplateSentAt || workflowStartTime;
-         const replies = await checkUserReply(phoneNumber, since);
-         const result = replies.length > 0;
+         let result = false;
+
+         if (conditionType === 'user_replied') {
+             // Default to checking if user replied
+             // Use lastTemplateSentAt if available, else workflowStartTime
+             const since = lastTemplateSentAt || workflowStartTime;
+             const replies = await checkUserReply(phoneNumber, since);
+             result = replies.length > 0;
+         } else if (conditionType === 'has_tag') {
+             const tagName = currentNode.data.tagName;
+             if (tagName) {
+                 // Check if contact has tag
+                 const contactRes = await db.query('SELECT profile FROM contacts WHERE external_id = $1', [phoneNumber]);
+                 if (contactRes.rowCount > 0) {
+                     const profile = contactRes.rows[0].profile || {};
+                     const tags = profile.tags || [];
+                     // tags is array of strings in JSON
+                     result = Array.isArray(tags) && tags.includes(tagName);
+                 } else {
+                     // Try with/without +
+                     const altPhone = phoneNumber.startsWith('+') ? phoneNumber.slice(1) : `+${phoneNumber}`;
+                     const altRes = await db.query('SELECT profile FROM contacts WHERE external_id = $1', [altPhone]);
+                     if (altRes.rowCount > 0) {
+                         const profile = altRes.rows[0].profile || {};
+                         const tags = profile.tags || [];
+                         result = Array.isArray(tags) && tags.includes(tagName);
+                     }
+                 }
+             }
+         } else if (conditionType === 'variable_match') {
+             const varName = currentNode.data.variableName;
+             const varValue = currentNode.data.variableValue;
+             
+             if (varName) {
+                 // Check if contact has variable matching value
+                 const contactRes = await db.query('SELECT profile FROM contacts WHERE external_id = $1', [phoneNumber]);
+                 if (contactRes.rowCount > 0) {
+                     const profile = contactRes.rows[0].profile || {};
+                     const attributes = profile.attributes || {};
+                     result = attributes[varName] == varValue; // loose equality for string/number match
+                 } else {
+                      const altPhone = phoneNumber.startsWith('+') ? phoneNumber.slice(1) : `+${phoneNumber}`;
+                      const altRes = await db.query('SELECT profile FROM contacts WHERE external_id = $1', [altPhone]);
+                      if (altRes.rowCount > 0) {
+                          const profile = altRes.rows[0].profile || {};
+                          const attributes = profile.attributes || {};
+                          result = attributes[varName] == varValue;
+                      }
+                 }
+             }
+         }
          
          console.log(`[WorkflowRunner] Condition result: ${result ? 'YES' : 'NO'}`);
          

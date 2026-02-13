@@ -14,7 +14,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { Button } from './ui/Button';
-import { Save, ArrowLeft, Plus, Clock, MessageSquare, GitBranch, Zap, StopCircle, Loader2, Play } from 'lucide-react';
+import { Save, ArrowLeft, Plus, Clock, MessageSquare, GitBranch, Zap, StopCircle, Loader2, Play, MessageCircle, Code, UserCheck, Tag } from 'lucide-react';
 import { getTemplates, runWorkflow } from '../api';
 
 // --- Custom Node Components ---
@@ -105,10 +105,42 @@ const ConditionNode = ({ data, selected }) => {
   );
 };
 
-const ActionNode = ({ data, selected }) => {
+const SendMessageNode = ({ data, selected }) => {
   return (
-    <NodeWrapper selected={selected} title="Action" icon={Plus} colorClass="bg-indigo-600">
-      <div className="text-xs text-slate-600">{data.action || 'Configure action'}</div>
+    <NodeWrapper selected={selected} title="Send Message" icon={MessageCircle} colorClass="bg-teal-500">
+      <div className="text-xs text-slate-600 mb-2 truncate max-w-[180px]">{data.message || 'Enter message...'}</div>
+      <Handle type="target" position={Position.Top} className="w-3 h-3 bg-slate-400" />
+      <Handle type="source" position={Position.Bottom} className="w-3 h-3 bg-slate-400" />
+    </NodeWrapper>
+  );
+};
+
+const CustomCodeNode = ({ data, selected }) => {
+  return (
+    <NodeWrapper selected={selected} title="Custom Code" icon={Code} colorClass="bg-gray-800">
+      <div className="text-xs text-slate-600 mb-2 font-mono truncate max-w-[180px]">{data.code || '// Enter code...'}</div>
+      <Handle type="target" position={Position.Top} className="w-3 h-3 bg-slate-400" />
+      <Handle type="source" position={Position.Bottom} className="w-3 h-3 bg-slate-400" />
+    </NodeWrapper>
+  );
+};
+
+const ActionNode = ({ data, selected }) => {
+  const isAssign = data.actionType === 'assign_agent';
+  const isTag = data.actionType === 'add_tag' || data.actionType === 'remove_tag';
+  const isVar = data.actionType === 'set_variable';
+  
+  return (
+    <NodeWrapper selected={selected} title="Action" icon={isAssign ? UserCheck : (isTag ? Tag : Plus)} colorClass="bg-indigo-600">
+      <div className="text-xs text-slate-600 font-medium mb-1">
+        {data.actionType === 'assign_agent' ? 'Assign Agent' : 
+         data.actionType === 'add_tag' ? 'Add Tag' : 
+         data.actionType === 'remove_tag' ? 'Remove Tag' : 
+         data.actionType === 'set_variable' ? 'Set Variable' : 'Action'}
+      </div>
+      <div className="text-xs text-slate-500 truncate max-w-[180px]">
+        {isVar ? `${data.variableName || 'Key'} = ${data.variableValue || 'Val'}` : (data.actionValue || 'Configure...')}
+      </div>
       <Handle type="target" position={Position.Top} className="w-3 h-3 bg-slate-400" />
       <Handle type="source" position={Position.Bottom} className="w-3 h-3 bg-slate-400" />
     </NodeWrapper>
@@ -129,6 +161,8 @@ const nodeTypes = {
   send_template: TemplateNode,
   delay: DelayNode,
   condition: ConditionNode,
+  send_message: SendMessageNode,
+  custom_code: CustomCodeNode,
   action: ActionNode,
   end: EndNode,
 };
@@ -387,9 +421,11 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
           <div className="p-4 space-y-3 overflow-y-auto">
             <DraggableBlock type="trigger" label="Trigger" icon={Zap} color="bg-purple-600" />
             <DraggableBlock type="send_template" label="Send Template" icon={MessageSquare} color="bg-green-600" />
+            <DraggableBlock type="send_message" label="Send Message" icon={MessageCircle} color="bg-teal-500" />
             <DraggableBlock type="delay" label="Delay" icon={Clock} color="bg-orange-500" />
             <DraggableBlock type="condition" label="Condition" icon={GitBranch} color="bg-blue-600" />
             <DraggableBlock type="action" label="Action" icon={Plus} color="bg-indigo-600" />
+            <DraggableBlock type="custom_code" label="Custom Code" icon={Code} color="bg-gray-800" />
             <DraggableBlock type="end" label="End" icon={StopCircle} color="bg-slate-600" />
           </div>
         </div>
@@ -560,6 +596,53 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                        onChange={(e) => updateNodeData('tagName', e.target.value)}
                      />
                   )}
+
+                  {selectedNode.data.conditionType === 'variable_match' && (
+                    <div className="space-y-2">
+                       <input 
+                         placeholder="Variable Name" 
+                         className="w-full border border-slate-300 rounded-md p-2 text-sm"
+                         value={selectedNode.data.variableName || ''}
+                         onChange={(e) => updateNodeData('variableName', e.target.value)}
+                       />
+                       <input 
+                         placeholder="Value to Match" 
+                         className="w-full border border-slate-300 rounded-md p-2 text-sm"
+                         value={selectedNode.data.variableValue || ''}
+                         onChange={(e) => updateNodeData('variableValue', e.target.value)}
+                       />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {selectedNode.type === 'send_message' && (
+                <div className="space-y-3">
+                  <label className="block text-sm font-medium text-slate-700">Message Text</label>
+                  <textarea 
+                    className="w-full border border-slate-300 rounded-md p-2 text-sm min-h-[100px]"
+                    placeholder="Enter message text..."
+                    value={selectedNode.data.message || ''}
+                    onChange={(e) => updateNodeData('message', e.target.value)}
+                  />
+                  <p className="text-xs text-slate-500">
+                    Note: Can only be sent within 24 hours of the user's last message.
+                  </p>
+                </div>
+              )}
+
+              {selectedNode.type === 'custom_code' && (
+                <div className="space-y-3">
+                  <label className="block text-sm font-medium text-slate-700">JavaScript Code</label>
+                  <textarea 
+                    className="w-full border border-slate-900 bg-slate-900 text-slate-50 rounded-md p-2 text-sm font-mono min-h-[200px]"
+                    placeholder="// e.g. console.log('Processing request...')"
+                    value={selectedNode.data.code || ''}
+                    onChange={(e) => updateNodeData('code', e.target.value)}
+                  />
+                  <p className="text-xs text-slate-500">
+                    Code runs in a restricted environment. Use `console.log` for debugging.
+                  </p>
                 </div>
               )}
 
@@ -574,14 +657,51 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                     <option value="add_tag">Add Tag</option>
                     <option value="remove_tag">Remove Tag</option>
                     <option value="assign_agent">Assign Agent</option>
+                    <option value="set_variable">Set Variable</option>
                   </select>
                   
-                  <input 
-                     placeholder="Value (e.g. Tag Name)" 
-                     className="w-full border border-slate-300 rounded-md p-2 text-sm"
-                     value={selectedNode.data.actionValue || ''}
-                     onChange={(e) => updateNodeData('actionValue', e.target.value)}
-                   />
+                  {selectedNode.data.actionType === 'assign_agent' ? (
+                    <div className="space-y-1">
+                      <label className="text-xs text-slate-500">Agent Email or ID</label>
+                      <input 
+                         placeholder="agent@example.com" 
+                         className="w-full border border-slate-300 rounded-md p-2 text-sm"
+                         value={selectedNode.data.actionValue || ''}
+                         onChange={(e) => updateNodeData('actionValue', e.target.value)}
+                       />
+                    </div>
+                  ) : selectedNode.data.actionType === 'set_variable' ? (
+                    <div className="space-y-2">
+                      <div className="space-y-1">
+                        <label className="text-xs text-slate-500">Variable Name</label>
+                        <input 
+                           placeholder="e.g. user_type" 
+                           className="w-full border border-slate-300 rounded-md p-2 text-sm"
+                           value={selectedNode.data.variableName || ''}
+                           onChange={(e) => updateNodeData('variableName', e.target.value)}
+                         />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs text-slate-500">Value</label>
+                        <input 
+                           placeholder="e.g. premium" 
+                           className="w-full border border-slate-300 rounded-md p-2 text-sm"
+                           value={selectedNode.data.variableValue || ''}
+                           onChange={(e) => updateNodeData('variableValue', e.target.value)}
+                         />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      <label className="text-xs text-slate-500">Tag Name</label>
+                      <input 
+                         placeholder="e.g. VIP" 
+                         className="w-full border border-slate-300 rounded-md p-2 text-sm"
+                         value={selectedNode.data.actionValue || ''}
+                         onChange={(e) => updateNodeData('actionValue', e.target.value)}
+                       />
+                    </div>
+                  )}
                 </div>
               )}
             </div>
