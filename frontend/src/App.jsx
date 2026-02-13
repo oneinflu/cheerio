@@ -143,9 +143,9 @@ export default function App() {
   const filteredConversations = useMemo(() => {
     if (!conversations) return [];
     return conversations.filter(c => {
-      // open: status open AND has assignee
+      // open: status open AND (has assignee OR unassigned)
       if (inboxFilter === 'open') {
-        return c.status === 'open' && c.assigneeUserId;
+        return c.status === 'open' || c.status === 'unassigned';
       }
       // pinned: isPinned true
       if (inboxFilter === 'pinned') {

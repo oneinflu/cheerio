@@ -53,13 +53,18 @@ async function start() {
 
 start();
 
+process.on('uncaughtException', (err) => {
+  console.error('[server] Uncaught Exception:', err);
+  shutdown('UNCAUGHT_EXCEPTION');
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[server] Unhandled Rejection at:', promise, 'reason:', reason);
+  shutdown('UNHANDLED_REJECTION');
+});
+
 /**
  * Helper: Graceful shutdown
- * - Stops accepting new connections.
- * - Gives in-flight requests a short window to finish.
- * - Closes the PostgreSQL pool.
- *
- * This is important for deployments and restarts.
  */
 async function shutdown(signal) {
   try {

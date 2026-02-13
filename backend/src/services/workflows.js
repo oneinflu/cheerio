@@ -160,10 +160,10 @@ async function checkUserReply(phoneNumber, sinceTime) {
         console.log(`[WorkflowRunner] checkUserReply: First message: ${JSON.stringify(msgRes.rows[0])}`);
     }
     
-    return msgRes.rowCount > 0;
+    return msgRes.rows;
   } catch (err) {
     console.error('[WorkflowRunner] Error checking user reply:', err);
-    return false;
+    return [];
   }
 }
 
@@ -216,6 +216,39 @@ async function runWorkflow(id, phoneNumber) {
              await whatsappClient.sendTemplateMessage(phoneNumber, templateName);
              lastTemplateSentAt = new Date();
            }
+
+           // Handle Quick Reply Buttons (Branching)
+           if (currentNode.routes && Object.keys(currentNode.routes).length > 0) {
+              console.log(`[WorkflowRunner] Waiting for user reply to match buttons: ${Object.keys(currentNode.routes).join(', ')}`);
+              const pollingStart = Date.now();
+              const TIMEOUT = 5 * 60 * 1000; // 5 mins wait max
+              let matchedRoute = null;
+              
+              while (Date.now() - pollingStart < TIMEOUT) {
+                 const replies = await checkUserReply(phoneNumber, lastTemplateSentAt);
+                 if (replies && replies.length > 0) {
+                    for (const msg of replies) {
+                       const text = (msg.text_body || '').trim();
+                       // Find matching route key (case insensitive)
+                       const matchedKey = Object.keys(currentNode.routes).find(k => k.toLowerCase() === text.toLowerCase());
+                       if (matchedKey) {
+                          matchedRoute = currentNode.routes[matchedKey];
+                          console.log(`[WorkflowRunner] Matched reply '${text}' to route -> ${matchedRoute}`);
+                          break;
+                       }
+                    }
+                 }
+                 if (matchedRoute) break;
+                 await sleep(3000); // Poll every 3 seconds
+              }
+              
+              if (matchedRoute) {
+                 currentNode = nodes.find(n => n.id === matchedRoute);
+                 continue; // Skip default next logic
+              } else {
+                 console.log('[WorkflowRunner] Timed out waiting for button reply.');
+              }
+           }
         }
       } else if (currentNode.type === 'delay') {
         const duration = parseInt(currentNode.data.duration || 0, 10);
@@ -242,7 +275,8 @@ async function runWorkflow(id, phoneNumber) {
          // Default to checking if user replied
          // Use lastTemplateSentAt if available, else workflowStartTime
          const since = lastTemplateSentAt || workflowStartTime;
-         const result = await checkUserReply(phoneNumber, since);
+         const replies = await checkUserReply(phoneNumber, since);
+         const result = replies.length > 0;
          
          console.log(`[WorkflowRunner] Condition result: ${result ? 'YES' : 'NO'}`);
          

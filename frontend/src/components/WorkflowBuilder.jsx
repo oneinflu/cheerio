@@ -41,11 +41,34 @@ const TriggerNode = ({ data, selected }) => {
 };
 
 const TemplateNode = ({ data, selected }) => {
+  const buttons = data.buttons || [];
+  
   return (
     <NodeWrapper selected={selected} title="Send Template" icon={MessageSquare} colorClass="bg-green-600">
-      <div className="text-xs text-slate-600 mb-1">Template: <b>{data.template || 'Select...'}</b></div>
+      <div className="text-xs text-slate-600 mb-2">Template: <b>{data.template || 'Select...'}</b></div>
+      
       <Handle type="target" position={Position.Top} className="w-3 h-3 bg-slate-400" />
-      <Handle type="source" position={Position.Bottom} className="w-3 h-3 bg-slate-400" />
+      
+      {/* If template has buttons, render a handle for each button */}
+      {buttons.length > 0 ? (
+        <div className="space-y-2 mt-2">
+          {buttons.map((btnText, idx) => (
+            <div key={idx} className="relative flex items-center justify-end">
+              <span className="text-[10px] text-slate-500 mr-2 bg-slate-100 px-1 rounded">{btnText}</span>
+              <Handle 
+                type="source" 
+                position={Position.Right} 
+                id={`button-${idx}`}
+                className="w-3 h-3 bg-blue-400 !right-[-6px]" 
+                style={{ top: '50%', transform: 'translateY(-50%)' }}
+              />
+            </div>
+          ))}
+        </div>
+      ) : (
+        /* Default single output if no buttons */
+        <Handle type="source" position={Position.Bottom} id="default" className="w-3 h-3 bg-slate-400" />
+      )}
     </NodeWrapper>
   );
 };
@@ -223,6 +246,14 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
         const noEdge = edges.find(e => e.source === node.id && e.sourceHandle === 'no');
         if (yesEdge) nodeDef.yes = yesEdge.target;
         if (noEdge) nodeDef.no = noEdge.target;
+      } else if (node.type === 'send_template' && node.data.buttons && node.data.buttons.length > 0) {
+        nodeDef.routes = {};
+        node.data.buttons.forEach((btn, idx) => {
+           const edge = edges.find(e => e.source === node.id && e.sourceHandle === `button-${idx}`);
+           if (edge) {
+              nodeDef.routes[btn] = edge.target;
+           }
+        });
       } else {
         const edge = edges.find(e => e.source === node.id);
         if (edge) nodeDef.next = edge.target;
@@ -415,7 +446,33 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                   <select 
                     className="w-full border border-slate-300 rounded-md p-2 text-sm"
                     value={selectedNode.data.template || ''}
-                    onChange={(e) => updateNodeData('template', e.target.value)}
+                    onChange={(e) => {
+                      const tName = e.target.value;
+                      const found = templates.find(t => t.name === tName);
+                      let btns = [];
+                      if (found && found.components) {
+                        const btnComp = found.components.find(c => c.type === 'BUTTONS');
+                        if (btnComp && btnComp.buttons) {
+                           btns = btnComp.buttons.map(b => b.text);
+                        }
+                      }
+                      
+                      if (!selectedNode) return;
+                      setNodes((nds) =>
+                        nds.map((node) => {
+                          if (node.id === selectedNode.id) {
+                            const newData = { 
+                              ...node.data, 
+                              template: tName,
+                              buttons: btns 
+                            };
+                            setSelectedNode({ ...node, data: newData });
+                            return { ...node, data: newData };
+                          }
+                          return node;
+                        })
+                      );
+                    }}
                   >
                     <option value="">-- Select Template --</option>
                     {templates.length > 0 ? (
