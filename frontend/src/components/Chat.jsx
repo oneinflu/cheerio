@@ -573,18 +573,14 @@ export default function Chat({ socket, conversationId, messages, onRefresh, isLo
             {sendError}
           </div>
         ) : null}
-        <div className="flex items-center gap-2 mb-3 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-slate-200">
-           <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5 whitespace-nowrap" onClick={() => handleQuickAction('proposal')}>
-             <FileText size={14} className="text-blue-600" />
-             Send Proposal
-           </Button>
+        <div className="flex items-center gap-2 mb-3 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-slate-200 flex-nowrap">
            
            {templates.filter(t => t.is_starred).map(t => (
              <Button 
                key={t.name}
                variant="outline" 
                size="sm" 
-               className="h-8 text-xs gap-1.5 whitespace-nowrap" 
+               className="h-8 text-xs gap-1.5 whitespace-nowrap shrink-0" 
                onClick={() => handleSendStarredTemplate(t)}
                disabled={isSending}
              >
@@ -593,9 +589,9 @@ export default function Chat({ socket, conversationId, messages, onRefresh, isLo
              </Button>
            ))}
 
-           <div className="h-4 w-px bg-slate-200 mx-1" />
+           <div className="h-4 w-px bg-slate-200 mx-1 shrink-0" />
            
-           <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-slate-100" onClick={() => setShowTemplateModal(true)} title="Manage Templates">
+           <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-slate-100 shrink-0" onClick={() => setShowTemplateModal(true)} title="Manage Templates">
              <MoreHorizontal size={16} className="text-slate-500" />
            </Button>
         </div>

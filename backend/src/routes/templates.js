@@ -29,8 +29,9 @@ router.get('/', async (req, res, next) => {
     try {
       const res = await client.query('SELECT template_name FROM template_settings WHERE is_starred = TRUE');
       res.rows.forEach(r => starredMap.add(r.template_name));
+      console.log(`[templates] Found ${starredMap.size} starred templates in DB.`);
     } catch (dbErr) {
-      console.error('Error fetching template settings:', dbErr);
+      console.error('[templates] Error fetching template settings (migration might be missing):', dbErr.message);
     } finally {
       client.release();
     }
