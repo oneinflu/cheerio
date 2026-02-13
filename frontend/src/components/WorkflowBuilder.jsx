@@ -47,6 +47,13 @@ const TemplateNode = ({ data, selected }) => {
     <NodeWrapper selected={selected} title="Send Template" icon={MessageSquare} colorClass="bg-green-600">
       <div className="text-xs text-slate-600 mb-2">Template: <b>{data.template || 'Select...'}</b></div>
       
+      {/* Template Content Preview */}
+      {data.content && (
+        <div className="text-[10px] text-slate-500 bg-slate-50 p-2 rounded mb-2 max-h-[100px] overflow-y-auto border border-slate-100 whitespace-pre-wrap">
+          {data.content}
+        </div>
+      )}
+      
       <Handle type="target" position={Position.Top} className="w-3 h-3 bg-slate-400" />
       
       {/* If template has buttons, render a handle for each button */}
@@ -450,10 +457,17 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                       const tName = e.target.value;
                       const found = templates.find(t => t.name === tName);
                       let btns = [];
+                      let content = '';
+
                       if (found && found.components) {
                         const btnComp = found.components.find(c => c.type === 'BUTTONS');
                         if (btnComp && btnComp.buttons) {
                            btns = btnComp.buttons.map(b => b.text);
+                        }
+                        
+                        const bodyComp = found.components.find(c => c.type === 'BODY');
+                        if (bodyComp && bodyComp.text) {
+                           content = bodyComp.text;
                         }
                       }
                       
@@ -464,7 +478,8 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                             const newData = { 
                               ...node.data, 
                               template: tName,
-                              buttons: btns 
+                              buttons: btns,
+                              content: content
                             };
                             setSelectedNode({ ...node, data: newData });
                             return { ...node, data: newData };
