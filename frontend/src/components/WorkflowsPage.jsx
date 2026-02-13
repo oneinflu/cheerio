@@ -166,7 +166,7 @@ export default function WorkflowsPage({ onOpenBuilder }) {
                       {new Date(workflow.created_at).toLocaleDateString()}
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex items-center justify-end gap-2">
                         <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:text-blue-600" onClick={() => onOpenBuilder && onOpenBuilder(workflow)} title="Open Builder">
                           <WorkflowIcon size={16} />
                         </Button>

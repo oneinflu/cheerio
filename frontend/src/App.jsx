@@ -30,8 +30,27 @@ export default function App() {
   });
   const [isLoggedIn, setIsLoggedIn] = useState(!!storedUser);
   const [socket, setSocket] = useState(null);
-  const [activePage, setActivePage] = useState('inbox');
-  const [editingWorkflow, setEditingWorkflow] = useState(null);
+  const [activePage, setActivePage] = useState(() => localStorage.getItem('activePage') || 'inbox');
+  const [editingWorkflow, setEditingWorkflow] = useState(() => {
+    try {
+      const saved = localStorage.getItem('editingWorkflow');
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) {
+      return null;
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('activePage', activePage);
+  }, [activePage]);
+
+  useEffect(() => {
+    if (editingWorkflow) {
+      localStorage.setItem('editingWorkflow', JSON.stringify(editingWorkflow));
+    } else {
+      localStorage.removeItem('editingWorkflow');
+    }
+  }, [editingWorkflow]);
   const [conversations, setConversations] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const selectedIdRef = React.useRef(selectedId);
