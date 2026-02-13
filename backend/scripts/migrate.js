@@ -104,6 +104,25 @@ async function runMigrations() {
         } else {
            console.log('[migrate] Team constraints already relaxed.');
         }
+
+        // Check if template_settings table exists
+        const templateSettingsRes = await client.query(`
+          SELECT EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE  table_schema = 'public'
+            AND    table_name   = 'template_settings'
+          );
+        `);
+
+        if (!templateSettingsRes.rows[0].exists) {
+           console.log('[migrate] Adding template_settings table...');
+           await client.query('BEGIN');
+           await runSQLFile(client, path.join(__dirname, '..', 'db', 'migrations', '0006_create_template_settings.sql'));
+           await client.query('COMMIT');
+           console.log('[migrate] Applied template_settings migration.');
+        } else {
+           console.log('[migrate] template_settings table already exists.');
+        }
         
         return;
       }
