@@ -49,7 +49,7 @@ const TemplateNode = ({ data, selected }) => {
       
       {/* Template Content Preview */}
       {data.content && (
-        <div className="text-[10px] text-slate-500 bg-slate-50 p-2 rounded mb-2 max-h-[100px] overflow-y-auto border border-slate-100 whitespace-pre-wrap">
+        <div className="w-[250px] text-[10px] text-slate-500 bg-slate-50 p-2 rounded mb-2 border border-slate-100 whitespace-pre-wrap break-words">
           {data.content}
         </div>
       )}

@@ -1,6 +1,6 @@
 'use strict';
 import React, { useEffect, useState, useRef } from 'react';
-import { sendText, sendMedia, sendTemplate, uploadMedia } from '../api';
+import { sendText, sendMedia, sendTemplate, uploadMedia, getTemplates } from '../api';
 import { cn } from '../lib/utils';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
@@ -21,12 +21,139 @@ export default function Chat({ socket, conversationId, messages, onRefresh, isLo
   const [isSending, setIsSending] = useState(false);
   const [typingUsers, setTypingUsers] = useState(new Set());
   const [isTypingSelf, setIsTypingSelf] = useState(false);
+  const [templates, setTemplates] = useState([]);
   const typingTimeoutRef = useRef(null);
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    getTemplates().then(data => {
+      if (data && data.data) {
+        setTemplates(data.data);
+      }
+    }).catch(err => console.error('Failed to load templates in Chat:', err));
+  }, []);
+
+  const renderTemplateMessage = (m) => {
+    const templateName = m.rawPayload.name;
+    const templateDef = templates.find(t => t.name === templateName);
+
+    // Helper to substitute parameters into text
+    const substituteParams = (text, params) => {
+      if (!text) return '';
+      if (!params || params.length === 0) return text;
+      let res = text;
+      params.forEach((p, i) => {
+        const val = p.text || p.type;
+        res = res.replace(new RegExp(`\\{\\{${i + 1}\\}\\}`, 'g'), val);
+      });
+      return res;
+    };
+
+    if (!templateDef) {
+       return (
+         <div className="space-y-2 min-w-[200px]">
+           <div className="text-sm italic text-slate-500">Template: {templateName}</div>
+            {m.rawPayload?.components?.find(c => c.type === 'body')?.parameters?.length > 0 && (
+               <div className="text-xs opacity-90">
+                 <ul className="list-disc pl-4 space-y-0.5">
+                   {m.rawPayload.components.find(c => c.type === 'body').parameters.map((p, i) => (
+                     <li key={`b-${i}`}>{p.text || p.type}</li>
+                   ))}
+                 </ul>
+               </div>
+            )}
+         </div>
+       );
+    }
+
+    const headerComp = templateDef.components.find(c => c.type === 'HEADER');
+    const bodyComp = templateDef.components.find(c => c.type === 'BODY');
+    const footerComp = templateDef.components.find(c => c.type === 'FOOTER');
+    const buttonsComp = templateDef.components.find(c => c.type === 'BUTTONS');
+
+    const msgBodyParams = m.rawPayload.components?.find(c => c.type === 'body')?.parameters || [];
+    const msgHeaderParams = m.rawPayload.components?.find(c => c.type === 'header')?.parameters || [];
+
+    let headerContent = null;
+    if (headerComp) {
+        if (headerComp.format === 'TEXT') {
+           const text = substituteParams(headerComp.text, msgHeaderParams);
+           headerContent = <div className="font-bold text-sm mb-1">{text}</div>;
+        } else if (['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerComp.format)) {
+           const mediaParam = msgHeaderParams[0];
+           if (mediaParam && mediaParam.image) {
+              const src = mediaParam.image.link || '';
+              headerContent = (
+                 <div className="mb-2 rounded-lg overflow-hidden bg-slate-100">
+                    <img src={src} alt="Header" className="w-full h-auto object-cover" />
+                 </div>
+              );
+           } else {
+              headerContent = (
+                 <div className="mb-2 flex items-center gap-2 text-xs text-slate-500 bg-slate-100 p-2 rounded">
+                    <ImageIcon size={14} /> <span>{headerComp.format} Header</span>
+                 </div>
+              );
+           }
+        }
+    }
+
+    let bodyContent = null;
+    if (bodyComp) {
+        const text = substituteParams(bodyComp.text, msgBodyParams);
+        bodyContent = <div className="text-sm whitespace-pre-wrap leading-relaxed">{text}</div>;
+    }
+
+    let footerContent = null;
+    if (footerComp) {
+        footerContent = <div className="text-[10px] text-slate-400 mt-2 pt-1 border-t border-slate-100">{footerComp.text}</div>;
+    }
+
+    let buttonsContent = null;
+    if (buttonsComp && buttonsComp.buttons) {
+        buttonsContent = (
+            <div className="grid gap-2 mt-3 pt-2 border-t border-slate-100/50">
+               {buttonsComp.buttons.map((btn, idx) => {
+                  if (btn.type === 'QUICK_REPLY') {
+                     return (
+                        <div key={idx} className="bg-white text-blue-600 text-sm font-medium py-2 px-3 rounded text-center shadow-sm border border-slate-100 cursor-default">
+                           {btn.text}
+                        </div>
+                     );
+                  }
+                  if (btn.type === 'URL') {
+                      return (
+                        <a key={idx} href={btn.url} target="_blank" rel="noreferrer" className="bg-white text-blue-600 text-sm font-medium py-2 px-3 rounded text-center shadow-sm border border-slate-100 flex items-center justify-center gap-1 hover:bg-slate-50">
+                           {btn.text} <DollarSign size={12} className="opacity-50"/>
+                        </a>
+                      );
+                  }
+                  if (btn.type === 'PHONE_NUMBER') {
+                      return (
+                        <a key={idx} href={`tel:${btn.phone_number}`} className="bg-white text-blue-600 text-sm font-medium py-2 px-3 rounded text-center shadow-sm border border-slate-100 hover:bg-slate-50">
+                           {btn.text}
+                        </a>
+                      );
+                  }
+                  return null;
+               })}
+            </div>
+        );
+    }
+
+    return (
+       <div className="min-w-[250px]">
+          {headerContent}
+          {bodyContent}
+          {footerContent}
+          {buttonsContent}
+       </div>
+    );
   };
 
   useEffect(() => {
@@ -288,74 +415,7 @@ export default function Chat({ socket, conversationId, messages, onRefresh, isLo
                 )}
                 {m.contentType === 'text' ? (
                   m.rawPayload?.type === 'template' ? (
-                    <div className="space-y-3 min-w-[250px]">
-                      {/* Template Body */}
-                      <div className="text-sm">
-                        {m.rawPayload.name === 'proposal_invoice' && m.rawPayload?.components?.find(c => c.type === 'body')?.parameters ? (
-                           // Render constructed text from params if available
-                           <div className="space-y-1">
-                             <div className="font-semibold text-base mb-2">Proposal Invoice</div>
-                             <p>Course: <b>{m.rawPayload.components[0].parameters[0]?.text}</b></p>
-                             <p>Package: {m.rawPayload.components[0].parameters[1]?.text}</p>
-                             <div className="h-px bg-white/20 my-2" />
-                             <p className="text-lg font-bold">Total: {m.rawPayload.components[0].parameters[2]?.text}</p>
-                           </div>
-                        ) : (
-                          <div className="space-y-2">
-                             {/* Only show Template name if no parameters to show, or as a small label? 
-                                 User requested "Delete the template", likely referring to the big header.
-                                 We will hide the header but ensure we don't show an empty bubble.
-                             */}
-                             
-                             {/* Render Header Parameters */}
-                             {m.rawPayload?.components?.find(c => c.type === 'header')?.parameters?.map((p, i) => (
-                               <div key={`h-${i}`} className="flex items-center gap-2 text-xs opacity-90 bg-black/5 p-1 rounded">
-                                 <span className="font-bold">Header:</span> 
-                                 {p.type === 'image' ? (
-                                    <span className="flex items-center gap-1"><ImageIcon size={12}/> Image</span>
-                                 ) : (
-                                    <span>{p.text || p.type}</span>
-                                 )}
-                               </div>
-                             ))}
-                             {/* Render Body Parameters */}
-                             {m.rawPayload?.components?.find(c => c.type === 'body')?.parameters?.length > 0 && (
-                               <div className="text-xs opacity-90">
-                                 <span className="font-bold block mb-1">Parameters:</span>
-                                 <ul className="list-disc pl-4 space-y-0.5">
-                                   {m.rawPayload.components.find(c => c.type === 'body').parameters.map((p, i) => (
-                                     <li key={`b-${i}`}>{p.text || p.type}</li>
-                                   ))}
-                                 </ul>
-                               </div>
-                             )}
-
-                             {/* Fallback: if no visual components, show the name so bubble isn't empty */}
-                             {(!m.rawPayload?.components?.some(c => c.parameters?.length > 0)) && (
-                                <div className="text-xs text-slate-500 italic">
-                                  Template: {m.rawPayload?.name}
-                                </div>
-                             )}
-                             
-                             {m.rawPayload?.status && (
-                                 <div className="text-[10px] text-slate-400">Status: {m.rawPayload.status}</div>
-                             )}
-                          </div>
-                        )}
-                      </div>
-                      
-                      {/* Template Buttons */}
-                      <div className="pt-2">
-                        <a 
-                          href={`https://example.com/pay?amt=${m.rawPayload?.components?.find(c => c.type === 'button')?.parameters?.[0]?.text || ''}`}
-                          target="_blank"
-                          rel="noreferrer" 
-                          className="flex items-center justify-center gap-2 w-full bg-white text-blue-600 font-semibold py-2 px-4 rounded-lg shadow-sm hover:bg-blue-50 transition-colors"
-                        >
-                          Click to Pay <DollarSign size={16} />
-                        </a>
-                      </div>
-                   </div>
+                    renderTemplateMessage(m)
                   ) : (
                     <div className="whitespace-pre-wrap leading-relaxed">
                       {m.textBody || 
