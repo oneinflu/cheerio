@@ -17,6 +17,7 @@ const express = require('express');
 const path = require('path');
 const cors = require('cors'); // Added for widget support
 const whatsappWebhookRouter = require('./src/webhooks/whatsapp');
+const instagramWebhookRouter = require('./src/webhooks/instagram');
 const whatsappOutboundRouter = require('./src/routes/whatsappOutbound');
 const conversationsRouter = require('./src/routes/conversations');
 const staffNotesRouter = require('./src/routes/staffNotes');
@@ -28,6 +29,7 @@ const dashboardRouter = require('./src/routes/dashboard');
 const workflowsRouter = require('./src/routes/workflows');
 const authRouter = require('./src/routes/auth');
 const teamRouter = require('./src/routes/team');
+const instagramAutoDmRouter = require('./src/routes/instagramAutoDm');
 const auth = require('./src/middlewares/auth');
 
 // Read environment-based config for HTTP concerns. Defaults are safe for dev.
@@ -98,6 +100,7 @@ function createApp() {
   // app.use('/api/conversations', conversationsRouter);
   // app.use('/api/messages', messagesRouter);
   app.use('/webhooks/whatsapp', whatsappWebhookRouter);
+  app.use('/webhooks/instagram', instagramWebhookRouter);
   app.use('/api/auth', authRouter); // Login
   app.use('/api/team-users', teamRouter); // Team Users
   app.use('/api/whatsapp', whatsappOutboundRouter);
@@ -109,6 +112,7 @@ function createApp() {
   app.use('/api/media', mediaRouter);
   app.use('/api/workflows', workflowsRouter);
   app.use('/api', dashboardRouter);
+  app.use('/api', instagramAutoDmRouter);
 
   /**
    * Serve static assets in production.

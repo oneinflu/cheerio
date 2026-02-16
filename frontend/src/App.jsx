@@ -15,7 +15,7 @@ import LoginPage from './components/LoginPage.jsx';
 import GuestChat from './components/GuestChat.jsx';
 import { connectSocket } from './socket.js';
 import { getInbox, getMessages, claimConversation, reassignConversation, forceReassignConversation, releaseConversation, markAsRead, resolveConversation, pinConversation, updateWorkflow, getTeamUser, getTeamUsers, reassignExternalLead } from './api.js';
-import { LayoutDashboard, MessageSquare, Users, Settings, LogOut, Search, Bell, FileText, Workflow, Shield, ChevronsUpDown, Check } from 'lucide-react';
+import { LayoutDashboard, MessageSquare, Users, Settings, LogOut, Search, Bell, FileText, Workflow, Shield, ChevronsUpDown, Check, Instagram } from 'lucide-react';
 import { Button } from './components/ui/Button';
 import { Badge } from './components/ui/Badge';
 import { Card, CardHeader, CardTitle, CardContent } from './components/ui/Card';
@@ -146,6 +146,7 @@ export default function App() {
       const nextConversations = (res.conversations || []).map(c => 
         c.id === currentId ? { ...c, unreadCount: 0 } : c
       );
+
       setConversations(nextConversations);
       
       if (!currentId && nextConversations.length > 0) {
@@ -191,7 +192,6 @@ export default function App() {
       const res = await getMessages(selectedId);
       setMessages(res.messages || []);
       
-      // Mark as read and update local state
       await markAsRead(selectedId);
       setConversations(prev => prev.map(c => 
         c.id === selectedId ? { ...c, unreadCount: 0 } : c
@@ -399,6 +399,7 @@ export default function App() {
   const selectedConversation = conversations.find((c) => c.id === selectedId);
   const isAssignedToMe = Boolean(selectedConversation?.assigneeUserId && selectedConversation.assigneeUserId === currentUser.id);
   const isAssigned = Boolean(selectedConversation?.assigneeUserId);
+  const isInstagramChannel = selectedConversation?.channelType === 'instagram';
 
   const getUserName = (user) => {
     if (!user) return 'Unknown Agent';
@@ -603,9 +604,27 @@ export default function App() {
                       <h2 className="font-semibold text-sm text-slate-900 leading-tight">
                         {selectedConversation?.contactName || 'Unknown Contact'}
                       </h2>
-                      <p className="text-xs text-slate-500">
-                        {selectedConversation?.status === 'open' ? 'Open Conversation' : 'Closed'}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs text-slate-500">
+                          {selectedConversation?.status === 'open' ? 'Open Conversation' : 'Closed'}
+                        </p>
+                        {selectedConversation && (
+                          <span
+                            className={
+                              isInstagramChannel
+                                ? 'inline-flex items-center gap-1 rounded-full border border-pink-200 bg-pink-50 px-2 py-0.5 text-[10px] font-medium text-pink-700'
+                                : 'inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700'
+                            }
+                          >
+                            {isInstagramChannel ? (
+                              <Instagram size={10} />
+                            ) : (
+                              <MessageSquare size={10} />
+                            )}
+                            {isInstagramChannel ? 'Instagram DM' : 'WhatsApp'}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-center space-x-2">

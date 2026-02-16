@@ -1,5 +1,32 @@
 'use strict';
 
+function getAuthHeaders() {
+  const token = window.localStorage.getItem('accessToken');
+  const headers = {
+    'Content-Type': 'application/json',
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  return headers;
+}
+
+export async function getInstagramAutoDmConfig() {
+  const headers = getAuthHeaders();
+  const res = await fetch('/api/instagram/auto-dm-config', { headers, cache: 'no-store' });
+  return res.json();
+}
+
+export async function saveInstagramAutoDmConfig(payload) {
+  const headers = getAuthHeaders();
+  const res = await fetch('/api/instagram/auto-dm-config', {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify(payload),
+  });
+  return res.json();
+}
+
 export async function getTeamUser(id) {
   const headers = getAuthHeaders();
   const res = await fetch(`/api/team-users/${id}`, { headers });
