@@ -26,8 +26,22 @@
 const db = require('../../db');
 const { getIO } = require('../realtime/io');
 const client = require('../integrations/meta/whatsappClient');
+const cloudinaryLib = require('cloudinary').v2;
 
 const H24_MS = 24 * 60 * 60 * 1000;
+
+const HAS_CLOUDINARY =
+  !!process.env.CLOUDINARY_CLOUD_NAME &&
+  !!process.env.CLOUDINARY_API_KEY &&
+  !!process.env.CLOUDINARY_API_SECRET;
+
+if (HAS_CLOUDINARY) {
+  cloudinaryLib.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET,
+  });
+}
 
 async function getConversationDetails(clientConn, conversationId) {
   const res = await clientConn.query(
@@ -377,11 +391,81 @@ async function uploadMedia(conversationId, fileBuffer, mimeType, filename) {
   const clientConn = await db.getClient();
   try {
     const details = await getConversationDetails(clientConn, conversationId);
-    // 24h check technically not needed for upload, but good to check if we can even message this person?
-    // Actually upload is just stashing media. We check 24h when sending.
-    
+
+    if (HAS_CLOUDINARY) {
+      let cloudResult = null;
+      try {
+        const base64 = fileBuffer.toString('base64');
+        const dataUri = `data:${mimeType};base64,${base64}`;
+        cloudResult = await cloudinaryLib.uploader.upload(dataUri, {
+          resource_type: 'auto',
+          folder: process.env.CLOUDINARY_FOLDER || 'whatsapp_media',
+          use_filename: true,
+          unique_filename: true,
+        });
+      } catch (cloudErr) {
+        console.error('[uploadMedia] Cloudinary upload failed:', cloudErr.message);
+      }
+
+      if (cloudResult && cloudResult.secure_url) {
+        const kind =
+          mimeType && mimeType.startsWith('image/')
+            ? 'image'
+            : mimeType && mimeType.startsWith('video/')
+            ? 'video'
+            : mimeType && mimeType.startsWith('audio/')
+            ? 'audio'
+            : 'document';
+
+        try {
+          await clientConn.query(
+            `
+            INSERT INTO media_assets (
+              id,
+              kind,
+              cloudinary_public_id,
+              url,
+              mime_type,
+              original_filename,
+              conversation_id,
+              created_at
+            )
+            VALUES (
+              gen_random_uuid(),
+              $1,
+              $2,
+              $3,
+              $4,
+              $5,
+              $6,
+              NOW()
+            )
+            `,
+            [
+              kind,
+              cloudResult.public_id,
+              cloudResult.secure_url,
+              mimeType || null,
+              filename || null,
+              conversationId,
+            ]
+          );
+        } catch (dbErr) {
+          console.error('[uploadMedia] Failed to persist media_assets row:', dbErr.message);
+        }
+
+        return {
+          id: cloudResult.secure_url,
+          url: cloudResult.secure_url,
+          cloudinary_public_id: cloudResult.public_id,
+          kind,
+          mime_type: mimeType || null,
+        };
+      }
+    }
+
     const result = await client.uploadMedia(details.phoneNumberId, fileBuffer, mimeType, filename);
-    return result; // { id: '...' }
+    return result;
   } finally {
     clientConn.release();
   }

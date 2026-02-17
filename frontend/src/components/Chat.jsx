@@ -1,6 +1,6 @@
 'use strict';
 import React, { useEffect, useState, useRef } from 'react';
-import { sendText, sendMedia, sendTemplate, uploadMedia, getTemplates, starTemplate, unstarTemplate } from '../api';
+import { sendText, sendMedia, sendTemplate, uploadMedia, getTemplates, starTemplate, unstarTemplate, fetchMediaLibrary } from '../api';
 import { cn } from '../lib/utils';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
@@ -23,9 +23,23 @@ export default function Chat({ socket, conversationId, messages, onRefresh, isLo
   const [typingUsers, setTypingUsers] = useState(new Set());
   const [isTypingSelf, setIsTypingSelf] = useState(false);
   const [templates, setTemplates] = useState([]);
+  const [recentMedia, setRecentMedia] = useState([]);
+  const [isLoadingRecentMedia, setIsLoadingRecentMedia] = useState(false);
+  const [recentMediaError, setRecentMediaError] = useState('');
   const typingTimeoutRef = useRef(null);
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
+
+  const getSafeValue = (val) => {
+    if (val == null) return '';
+    if (typeof val === 'string' || typeof val === 'number') return val;
+    if (typeof val === 'object') {
+      if (typeof val.text === 'string') return val.text;
+      if (typeof val.type === 'string') return val.type;
+      return '';
+    }
+    return String(val);
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -39,6 +53,24 @@ export default function Chat({ socket, conversationId, messages, onRefresh, isLo
     }).catch(err => console.error('Failed to load templates in Chat:', err));
   }, []);
 
+  useEffect(() => {
+    if (!showMediaInput) return;
+    setIsLoadingRecentMedia(true);
+    setRecentMediaError('');
+    fetchMediaLibrary(10)
+      .then((res) => {
+        const rows = res && res.data ? res.data : [];
+        setRecentMedia(rows);
+      })
+      .catch((err) => {
+        console.error('Failed to load recent media:', err);
+        setRecentMediaError('Failed to load recent media');
+      })
+      .finally(() => {
+        setIsLoadingRecentMedia(false);
+      });
+  }, [showMediaInput]);
+
   const renderTemplateMessage = (m) => {
     const templateName = m.rawPayload.name;
     const templateDef = templates.find(t => t.name === templateName);
@@ -49,7 +81,7 @@ export default function Chat({ socket, conversationId, messages, onRefresh, isLo
       if (!params || params.length === 0) return text;
       let res = text;
       params.forEach((p, i) => {
-        const val = p.text || p.type;
+        const val = getSafeValue(p);
         res = res.replace(new RegExp(`\\{\\{${i + 1}\\}\\}`, 'g'), val);
       });
       return res;
@@ -63,7 +95,7 @@ export default function Chat({ socket, conversationId, messages, onRefresh, isLo
                <div className="text-xs opacity-90">
                  <ul className="list-disc pl-4 space-y-0.5">
                    {m.rawPayload.components.find(c => c.type === 'body').parameters.map((p, i) => (
-                     <li key={`b-${i}`}>{p.text || p.type}</li>
+                     <li key={`b-${i}`}>{getSafeValue(p)}</li>
                    ))}
                  </ul>
                </div>
@@ -444,11 +476,13 @@ export default function Chat({ socket, conversationId, messages, onRefresh, isLo
                     renderTemplateMessage(m)
                   ) : (
                     <div className="whitespace-pre-wrap leading-relaxed">
-                      {m.textBody || 
-                        (m.rawPayload?.type === 'interactive' && m.rawPayload.interactive?.button_reply?.title) ||
-                        (m.rawPayload?.type === 'interactive' && m.rawPayload.interactive?.list_reply?.title) ||
-                        (m.rawPayload?.type === 'button' && m.rawPayload.button?.text) ||
-                        null}
+                      {getSafeValue(
+                        m.textBody ||
+                          (m.rawPayload?.type === 'interactive' && m.rawPayload.interactive?.button_reply?.title) ||
+                          (m.rawPayload?.type === 'interactive' && m.rawPayload.interactive?.list_reply?.title) ||
+                          (m.rawPayload?.type === 'button' && m.rawPayload.button?.text) ||
+                          ''
+                      )}
                     </div>
                   )
                 ) : (
@@ -542,7 +576,11 @@ export default function Chat({ socket, conversationId, messages, onRefresh, isLo
                           ))}
                        </div>
                     )}
-                    {m.textBody && <div className="text-xs opacity-90 pt-1">{m.textBody}</div>}
+                    {m.textBody && (
+                      <div className="text-xs opacity-90 pt-1">
+                        {getSafeValue(m.textBody)}
+                      </div>
+                    )}
                   </div>
                 )}
                 <div className="text-[10px] mt-1 text-right opacity-70 text-slate-500">
@@ -615,42 +653,73 @@ export default function Chat({ socket, conversationId, messages, onRefresh, isLo
                 </Button>
              </div>
              
-             <div className="space-y-2">
-                <div className="flex gap-2 items-center">
-                   <Button 
-                      size="sm" 
-                      variant="outline" 
-                      onClick={() => fileInputRef.current?.click()}
-                   >
-                     {selectedFile ? 'Change File' : 'Choose File'}
-                   </Button>
-                   <span className="text-xs text-slate-500 truncate max-w-[200px]">
-                     {selectedFile ? selectedFile.name : 'No file selected'}
-                   </span>
-                   <input 
-                      type="file" 
-                      ref={fileInputRef} 
-                      className="hidden" 
-                      onChange={(e) => {
-                        if(e.target.files?.[0]) {
-                          setSelectedFile(e.target.files[0]);
-                          setMediaLink(''); // Clear link if file selected
-                        }
-                      }}
-                      accept={mediaKind === 'image' ? "image/*" : "*/*"}
-                   />
-                </div>
-                <div className="text-xs text-slate-400 text-center">- OR -</div>
-                <Input
-                  placeholder="Media URL (e.g., https://example.com/image.png)"
-                  value={mediaLink}
-                  onChange={(e) => {
-                    setMediaLink(e.target.value);
-                    if(e.target.value) setSelectedFile(null); // Clear file if link entered
-                  }}
-                  disabled={!!selectedFile}
-                />
-             </div>
+            <div className="space-y-2">
+               <div className="flex gap-2 items-center">
+                  <Button 
+                     size="sm" 
+                     variant="outline" 
+                     onClick={() => fileInputRef.current?.click()}
+                  >
+                    {selectedFile ? 'Change File' : 'Choose File'}
+                  </Button>
+                  <span className="text-xs text-slate-500 truncate max-w-[200px]">
+                    {selectedFile ? selectedFile.name : 'No file selected'}
+                  </span>
+                  <input 
+                     type="file" 
+                     ref={fileInputRef} 
+                     className="hidden" 
+                     onChange={(e) => {
+                       if(e.target.files?.[0]) {
+                         setSelectedFile(e.target.files[0]);
+                         setMediaLink('');
+                       }
+                     }}
+                     accept={mediaKind === 'image' ? "image/*" : "*/*"}
+                  />
+               </div>
+               <div className="text-xs text-slate-400 text-center">- OR -</div>
+               <Input
+                 placeholder="Media URL (e.g., https://example.com/image.png)"
+                 value={mediaLink}
+                 onChange={(e) => {
+                   setMediaLink(e.target.value);
+                   if(e.target.value) setSelectedFile(null);
+                 }}
+                 disabled={!!selectedFile}
+               />
+               {isLoadingRecentMedia && (
+                 <div className="mt-2 flex items-center gap-1 text-xs text-slate-400">
+                   <Loader2 size={12} className="animate-spin" /> Loading recent media...
+                 </div>
+               )}
+               {recentMediaError && (
+                 <div className="mt-2 text-xs text-red-500">{recentMediaError}</div>
+               )}
+               {!isLoadingRecentMedia && !recentMediaError && recentMedia && recentMedia.length > 0 && (
+                 <div className="mt-3">
+                   <div className="text-xs font-medium text-slate-500 mb-1">Recent media</div>
+                   <div className="flex flex-wrap gap-2 max-h-24 overflow-y-auto">
+                     {recentMedia.map((m) => (
+                       <button
+                         key={m.id}
+                         type="button"
+                         className="border border-slate-200 rounded px-2 py-1 text-[11px] flex items-center gap-1 bg-white hover:bg-slate-50"
+                         onClick={() => {
+                           setMediaLink(m.url);
+                           setSelectedFile(null);
+                         }}
+                       >
+                         <FileText size={12} className="text-slate-400" />
+                         <span className="truncate max-w-[140px]">
+                           {m.original_filename || m.url}
+                         </span>
+                       </button>
+                     ))}
+                   </div>
+                 </div>
+               )}
+            </div>
 
              <Input
                placeholder="Caption (optional)"

@@ -27,8 +27,16 @@ export default function WorkflowsPage({ onOpenBuilder }) {
     try {
       setLoading(true);
       const data = await getWorkflows();
-      setWorkflows(data);
-      setError(null);
+      if (Array.isArray(data)) {
+        setWorkflows(data);
+        setError(null);
+      } else {
+        setWorkflows([]);
+        setError(
+          (data && (data.error || data.message)) ||
+          'You may not have permission to view workflows.'
+        );
+      }
     } catch (err) {
       setError('Failed to load workflows');
       console.error(err);

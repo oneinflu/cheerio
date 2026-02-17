@@ -2,8 +2,10 @@
 const db = require('../../db');
 const whatsappClient = require('../integrations/meta/whatsappClient');
 const outboundWhatsApp = require('./outboundWhatsApp');
+const axios = require('axios');
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+const WABA_ID = process.env.WHATSAPP_BUSINESS_ACCOUNT_ID || '';
 
 /**
  * Service: Workflows
@@ -115,7 +117,7 @@ async function deleteWorkflow(id) {
 async function checkUserReply(phoneNumber, sinceTime) {
   if (!sinceTime) {
     console.log('[WorkflowRunner] checkUserReply: No sinceTime provided');
-    return false;
+    return [];
   }
   
   try {
@@ -132,7 +134,7 @@ async function checkUserReply(phoneNumber, sinceTime) {
 
     if (contactRes.rows.length === 0) {
       console.log(`[WorkflowRunner] checkUserReply: Contact not found for ${phoneNumber}`);
-      return false;
+      return [];
     }
     const contactId = contactRes.rows[0].id;
     console.log(`[WorkflowRunner] checkUserReply: Found contactId ${contactId}`);
@@ -141,7 +143,7 @@ async function checkUserReply(phoneNumber, sinceTime) {
     const convRes = await db.query('SELECT id FROM conversations WHERE contact_id = $1', [contactId]);
     if (convRes.rows.length === 0) {
        console.log(`[WorkflowRunner] checkUserReply: Conversation not found for contactId ${contactId}`);
-       return false;
+       return [];
     }
     const conversationId = convRes.rows[0].id;
     console.log(`[WorkflowRunner] checkUserReply: Found conversationId ${conversationId}`);
@@ -202,18 +204,21 @@ async function runWorkflow(id, phoneNumber) {
     try {
       // 1. Execute Node Logic
       if (currentNode.type === 'send_template') {
-        const templateName = currentNode.data.template;
+        const nodeData = currentNode.data || {};
+        const templateName = nodeData.template;
         if (templateName) {
+           const components = Array.isArray(nodeData.components) ? nodeData.components : [];
+           const languageCode = nodeData.languageCode || 'en_US';
            console.log(`[WorkflowRunner] Sending template ${templateName} to ${phoneNumber}`);
            // Resolve conversation and send via outbound service (persists to DB)
            try {
              const conversationId = await ensureConversation(phoneNumber);
-             await outboundWhatsApp.sendTemplate(conversationId, templateName, 'en_US', []);
+             await outboundWhatsApp.sendTemplate(conversationId, templateName, languageCode, components);
              lastTemplateSentAt = new Date();
            } catch (err) {
              console.error(`[WorkflowRunner] Failed to send template via service: ${err.message}`);
              // Fallback to direct client if DB fails (unlikely but safe)
-             await whatsappClient.sendTemplateMessage(phoneNumber, templateName);
+             await whatsappClient.sendTemplateMessage(phoneNumber, templateName, languageCode, components);
              lastTemplateSentAt = new Date();
            }
 
@@ -288,16 +293,17 @@ async function runWorkflow(id, phoneNumber) {
                 const convRes = await db.query('SELECT contact_id FROM conversations WHERE id = $1', [conversationId]);
                 if (convRes.rowCount > 0) {
                     const contactId = convRes.rows[0].contact_id;
-                    // Append tag to profile.tags array if not exists
                     await db.query(`
                         UPDATE contacts 
                         SET profile = jsonb_set(
                             COALESCE(profile, '{}'::jsonb), 
                             '{tags}', 
-                            CASE 
-                              WHEN (COALESCE(profile->'tags', '[]'::jsonb) @> to_jsonb($1::text)) THEN COALESCE(profile->'tags', '[]'::jsonb)
-                              ELSE (COALESCE(profile->'tags', '[]'::jsonb) || to_jsonb($1::text))
-                            END
+                            (
+                              (SELECT COALESCE(jsonb_agg(elem), '[]'::jsonb)
+                               FROM jsonb_array_elements(COALESCE(profile->'tags', '[]'::jsonb)) elem
+                               WHERE elem::text <> to_jsonb($1::text)::text)
+                              || to_jsonb($1::text)
+                            )
                         )
                         WHERE id = $2
                     `, [actionValue, contactId]);
@@ -465,11 +471,414 @@ async function runWorkflow(id, phoneNumber) {
   return { success: true, log: executionLog };
 }
 
+async function getTemplateSummariesForAI() {
+  if (!WABA_ID) return [];
+  let templates;
+  try {
+    const resp = await whatsappClient.getTemplates(WABA_ID, 50);
+    templates = (resp.data && resp.data.data) || [];
+  } catch (err) {
+    console.warn(
+      '[getTemplateSummariesForAI] Failed to fetch templates:',
+      err.response && err.response.status,
+      err.response && err.response.data ? err.response.data : err.message
+    );
+    return [];
+  }
+  return templates
+    .filter((t) => t && t.name)
+    .map((t) => {
+      const components = Array.isArray(t.components) ? t.components : [];
+      const bodyComp = components.find((c) => c && c.type === 'BODY');
+      let body = bodyComp && bodyComp.text ? String(bodyComp.text) : '';
+      if (body.length > 160) {
+        body = body.slice(0, 157) + '...';
+      }
+      return {
+        name: t.name,
+        category: t.category || '',
+        language: t.language || t.language_code || 'en_US',
+        body,
+      };
+    });
+}
+
+async function generateWorkflowFromDescription(description) {
+  if (!description || typeof description !== 'string') {
+    const e = new Error('Description is empty');
+    e.status = 400;
+    e.expose = true;
+    throw e;
+  }
+
+  const apiKey = process.env.OPENAI_API_KEY;
+  const model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+
+  if (!apiKey) {
+    return await buildWorkflowFromSimpleDescription(description);
+  }
+
+  const systemPrompt =
+    'You are an assistant that designs WhatsApp workflow automations.\n' +
+    'You receive available WhatsApp templates and a high-level goal.\n' +
+    'Return only strict JSON with this shape:\n' +
+    '{ "steps": [ { "kind": "send_template" | "send_message", "template_name"?: string, "language_code"?: string, "text"?: string, "schedule": { "type": "immediate" | "delay", "value"?: number, "unit"?: "minutes" | "hours" | "days" } } ] }\n' +
+    'Choose templates that best match the goal from the provided list.\n' +
+    'If a template is clearly appropriate, prefer kind "send_template" with template_name set to its exact name.\n' +
+    'Use schedule.type="delay" with value and unit when spacing messages over time (for example, after 1 day).\n' +
+    'If no template fits, use kind "send_message" with free-form text.\n' +
+    'Do not include a trigger step; it is implicit. Do not include any extra fields or explanations.';
+
+  let templateSummaries = [];
+  try {
+    templateSummaries = await getTemplateSummariesForAI();
+  } catch (err) {
+    console.warn('[generateWorkflowFromDescription] Failed to load template summaries:', err.message);
+  }
+
+  const templatesText =
+    templateSummaries.length > 0
+      ? 'Available templates:\n' +
+        templateSummaries
+          .map(
+            (t) =>
+              `- ${t.name} [${t.language}] (${t.category || 'general'}): ${t.body || ''}`
+          )
+          .join('\n')
+      : 'No template metadata could be loaded. If the user mentions a template by name, you may still reference it by that name in template_name.';
+
+  const userPrompt =
+    templatesText +
+    '\n\nUser goal description:\n' +
+    description;
+
+  let content;
+  try {
+    const resp = await axios.post(
+      'https://api.openai.com/v1/chat/completions',
+      {
+        model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: 20000,
+      }
+    );
+    content =
+      resp.data &&
+      resp.data.choices &&
+      resp.data.choices[0] &&
+      resp.data.choices[0].message &&
+      resp.data.choices[0].message.content;
+  } catch (err) {
+    console.error(
+      '[generateWorkflowFromDescription] OpenAI call failed:',
+      err.response && err.response.status,
+      err.response && err.response.data ? err.response.data : err.message
+    );
+    return await buildWorkflowFromSimpleDescription(description);
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(content);
+  } catch (err) {
+    return await buildWorkflowFromSimpleDescription(description);
+  }
+
+  const steps = Array.isArray(parsed.steps) ? parsed.steps : [];
+  if (!steps.length) {
+    return await buildWorkflowFromSimpleDescription(description);
+  }
+
+  const nodes = [];
+  const edges = [];
+
+  const triggerId = `node_trigger_${Date.now()}`;
+  nodes.push({
+    id: triggerId,
+    type: 'trigger',
+    position: { x: 0, y: 0 },
+    data: { label: 'Start Workflow' },
+  });
+
+  let prevId = triggerId;
+  let y = 140;
+  let index = 0;
+
+  for (const step of steps) {
+    index += 1;
+    const id = `node_${Date.now()}_${index}`;
+    const schedule = step.schedule || {};
+    const scheduleType = schedule.type === 'delay' ? 'delay' : 'immediate';
+    const delayValue =
+      scheduleType === 'delay' && typeof schedule.value === 'number'
+        ? schedule.value
+        : null;
+    const delayUnit =
+      scheduleType === 'delay' && typeof schedule.unit === 'string'
+        ? schedule.unit
+        : null;
+
+    if (step.kind === 'send_template') {
+      nodes.push({
+        id,
+        type: 'send_template',
+        position: { x: 0, y },
+        data: {
+          label: step.template_name || 'Send Template',
+          template: step.template_name || '',
+          languageCode: step.language_code || 'en_US',
+          scheduleType,
+          delayValue,
+          delayUnit,
+        },
+      });
+    } else if (step.kind === 'send_message') {
+      nodes.push({
+        id,
+        type: 'send_message',
+        position: { x: 0, y },
+        data: {
+          label: step.text || 'Send Message',
+          message: step.text || '',
+          scheduleType,
+          delayValue,
+          delayUnit,
+        },
+      });
+    } else {
+      index -= 1;
+      continue;
+    }
+
+    edges.push({
+      id: `e_${prevId}_${id}`,
+      source: prevId,
+      target: id,
+    });
+
+    prevId = id;
+    y += 140;
+  }
+
+  return { nodes, edges };
+}
+
+async function resolveTemplateNameFromDescription(description) {
+  if (!WABA_ID) return null;
+  const trimmed = (description || '').trim();
+  if (!trimmed) return null;
+
+  const normalize = (str) =>
+    str
+      .toLowerCase()
+      .replace(/[_\-]+/g, ' ')
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+  const normDesc = normalize(trimmed);
+  if (!normDesc) return null;
+
+  let templates;
+  try {
+    const resp = await whatsappClient.getTemplates(WABA_ID, 50);
+    templates = (resp.data && resp.data.data) || [];
+  } catch (err) {
+    console.warn(
+      '[resolveTemplateNameFromDescription] Failed to fetch templates:',
+      err.response && err.response.status,
+      err.response && err.response.data ? err.response.data : err.message
+    );
+    return null;
+  }
+
+  let best = { name: null, score: 0 };
+
+  for (const t of templates) {
+    if (!t || !t.name) continue;
+    const normName = normalize(t.name);
+    if (!normName) continue;
+
+    if (normDesc.includes(normName)) {
+      const score = normName.length / normDesc.length;
+      if (score > best.score) {
+        best = { name: t.name, score };
+      }
+      continue;
+    }
+
+    const nameTokens = normName.split(' ');
+    let hits = 0;
+    for (const tok of nameTokens) {
+      if (tok && normDesc.includes(tok)) hits += 1;
+    }
+    if (!hits) continue;
+    const score = hits / nameTokens.length;
+    if (score > best.score) {
+      best = { name: t.name, score };
+    }
+  }
+
+  if (best.name && best.score >= 0.5) {
+    return best.name;
+  }
+  return null;
+}
+
+async function buildWorkflowFromSimpleDescription(description) {
+  if (!description || typeof description !== 'string') {
+    const e = new Error('Description is empty');
+    e.status = 400;
+    e.expose = true;
+    throw e;
+  }
+
+  const lower = description.toLowerCase();
+
+  let templateName = await resolveTemplateNameFromDescription(description);
+  if (!templateName) {
+    const quotedTemplateMatch = description.match(/template(?:d)? named ["']([^"']+)["']/i);
+    if (quotedTemplateMatch) {
+      templateName = quotedTemplateMatch[1];
+    } else {
+      const wordTemplateMatch = lower.match(/template(?:d)? named\s+([a-z0-9_]+)/i);
+      if (wordTemplateMatch) {
+        templateName = wordTemplateMatch[1];
+      }
+    }
+  }
+
+  let delayValue = 0;
+  let delayUnit = null;
+  const delayMatch = lower.match(
+    /after\s+(?<value>\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+(?<unit>minute|minutes|hour|hours|day|days)/i
+  );
+  if (delayMatch && delayMatch.groups) {
+    const rawVal = delayMatch.groups.value;
+    const unitText = delayMatch.groups.unit;
+    const wordToNum = {
+      one: 1,
+      two: 2,
+      three: 3,
+      four: 4,
+      five: 5,
+      six: 6,
+      seven: 7,
+      eight: 8,
+      nine: 9,
+      ten: 10,
+    };
+    if (rawVal && /^[0-9]+$/.test(rawVal)) {
+      delayValue = parseInt(rawVal, 10);
+    } else if (rawVal && wordToNum[rawVal]) {
+      delayValue = wordToNum[rawVal];
+    }
+    if (unitText.startsWith('minute')) delayUnit = 'minutes';
+    else if (unitText.startsWith('hour')) delayUnit = 'hours';
+    else if (unitText.startsWith('day')) delayUnit = 'days';
+  }
+
+  let messageText = '';
+  const msgSayingMatch = description.match(/message\s+saying\s+["']?([^"']+)["']?/i);
+  if (msgSayingMatch) {
+    messageText = msgSayingMatch[1].trim();
+  } else {
+    const msgTailMatch = description.match(/send\s+a?\s*message\s+(.+)$/i);
+    if (msgTailMatch) {
+      messageText = msgTailMatch[1].trim();
+    }
+  }
+
+  const nodes = [];
+  const edges = [];
+
+  const triggerId = `node_trigger_${Date.now()}`;
+  nodes.push({
+    id: triggerId,
+    type: 'trigger',
+    position: { x: 0, y: 0 },
+    data: { label: 'Start Workflow' },
+  });
+
+  let prevId = triggerId;
+  let y = 140;
+  let index = 0;
+
+  if (templateName) {
+    index += 1;
+    const id = `node_${Date.now()}_${index}`;
+    nodes.push({
+      id,
+      type: 'send_template',
+      position: { x: 0, y },
+      data: {
+        label: templateName,
+        template: templateName,
+        languageCode: 'en_US',
+        scheduleType: 'immediate',
+        delayValue: null,
+        delayUnit: null,
+      },
+    });
+    edges.push({
+      id: `e_${prevId}_${id}`,
+      source: prevId,
+      target: id,
+    });
+    prevId = id;
+    y += 140;
+  }
+
+  if (messageText) {
+    index += 1;
+    const id = `node_${Date.now()}_${index}`;
+    const scheduleType = delayValue > 0 && delayUnit ? 'delay' : 'immediate';
+    nodes.push({
+      id,
+      type: 'send_message',
+      position: { x: 0, y },
+      data: {
+        label: messageText,
+        message: messageText,
+        scheduleType,
+        delayValue: scheduleType === 'delay' ? delayValue : null,
+        delayUnit: scheduleType === 'delay' ? delayUnit : null,
+      },
+    });
+    edges.push({
+      id: `e_${prevId}_${id}`,
+      source: prevId,
+      target: id,
+    });
+    prevId = id;
+    y += 140;
+  }
+
+  if (nodes.length === 1) {
+    const e = new Error('Could not interpret description into workflow steps');
+    e.status = 502;
+    e.expose = true;
+    throw e;
+  }
+
+  return { nodes, edges };
+}
+
 module.exports = {
   listWorkflows,
   getWorkflow,
   createWorkflow,
   updateWorkflow,
   deleteWorkflow,
-  runWorkflow
+  runWorkflow,
+  generateWorkflowFromDescription,
 };

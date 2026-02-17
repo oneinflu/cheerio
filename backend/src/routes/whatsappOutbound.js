@@ -18,6 +18,7 @@ const service = require('../services/outboundWhatsApp');
 const auth = require('../middlewares/auth');
 const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage() });
+const db = require('../../db');
 
 /**
  * POST /api/whatsapp/text
@@ -101,6 +102,36 @@ router.post('/upload', auth.requireRole('admin','agent','supervisor'), upload.si
     }
     const result = await service.uploadMedia(conversationId, req.file.buffer, req.file.mimetype, req.file.originalname);
     res.status(200).json(result);
+  } catch (err) {
+    return next(err);
+  }
+});
+
+router.get('/media-library', auth.requireRole('admin','agent','supervisor'), async (req, res, next) => {
+  try {
+    const limitParam = parseInt(req.query.limit, 10);
+    const limit = Number.isNaN(limitParam) ? 20 : Math.min(Math.max(limitParam, 1), 100);
+    const client = await db.getClient();
+    try {
+      const result = await client.query(
+        `
+        SELECT
+          id,
+          kind,
+          url,
+          mime_type,
+          original_filename,
+          created_at
+        FROM media_assets
+        ORDER BY created_at DESC
+        LIMIT $1
+        `,
+        [limit]
+      );
+      res.status(200).json({ data: result.rows });
+    } finally {
+      client.release();
+    }
   } catch (err) {
     return next(err);
   }

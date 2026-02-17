@@ -197,6 +197,17 @@ export async function uploadMedia(conversationId, file) {
   return res.json();
 }
 
+export async function fetchMediaLibrary(limit = 20) {
+  const headers = getAuthHeaders();
+  const params = new URLSearchParams();
+  if (limit) params.append('limit', String(limit));
+  const res = await fetch(`/api/whatsapp/media-library?${params.toString()}`, {
+    method: 'GET',
+    headers,
+  });
+  return res.json();
+}
+
 export async function uploadTemplateExampleMedia(file) {
   const headers = getAuthHeaders(null); // No Content-Type for FormData
   const formData = new FormData();
@@ -207,7 +218,14 @@ export async function uploadTemplateExampleMedia(file) {
     headers,
     body: formData,
   });
-  return res.json();
+  const json = await res.json();
+  if (!res.ok) {
+    const msg =
+      (json && (json.error || json.message)) ||
+      'Template media upload failed';
+    throw new Error(msg);
+  }
+  return json;
 }
 
 export async function resolveConversation(conversationId) {
@@ -305,6 +323,16 @@ export async function runWorkflow(id, phoneNumber) {
     method: 'POST',
     headers,
     body: JSON.stringify({ phoneNumber }),
+  });
+  return res.json();
+}
+
+export async function aiGenerateWorkflow(description) {
+  const headers = getAuthHeaders();
+  const res = await fetch('/api/workflows/ai/generate', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ description }),
   });
   return res.json();
 }

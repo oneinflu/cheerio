@@ -382,9 +382,6 @@ export default function App() {
         // If the builder returns the full structure needed by backend:
         await updateWorkflow(editingWorkflow.id, {
            ...editingWorkflow,
-           steps: workflowJson.nodes, // Mapping nodes to steps? Or just storing the whole JSON?
-           // Let's assume we store the whole builder output in 'steps' or a specific field.
-           // Checking core memory: "Added `workflows` table with columns: ... steps (jsonb) ..."
            steps: workflowJson
         });
         // Do not close the builder automatically on save

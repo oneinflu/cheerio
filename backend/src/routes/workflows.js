@@ -4,6 +4,19 @@ const router = express.Router();
 const svc = require('../services/workflows');
 const auth = require('../middlewares/auth');
 
+router.post('/ai/generate', auth.requireRole('admin', 'supervisor'), async (req, res, next) => {
+  try {
+    const { description } = req.body;
+    if (!description || typeof description !== 'string') {
+      return res.status(400).json({ error: 'description is required' });
+    }
+    const graph = await svc.generateWorkflowFromDescription(description);
+    res.json(graph);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // List workflows
 router.get('/', auth.requireRole('admin', 'supervisor'), async (req, res, next) => {
   try {

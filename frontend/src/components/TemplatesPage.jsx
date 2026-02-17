@@ -349,12 +349,14 @@ export default function TemplatesPage() {
               } else if (['IMAGE', 'DOCUMENT', 'VIDEO'].includes(formData.headerType)) {
                   let handle = formData.headerHandle;
                   
-                  // If we have a file to upload, do it now
                   if (formData.headerFile) {
                       try {
                           const uploadRes = await uploadTemplateExampleMedia(formData.headerFile);
-                          if (uploadRes.h) {
+                          if (uploadRes && uploadRes.h) {
                               handle = uploadRes.h;
+                          } else if (uploadRes && (uploadRes.error || uploadRes.message)) {
+                              const msg = uploadRes.error?.message || uploadRes.error || uploadRes.message;
+                              throw new Error(msg);
                           } else {
                               throw new Error(`${formData.headerType} upload failed: No handle returned`);
                           }
