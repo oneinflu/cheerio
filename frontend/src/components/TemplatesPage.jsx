@@ -130,9 +130,12 @@ export default function TemplatesPage() {
     fetchTemplatesData();
   }, []);
 
-  // Editor State
   const [formData, setFormData] = useState(null);
   const bodyTextareaRef = React.useRef(null);
+  const resolvedHeaderPreviewUrl =
+    formData &&
+    (formData.headerPreviewUrl ||
+      (formData.headerHandle && /^https?:\/\//i.test(formData.headerHandle) ? formData.headerHandle : null));
 
   // Initialize editor when selection changes
   React.useEffect(() => {
@@ -1191,23 +1194,23 @@ Are you sure you want to delete '${template.name}'?`;
                                   "h-32 w-full max-w-md bg-slate-100 rounded-lg border-2 border-dashed border-slate-300 flex flex-col items-center justify-center text-slate-500 gap-2 transition-colors relative overflow-hidden",
                                   (formData.headerHandle || formData.headerPreviewUrl) ? "bg-blue-50 border-blue-300 text-blue-600" : "hover:bg-slate-50"
                                 )}>
-                                  {formData.headerPreviewUrl && formData.headerType === 'IMAGE' ? (
+                                  {resolvedHeaderPreviewUrl && formData.headerType === 'IMAGE' ? (
                                       <div className="relative w-full h-full flex items-center justify-center group">
-                                          <img src={formData.headerPreviewUrl} alt="Preview" className="max-h-full max-w-full object-contain p-2" />
+                                          <img src={resolvedHeaderPreviewUrl} alt="Preview" className="max-h-full max-w-full object-contain p-2" />
                                           <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                                               <span className="text-white text-xs font-medium bg-black/50 px-2 py-1 rounded">Click to replace</span>
                                           </div>
                                       </div>
-                                  ) : formData.headerPreviewUrl && formData.headerType === 'VIDEO' ? (
+                                  ) : resolvedHeaderPreviewUrl && formData.headerType === 'VIDEO' ? (
                                       <div className="relative w-full h-full flex items-center justify-center group">
-                                          <video src={formData.headerPreviewUrl} className="max-h-full max-w-full object-contain p-2" controls />
+                                          <video src={resolvedHeaderPreviewUrl} className="max-h-full max-w-full object-contain p-2" controls />
                                           <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                                               <span className="text-white text-xs font-medium bg-black/50 px-2 py-1 rounded">Click to replace</span>
                                           </div>
                                       </div>
-                                  ) : formData.headerPreviewUrl && formData.headerType === 'DOCUMENT' ? (
+                                  ) : resolvedHeaderPreviewUrl && formData.headerType === 'DOCUMENT' ? (
                                       <div className="relative w-full h-full flex items-center justify-center group">
-                                          <iframe src={formData.headerPreviewUrl} className="w-full h-full" title="Document preview" />
+                                          <iframe src={resolvedHeaderPreviewUrl} className="w-full h-full" title="Document preview" />
                                           <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                                               <span className="text-white text-xs font-medium bg-black/50 px-2 py-1 rounded">Click to replace</span>
                                           </div>
@@ -1575,9 +1578,9 @@ Are you sure you want to delete '${template.name}'?`;
                         {/* Header */}
                         {formData.headerType === 'IMAGE' && (
                           <div className="h-36 bg-black flex items-center justify-center">
-                            {formData.headerPreviewUrl ? (
+                            {resolvedHeaderPreviewUrl ? (
                               <img
-                                src={formData.headerPreviewUrl}
+                                src={resolvedHeaderPreviewUrl}
                                 alt="Header"
                                 className="max-h-full max-w-full object-contain"
                               />
@@ -1588,9 +1591,9 @@ Are you sure you want to delete '${template.name}'?`;
                         )}
                         {formData.headerType === 'VIDEO' && (
                           <div className="h-36 bg-black flex items-center justify-center">
-                            {formData.headerPreviewUrl ? (
+                            {resolvedHeaderPreviewUrl ? (
                               <video
-                                src={formData.headerPreviewUrl}
+                                src={resolvedHeaderPreviewUrl}
                                 className="max-h-full max-w-full object-contain"
                                 muted
                                 controls
