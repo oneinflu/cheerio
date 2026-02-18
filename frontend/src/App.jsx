@@ -53,7 +53,13 @@ export default function App() {
     }
   }, [editingWorkflow]);
   const [conversations, setConversations] = useState([]);
-  const [selectedId, setSelectedId] = useState(null);
+  const [selectedId, setSelectedId] = useState(() => {
+    try {
+      return localStorage.getItem('selectedConversationId') || null;
+    } catch (e) {
+      return null;
+    }
+  });
   const selectedIdRef = React.useRef(selectedId);
   const [messages, setMessages] = useState([]);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
@@ -89,6 +95,17 @@ export default function App() {
   useEffect(() => {
     selectedIdRef.current = selectedId;
   }, [selectedId]);
+
+  const setSelectedConversation = (id) => {
+    setSelectedId(id);
+    try {
+      if (id) {
+        localStorage.setItem('selectedConversationId', id);
+      } else {
+        localStorage.removeItem('selectedConversationId');
+      }
+    } catch (e) {}
+  };
 
   const currentUser = useMemo(() => {
     if (storedUser) {
@@ -149,7 +166,7 @@ export default function App() {
       setConversations(nextConversations);
       
       if (!currentId && nextConversations.length > 0) {
-        setSelectedId(nextConversations[0].id);
+        setSelectedConversation(nextConversations[0].id);
       }
     } catch (err) {
       console.error('Failed to load inbox:', err);
@@ -580,7 +597,7 @@ export default function App() {
               <Inbox 
                 conversations={filteredConversations} 
                 selectedId={selectedId} 
-                onSelect={(id) => setSelectedId(id)} 
+                onSelect={(id) => setSelectedConversation(id)} 
                 onPin={handlePin} 
                 onResolve={handleResolve} 
                 currentUser={currentUser} 
