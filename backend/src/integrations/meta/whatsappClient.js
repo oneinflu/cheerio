@@ -327,6 +327,10 @@ async function uploadMessageTemplateMedia(wabaId, fileBuffer, mimeType, filename
   const url = `${GRAPH_BASE}/${wabaId}/message_template_media`;
   const form = new FormData();
   form.append('file', fileBuffer, { filename, contentType: mimeType });
+  if (mimeType) {
+    form.append('type', mimeType);
+  }
+  form.append('messaging_product', 'whatsapp');
   
   try {
     const res = await axios.post(url, form, {

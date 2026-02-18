@@ -34,10 +34,12 @@ router.get('/:conversationId/contact', auth.requireRole('admin','agent','supervi
       return res.status(404).json({ error: 'Conversation not found' });
     }
     const row = result.rows[0];
+    const profile = row.profile || {};
     res.json({
       name: row.display_name,
       number: row.external_id,
-      course: row.profile?.course || ''
+      course: profile.course || '',
+      preferredLanguage: profile.preferred_language || '',
     });
   } catch (err) {
     next(err);

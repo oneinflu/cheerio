@@ -40,6 +40,7 @@ const db = require('../../db');
 const { getIO } = require('../realtime/io');
 const crypto = require('crypto');
 const axios = require('axios');
+const translation = require('../services/translation');
 
 // Verify token for GET challenge.
 const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN || '';
@@ -108,7 +109,28 @@ router.post('/', async (req, res, next) => {
         }
 
         for (const msg of messages) {
-          // Each message is handled in a transaction for consistency.
+          let textBody = null;
+          if (msg.type === 'text' && msg.text) {
+            textBody = msg.text.body;
+          } else if (msg.type === 'interactive' && msg.interactive) {
+            if (msg.interactive.type === 'button_reply' && msg.interactive.button_reply) {
+              textBody = msg.interactive.button_reply.title;
+            } else if (msg.interactive.type === 'list_reply' && msg.interactive.list_reply) {
+              textBody = msg.interactive.list_reply.title;
+            }
+          } else if (msg.type === 'button' && msg.button) {
+            textBody = msg.button.text;
+          }
+
+          let translationMeta = null;
+          if (textBody) {
+            try {
+              translationMeta = await translation.detectAndTranslateToEnglish(textBody);
+            } catch (e) {
+              translationMeta = null;
+            }
+          }
+
           const client = await db.getClient();
           try {
             await client.query('BEGIN');
@@ -202,21 +224,32 @@ router.post('/', async (req, res, next) => {
             else contentType = 'text';
 
             const externalMessageId = msg.id; // e.g., "wamid.XXXX"
-            
-            let textBody = null;
-            if (msg.type === 'text' && msg.text) {
-              textBody = msg.text.body;
-            } else if (msg.type === 'interactive' && msg.interactive) {
-               // Handle Quick Replies and List Replies
-               if (msg.interactive.type === 'button_reply' && msg.interactive.button_reply) {
-                 textBody = msg.interactive.button_reply.title;
-               } else if (msg.interactive.type === 'list_reply' && msg.interactive.list_reply) {
-                 textBody = msg.interactive.list_reply.title;
-               }
-             } else if (msg.type === 'button' && msg.button) {
-               // Handle Button responses (Template buttons)
-               textBody = msg.button.text;
-             }
+
+            const rawMsg = { ...msg };
+            if (translationMeta && translationMeta.languageCode && translationMeta.englishText) {
+              rawMsg.translation = {
+                languageCode: translationMeta.languageCode,
+                englishText: translationMeta.englishText,
+                originalText: textBody,
+              };
+              if (translationMeta.languageCode !== 'en') {
+                try {
+                  await client.query(
+                    `
+                    UPDATE contacts
+                    SET profile = jsonb_set(
+                      COALESCE(profile, '{}'),
+                      '{preferred_language}',
+                      to_jsonb($1::text),
+                      true
+                    )
+                    WHERE id = $2
+                    `,
+                    [translationMeta.languageCode, contactId]
+                  );
+                } catch (_) {}
+              }
+            }
 
             // Insert message with idempotency: unique(channel_id, external_message_id)
             const messageResult = await client.query(
@@ -235,7 +268,7 @@ router.post('/', async (req, res, next) => {
               DO NOTHING
               RETURNING id
               `,
-              [conversationId, channelId, contentType, externalMessageId, textBody, JSON.stringify(msg)]
+              [conversationId, channelId, contentType, externalMessageId, textBody, JSON.stringify(rawMsg)]
             );
 
             let messageId = null;
@@ -322,7 +355,8 @@ router.post('/', async (req, res, next) => {
                 textBody,
                 direction: 'inbound',
                 attachments,
-                rawPayload: msg
+                rawPayload: rawMsg,
+                translation: rawMsg.translation || null
               };
               io.to(`conversation:${conversationId}`).emit('message:new', payload);
               io.emit('message:new', payload);

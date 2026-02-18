@@ -523,7 +523,8 @@ async function generateWorkflowFromDescription(description) {
     'You receive available WhatsApp templates and a high-level goal.\n' +
     'Return only strict JSON with this shape:\n' +
     '{ "steps": [ { "kind": "send_template" | "send_message", "template_name"?: string, "language_code"?: string, "text"?: string, "schedule": { "type": "immediate" | "delay", "value"?: number, "unit"?: "minutes" | "hours" | "days" } } ] }\n' +
-    'Choose templates that best match the goal from the provided list.\n' +
+    'If the user clearly mentions a specific existing template by name (or very close variant), prefer that exact template_name over others.\n' +
+    'Otherwise, choose templates that best match the goal from the provided list.\n' +
     'If a template is clearly appropriate, prefer kind "send_template" with template_name set to its exact name.\n' +
     'Use schedule.type="delay" with value and unit when spacing messages over time (for example, after 1 day).\n' +
     'If no template fits, use kind "send_message" with free-form text.\n' +

@@ -31,17 +31,21 @@ async function listMessages(conversationId) {
     arr.push(a);
     attByMsg.set(a.message_id, arr);
   }
-  return msgs.rows.map((m) => ({
-    id: m.id,
-    conversationId: m.conversation_id,
-    direction: m.direction,
-    contentType: m.content_type,
-    textBody: m.text_body,
-    rawPayload: m.raw_payload,
-    createdAt: m.created_at,
-    externalMessageId: m.external_message_id,
-    attachments: attByMsg.get(m.id) || [],
-  }));
+  return msgs.rows.map((m) => {
+    const raw = m.raw_payload || {};
+    return {
+      id: m.id,
+      conversationId: m.conversation_id,
+      direction: m.direction,
+      contentType: m.content_type,
+      textBody: m.text_body,
+      rawPayload: raw,
+      createdAt: m.created_at,
+      externalMessageId: m.external_message_id,
+      attachments: attByMsg.get(m.id) || [],
+      translation: raw.translation || null,
+    };
+  });
 }
 
 async function markAsRead(conversationId) {
@@ -56,4 +60,3 @@ async function markAsRead(conversationId) {
 }
 
 module.exports = { listMessages, markAsRead };
-

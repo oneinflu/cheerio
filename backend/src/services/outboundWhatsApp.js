@@ -27,6 +27,7 @@ const db = require('../../db');
 const { getIO } = require('../realtime/io');
 const client = require('../integrations/meta/whatsappClient');
 const cloudinaryLib = require('cloudinary').v2;
+const translation = require('./translation');
 
 const H24_MS = 24 * 60 * 60 * 1000;
 
@@ -61,7 +62,7 @@ async function getConversationDetails(clientConn, conversationId) {
   }
   const row = res.rows[0];
   const contactRes = await clientConn.query(
-    `SELECT external_id FROM contacts WHERE id = $1`,
+    `SELECT external_id, profile FROM contacts WHERE id = $1`,
     [row.contact_id]
   );
   if (contactRes.rowCount === 0) {
@@ -70,11 +71,13 @@ async function getConversationDetails(clientConn, conversationId) {
     err.expose = true;
     throw err;
   }
+  const contactRow = contactRes.rows[0];
   return {
     conversationId: row.id,
     channelId: row.channel_id,
     phoneNumberId: row.phone_number_id,
-    toWaId: contactRes.rows[0].external_id,
+    toWaId: contactRow.external_id,
+    contactProfile: contactRow.profile || {},
   };
 }
 
@@ -193,20 +196,52 @@ async function sendText(conversationId, text) {
     const details = await getConversationDetails(clientConn, conversationId);
     await enforce24hWindow(clientConn, conversationId, false);
 
+    const preferredLang =
+      details.contactProfile &&
+      typeof details.contactProfile.preferred_language === 'string' &&
+      details.contactProfile.preferred_language
+        ? details.contactProfile.preferred_language
+        : null;
+
+    let textForMeta = text;
+    let translatedText = null;
+
+    if (preferredLang && preferredLang !== 'en') {
+      try {
+        const t = await translation.translateFromEnglish(text, preferredLang);
+        if (t && typeof t === 'string') {
+          textForMeta = t;
+          translatedText = t;
+        }
+      } catch (_) {
+        textForMeta = text;
+      }
+    }
+
     const messageId = await insertOutboundMessage(
       clientConn,
       details.conversationId,
       details.channelId,
       'text',
       text,
-      { type: 'text', text }
+      {
+        type: 'text',
+        text,
+        translatedText: translatedText || null,
+        targetLanguage: preferredLang || null,
+      }
     );
-    emitMessage(details.conversationId, messageId, 'text', text);
+    emitMessage(details.conversationId, messageId, 'text', text, {
+      type: 'text',
+      text,
+      translatedText: translatedText || null,
+      targetLanguage: preferredLang || null,
+    });
     emitStatus(details.conversationId, messageId, 'sending');
 
     let resp;
     try {
-      resp = await client.sendText(details.phoneNumberId, details.toWaId, text);
+      resp = await client.sendText(details.phoneNumberId, details.toWaId, textForMeta);
     } catch (apiErr) {
       console.error('[sendText] Meta API failed:', apiErr.response?.data || apiErr.message);
       await finalizeOutboundMessage(clientConn, messageId, details.conversationId, null, false);

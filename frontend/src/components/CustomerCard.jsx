@@ -11,7 +11,8 @@ export default function CustomerCard({ conversationId }) {
   const [formData, setFormData] = useState({
     name: '',
     number: '',
-    course: ''
+    course: '',
+    preferredLanguage: ''
   });
 
   useEffect(() => {
@@ -26,7 +27,8 @@ export default function CustomerCard({ conversationId }) {
         setFormData({
           name: data.name || '',
           number: data.number || '',
-          course: data.course || ''
+          course: data.course || '',
+          preferredLanguage: data.preferredLanguage || ''
         });
       })
       .catch(err => console.error(err))
@@ -83,6 +85,15 @@ export default function CustomerCard({ conversationId }) {
                 value={formData.number} 
                 disabled
                 className="h-8 bg-slate-50 mt-1 text-slate-500"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-500">Preferred Language</label>
+              <Input 
+                value={formData.preferredLanguage || ''}
+                disabled
+                className="h-8 bg-slate-50 mt-1 text-slate-500"
+                placeholder="Auto-detected from chat"
               />
             </div>
             <div>

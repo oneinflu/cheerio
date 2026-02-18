@@ -475,15 +475,28 @@ export default function Chat({ socket, conversationId, messages, onRefresh, isLo
                   m.rawPayload?.type === 'template' ? (
                     renderTemplateMessage(m)
                   ) : (
-                    <div className="whitespace-pre-wrap leading-relaxed">
-                      {getSafeValue(
-                        m.textBody ||
-                          (m.rawPayload?.type === 'interactive' && m.rawPayload.interactive?.button_reply?.title) ||
-                          (m.rawPayload?.type === 'interactive' && m.rawPayload.interactive?.list_reply?.title) ||
-                          (m.rawPayload?.type === 'button' && m.rawPayload.button?.text) ||
-                          ''
+                    <>
+                      <div className="whitespace-pre-wrap leading-relaxed">
+                        {(() => {
+                          const base =
+                            m.textBody ||
+                            (m.rawPayload?.type === 'interactive' && m.rawPayload.interactive?.button_reply?.title) ||
+                            (m.rawPayload?.type === 'interactive' && m.rawPayload.interactive?.list_reply?.title) ||
+                            (m.rawPayload?.type === 'button' && m.rawPayload.button?.text) ||
+                            '';
+                          const translated =
+                            !isOutbound && m.translation && m.translation.englishText
+                              ? m.translation.englishText
+                              : base;
+                          return getSafeValue(translated || base);
+                        })()}
+                      </div>
+                      {!isOutbound && m.translation && m.translation.originalText && m.translation.languageCode && m.translation.languageCode !== 'en' && (
+                        <div className="mt-1 text-[10px] text-slate-500 opacity-80">
+                          {`Original (${m.translation.languageCode}): `}{getSafeValue(m.translation.originalText)}
+                        </div>
                       )}
-                    </div>
+                    </>
                   )
                 ) : (
                   <div className="space-y-2">
