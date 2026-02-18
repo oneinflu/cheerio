@@ -506,6 +506,7 @@ Are you sure you want to delete '${template.name}'?`;
   };
 
   const filteredTemplates = templates.filter(t => {
+    if (t.status === 'PENDING_DELETION') return false;
     const matchesSearch = t.name.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory = filterCategory === 'ALL' || t.category === filterCategory;
     return matchesSearch && matchesCategory;

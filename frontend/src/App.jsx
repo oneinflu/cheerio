@@ -256,7 +256,8 @@ export default function App() {
               contentType: payload.contentType || 'text',
               createdAt: payload.createdAt || new Date().toISOString(),
               rawPayload: payload.rawPayload || {},
-              attachments: payload.attachments || [] // Handle optimistic attachments
+              attachments: payload.attachments || [],
+              translation: payload.translation || null,
             },
           ];
         });

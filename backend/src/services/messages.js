@@ -1,5 +1,6 @@
 'use strict';
 const db = require('../../db');
+const translation = require('./translation');
 
 async function listMessages(conversationId) {
   const msgs = await db.query(
@@ -31,6 +32,42 @@ async function listMessages(conversationId) {
     arr.push(a);
     attByMsg.set(a.message_id, arr);
   }
+
+  const needsTranslation = [];
+  for (const m of msgs.rows) {
+    if (m.direction !== 'inbound') continue;
+    if (m.content_type !== 'text') continue;
+    if (!m.text_body || !m.text_body.trim()) continue;
+    const raw = m.raw_payload || {};
+    if (raw.translation && raw.translation.englishText) continue;
+    needsTranslation.push(m);
+  }
+
+  if (needsTranslation.length > 0 && translation && translation.detectAndTranslateToEnglish) {
+    for (const m of needsTranslation) {
+      try {
+        const meta = await translation.detectAndTranslateToEnglish(m.text_body);
+        if (!meta || !meta.languageCode || !meta.englishText) continue;
+        const raw = m.raw_payload || {};
+        raw.translation = {
+          languageCode: meta.languageCode,
+          englishText: meta.englishText,
+          originalText: m.text_body,
+        };
+        m.raw_payload = raw;
+        await db.query(
+          `
+          UPDATE messages
+          SET raw_payload = $2::jsonb
+          WHERE id = $1
+          `,
+          [m.id, JSON.stringify(raw)]
+        );
+      } catch (e) {
+      }
+    }
+  }
+
   return msgs.rows.map((m) => {
     const raw = m.raw_payload || {};
     return {
