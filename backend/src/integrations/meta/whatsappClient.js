@@ -263,10 +263,36 @@ async function getTemplates(wabaId, limit = 100) {
 
 /**
  * Create a new template.
+ * Uses axios instead of the low-level https client to avoid intermittent
+ * "socket hang up" network errors and to surface Graph API errors clearly.
  */
 async function createTemplate(wabaId, templateData) {
+  if (USE_MOCK) {
+    console.log('[Mock WhatsApp Client] Skipping real template creation.');
+    return { status: 200, data: { success: true, id: 'mock_template_' + Date.now() } };
+  }
+  if (!TOKEN) throw new Error('WHATSAPP_TOKEN required');
+
   const url = `${GRAPH_BASE}/${wabaId}/message_templates`;
-  return postJSON(url, templateData);
+
+  await delayUntilAvailable();
+
+  try {
+    const res = await axios.post(url, templateData, {
+      headers: {
+        'Authorization': `Bearer ${TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    return { status: res.status, data: res.data };
+  } catch (err) {
+    const apiError = err.response && err.response.data && err.response.data.error;
+    const msg = apiError && apiError.message ? apiError.message : err.message;
+    const e = new Error(msg);
+    e.status = err.response && err.response.status ? err.response.status : 500;
+    e.response = err.response && err.response.data ? err.response.data : null;
+    throw e;
+  }
 }
 
 /**
