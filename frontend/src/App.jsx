@@ -14,7 +14,7 @@ import TeamMembersPage from './components/TeamMembersPage.jsx';
 import LoginPage from './components/LoginPage.jsx';
 import GuestChat from './components/GuestChat.jsx';
 import { connectSocket } from './socket.js';
-import { getInbox, getMessages, claimConversation, reassignConversation, forceReassignConversation, releaseConversation, markAsRead, resolveConversation, pinConversation, updateWorkflow, getTeamUser, getTeamUsers, reassignExternalLead } from './api.js';
+import { getInbox, getMessages, claimConversation, reassignConversation, forceReassignConversation, releaseConversation, markAsRead, resolveConversation, deleteConversation, blockConversation, unblockConversation, pinConversation, updateWorkflow, getTeamUser, getTeamUsers, reassignExternalLead } from './api.js';
 import { LayoutDashboard, MessageSquare, Users, Settings, LogOut, Search, Bell, FileText, Workflow, Shield, ChevronsUpDown, Check } from 'lucide-react';
 import { Button } from './components/ui/Button';
 import { Badge } from './components/ui/Badge';
@@ -160,9 +160,10 @@ export default function App() {
     try {
       const res = await getInbox(currentUser.teamIds[0], 'all');
       const currentId = selectedIdRef.current;
-      const nextConversations = (res.conversations || []).map(c => 
-        c.id === currentId ? { ...c, unreadCount: 0 } : c
-      );
+      const nextConversations = (res.conversations || []).map(c => {
+        const base = c.id === currentId ? { ...c, unreadCount: 0 } : c;
+        return base;
+      });
       setConversations(nextConversations);
       
       if (!currentId && nextConversations.length > 0) {
@@ -376,6 +377,43 @@ export default function App() {
       loadInbox();
     } catch (err) {
       console.error('Failed to resolve conversation:', err);
+    }
+  };
+
+  const handleToggleBlock = async () => {
+    if (!selectedConversation) return;
+    const conversationId = selectedConversation.id;
+    const isBlocked = selectedConversation.blocked === true;
+    try {
+      if (isBlocked) {
+        await unblockConversation(conversationId);
+        setConversations(prev =>
+          prev.map(c => (c.id === conversationId ? { ...c, blocked: false } : c))
+        );
+      } else {
+        await blockConversation(conversationId);
+        setConversations(prev =>
+          prev.map(c => (c.id === conversationId ? { ...c, blocked: true } : c))
+        );
+      }
+    } catch (err) {
+      console.error('Failed to toggle block:', err);
+    }
+  };
+
+  const handleDeleteConversation = async (conversationId) => {
+    if (!conversationId) return;
+    const confirmed = window.confirm('Delete this conversation and all its messages? This cannot be undone.');
+    if (!confirmed) return;
+    try {
+      await deleteConversation(conversationId);
+      setConversations(prev => prev.filter(c => c.id !== conversationId));
+      if (selectedId === conversationId) {
+        setSelectedConversation(null);
+        setMessages([]);
+      }
+    } catch (err) {
+      console.error('Failed to delete conversation:', err);
     }
   };
 
@@ -601,6 +639,7 @@ export default function App() {
                 onSelect={(id) => setSelectedConversation(id)} 
                 onPin={handlePin} 
                 onResolve={handleResolve} 
+                onDelete={handleDeleteConversation}
                 currentUser={currentUser} 
                 filter={inboxFilter} 
                 setFilter={setInboxFilter} 
@@ -629,6 +668,13 @@ export default function App() {
                     </Button>
                     <Button variant="outline" size="sm">
                       Snooze
+                    </Button>
+                    <Button
+                      variant={selectedConversation?.blocked ? "destructive" : "outline"}
+                      size="sm"
+                      onClick={handleToggleBlock}
+                    >
+                      {selectedConversation?.blocked ? 'Unblock' : 'Block'}
                     </Button>
                     <div className="flex items-center gap-2">
                       {isAssigned ? (

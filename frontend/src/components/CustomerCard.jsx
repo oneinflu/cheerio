@@ -19,10 +19,12 @@ export default function CustomerCard({ conversationId }) {
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
   const [formData, setFormData] = useState({
+    contactId: '',
     name: '',
     number: '',
     course: '',
-    preferredLanguage: ''
+    preferredLanguage: '',
+    blocked: false
   });
 
   useEffect(() => {
@@ -35,10 +37,12 @@ export default function CustomerCard({ conversationId }) {
       })
       .then(data => {
         setFormData({
+          contactId: data.contactId || '',
           name: data.name || '',
           number: data.number || '',
           course: data.course || '',
-          preferredLanguage: data.preferredLanguage || ''
+          preferredLanguage: data.preferredLanguage || '',
+          blocked: !!data.blocked
         });
       })
       .catch(err => console.error(err))
@@ -104,6 +108,14 @@ export default function CustomerCard({ conversationId }) {
                 disabled
                 className="h-8 bg-slate-50 mt-1 text-slate-500"
                 placeholder="Auto-detected from chat"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-500">Status</label>
+              <Input 
+                value={formData.blocked ? 'Blocked' : 'Active'}
+                disabled
+                className="h-8 bg-slate-50 mt-1 text-slate-500"
               />
             </div>
             <div>

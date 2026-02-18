@@ -173,11 +173,19 @@ router.post('/', async (req, res, next) => {
               VALUES (gen_random_uuid(), $1, $2, $3, '{}'::jsonb)
               ON CONFLICT (channel_id, external_id)
               DO UPDATE SET display_name = COALESCE(EXCLUDED.display_name, contacts.display_name)
-              RETURNING id
+              RETURNING id, profile
               `,
               [channelId, senderWaId, profileName]
             );
-            const contactId = contactResult.rows[0].id;
+            const contactRow = contactResult.rows[0];
+            const contactId = contactRow.id;
+
+            const existingProfile = contactRow.profile || {};
+            if (existingProfile.blocked === true) {
+              await client.query('ROLLBACK');
+              client.release();
+              continue;
+            }
 
             // Check if this is the first message for this contact (Global check)
             const historyRes = await client.query(

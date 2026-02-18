@@ -2,9 +2,9 @@
 import React, { useState } from 'react';
 import { cn } from '../lib/utils';
 import { Badge } from './ui/Badge';
-import { Pin, MessageCircle, Instagram, Check } from 'lucide-react';
+import { Pin, MessageCircle, Instagram, Check, Trash2 } from 'lucide-react';
 
-export default function Inbox({ conversations, selectedId, onSelect, onPin, onResolve, currentUser, filter, setFilter }) {
+export default function Inbox({ conversations, selectedId, onSelect, onPin, onResolve, onDelete, currentUser, filter, setFilter }) {
   
   return (
     <div className="flex flex-col h-full">
@@ -115,6 +115,18 @@ export default function Inbox({ conversations, selectedId, onSelect, onPin, onRe
                         title="Resolve"
                       >
                         <Check size={14} />
+                      </button>
+                    )}
+                    {onDelete && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDelete(c.id);
+                        }}
+                        className="p-1.5 rounded-full hover:bg-red-50 transition-colors text-slate-300 hover:text-red-600 opacity-0 group-hover:opacity-100"
+                        title="Delete conversation"
+                      >
+                        <Trash2 size={14} />
                       </button>
                     )}
                   </div>

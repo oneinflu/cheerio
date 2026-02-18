@@ -24,7 +24,7 @@ router.get('/:conversationId/contact', auth.requireRole('admin','agent','supervi
   try {
     const { conversationId } = req.params;
     const result = await db.query(
-      `SELECT ct.display_name, ct.external_id, ct.profile
+      `SELECT ct.id as contact_id, ct.display_name, ct.external_id, ct.profile
        FROM conversations c
        JOIN contacts ct ON ct.id = c.contact_id
        WHERE c.id = $1`,
@@ -36,10 +36,12 @@ router.get('/:conversationId/contact', auth.requireRole('admin','agent','supervi
     const row = result.rows[0];
     const profile = row.profile || {};
     res.json({
+      contactId: row.contact_id,
       name: row.display_name,
       number: row.external_id,
       course: profile.course || '',
       preferredLanguage: profile.preferred_language || '',
+      blocked: profile.blocked === true,
     });
   } catch (err) {
     next(err);
@@ -174,6 +176,98 @@ router.post('/:conversationId/status', auth.requireRole('admin','agent','supervi
     
     await db.query('UPDATE conversations SET status = $1 WHERE id = $2', [dbStatus, conversationId]);
     res.json({ success: true, status: dbStatus });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/:conversationId/block', auth.requireRole('admin','agent','supervisor'), async (req, res, next) => {
+  try {
+    const { conversationId } = req.params;
+    const conv = await db.query(
+      `SELECT contact_id FROM conversations WHERE id = $1`,
+      [conversationId]
+    );
+    if (conv.rowCount === 0) {
+      const err = new Error('Conversation not found');
+      err.status = 404;
+      err.expose = true;
+      throw err;
+    }
+    const contactId = conv.rows[0].contact_id;
+
+    await db.query(
+      `
+      UPDATE contacts
+      SET profile = jsonb_set(
+        COALESCE(profile, '{}'::jsonb),
+        '{blocked}',
+        'true'::jsonb,
+        true
+      )
+      WHERE id = $1
+      `,
+      [contactId]
+    );
+
+    res.json({ success: true, blocked: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/:conversationId/unblock', auth.requireRole('admin','agent','supervisor'), async (req, res, next) => {
+  try {
+    const { conversationId } = req.params;
+    const conv = await db.query(
+      `SELECT contact_id FROM conversations WHERE id = $1`,
+      [conversationId]
+    );
+    if (conv.rowCount === 0) {
+      const err = new Error('Conversation not found');
+      err.status = 404;
+      err.expose = true;
+      throw err;
+    }
+    const contactId = conv.rows[0].contact_id;
+
+    await db.query(
+      `
+      UPDATE contacts
+      SET profile = COALESCE(profile, '{}'::jsonb) - 'blocked'
+      WHERE id = $1
+      `,
+      [contactId]
+    );
+
+    res.json({ success: true, blocked: false });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete('/:conversationId', auth.requireRole('admin','agent','supervisor'), async (req, res, next) => {
+  try {
+    const { conversationId } = req.params;
+    if (!conversationId) {
+      const err = new Error('conversationId is required');
+      err.status = 400;
+      err.expose = true;
+      throw err;
+    }
+
+    const result = await db.query(
+      `DELETE FROM conversations WHERE id = $1 RETURNING id`,
+      [conversationId]
+    );
+    if (result.rowCount === 0) {
+      const err = new Error('Conversation not found');
+      err.status = 404;
+      err.expose = true;
+      throw err;
+    }
+
+    res.json({ success: true, conversationId });
   } catch (err) {
     next(err);
   }

@@ -238,6 +238,33 @@ export async function resolveConversation(conversationId) {
   return res.json();
 }
 
+export async function blockConversation(conversationId) {
+  const headers = getAuthHeaders();
+  const res = await fetch(`/api/conversations/${conversationId}/block`, {
+    method: 'POST',
+    headers,
+  });
+  return res.json();
+}
+
+export async function unblockConversation(conversationId) {
+  const headers = getAuthHeaders();
+  const res = await fetch(`/api/conversations/${conversationId}/unblock`, {
+    method: 'POST',
+    headers,
+  });
+  return res.json();
+}
+
+export async function deleteConversation(conversationId) {
+  const headers = getAuthHeaders();
+  const res = await fetch(`/api/conversations/${conversationId}`, {
+    method: 'DELETE',
+    headers,
+  });
+  return res.json();
+}
+
 export async function pinConversation(conversationId) {
   const headers = getAuthHeaders();
   const res = await fetch(`/api/conversations/${conversationId}/pin`, {

@@ -194,6 +194,15 @@ async function sendText(conversationId, text) {
   try {
     await clientConn.query('BEGIN');
     const details = await getConversationDetails(clientConn, conversationId);
+    const isBlocked =
+      details.contactProfile &&
+      details.contactProfile.blocked === true;
+    if (isBlocked) {
+      const err = new Error('This number is blocked. Unblock to send messages.');
+      err.status = 400;
+      err.expose = true;
+      throw err;
+    }
     await enforce24hWindow(clientConn, conversationId, false);
 
     const preferredLang =
@@ -282,6 +291,15 @@ async function sendMedia(conversationId, kind, link, caption) {
   try {
     await clientConn.query('BEGIN');
     const details = await getConversationDetails(clientConn, conversationId);
+    const isBlocked =
+      details.contactProfile &&
+      details.contactProfile.blocked === true;
+    if (isBlocked) {
+      const err = new Error('This number is blocked. Unblock to send messages.');
+      err.status = 400;
+      err.expose = true;
+      throw err;
+    }
     await enforce24hWindow(clientConn, conversationId, false);
 
     const messageId = await insertOutboundMessage(
@@ -350,6 +368,15 @@ async function sendTemplate(conversationId, name, languageCode, components) {
   try {
     await clientConn.query('BEGIN');
     const details = await getConversationDetails(clientConn, conversationId);
+    const isBlocked =
+      details.contactProfile &&
+      details.contactProfile.blocked === true;
+    if (isBlocked) {
+      const err = new Error('This number is blocked. Unblock to send messages.');
+      err.status = 400;
+      err.expose = true;
+      throw err;
+    }
     // Template messages are allowed regardless of 24h window.
 
     const rawPayload = { type: 'template', name, languageCode, components };
