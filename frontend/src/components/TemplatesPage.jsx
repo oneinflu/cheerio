@@ -125,6 +125,7 @@ export default function TemplatesPage() {
 
   // Editor State
   const [formData, setFormData] = useState(null);
+  const bodyTextareaRef = React.useRef(null);
 
   // Initialize editor when selection changes
   React.useEffect(() => {
@@ -227,9 +228,37 @@ export default function TemplatesPage() {
 
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
-    if (!file) return;
+    if (!file || !formData) return;
 
-    // Create a local preview URL
+    const type = formData.headerType;
+    const size = file.size;
+    const mime = file.type || '';
+
+    if (type === 'IMAGE') {
+      const max = 5 * 1024 * 1024;
+      const isValidMime = mime === 'image/jpeg' || mime === 'image/png';
+      if (!isValidMime || size > max) {
+        alert('Image must be JPEG or PNG and up to 5 MB.');
+        e.target.value = '';
+        return;
+      }
+    } else if (type === 'VIDEO') {
+      const max = 16 * 1024 * 1024;
+      const isValidMime = mime === 'video/mp4' || mime === 'video/3gpp';
+      if (!isValidMime || size > max) {
+        alert('Video must be MP4 or 3GPP and up to 16 MB.');
+        e.target.value = '';
+        return;
+      }
+    } else if (type === 'DOCUMENT') {
+      const max = 100 * 1024 * 1024;
+      if (size > max) {
+        alert('Document must be up to 100 MB.');
+        e.target.value = '';
+        return;
+      }
+    }
+
     const previewUrl = URL.createObjectURL(file);
     
     setFormData(prev => ({
@@ -237,7 +266,7 @@ export default function TemplatesPage() {
       headerFile: file,
       headerFileName: file.name,
       headerPreviewUrl: previewUrl,
-      headerHandle: null // Clear previous handle as we have a new file to upload on save
+      headerHandle: null
     }));
   };
 
@@ -1089,6 +1118,7 @@ Are you sure you want to delete '${template.name}'?`;
                         <div className="md:col-span-3 space-y-4">
                           <div className="relative">
                             <textarea 
+                              ref={bodyTextareaRef}
                               className="w-full min-h-[120px] rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-2 resize-y font-mono"
                               value={formData.bodyText}
                               onChange={e => setFormData({...formData, bodyText: e.target.value})}
@@ -1163,10 +1193,33 @@ Are you sure you want to delete '${template.name}'?`;
                                                         type="button"
                                                         className="text-[10px] text-slate-400 hover:text-blue-600"
                                                         title="Insert into text"
-                                                        onClick={() => setFormData(prev => ({
-                                                            ...prev,
-                                                            bodyText: prev.bodyText + `{{${v.name}}}`
-                                                        }))}
+                                                        onClick={() => {
+                                                            const token = `{{${v.name}}}`;
+                                                            const el = bodyTextareaRef.current;
+                                                            if (el && typeof el.selectionStart === 'number' && typeof el.selectionEnd === 'number') {
+                                                                const start = el.selectionStart;
+                                                                const end = el.selectionEnd;
+                                                                const value = el.value || '';
+                                                                const newValue = value.slice(0, start) + token + value.slice(end);
+                                                                setFormData(prev => ({
+                                                                    ...prev,
+                                                                    bodyText: newValue
+                                                                }));
+                                                                const pos = start + token.length;
+                                                                window.requestAnimationFrame(() => {
+                                                                    if (bodyTextareaRef.current) {
+                                                                        bodyTextareaRef.current.selectionStart = pos;
+                                                                        bodyTextareaRef.current.selectionEnd = pos;
+                                                                        bodyTextareaRef.current.focus();
+                                                                    }
+                                                                });
+                                                            } else {
+                                                                setFormData(prev => ({
+                                                                    ...prev,
+                                                                    bodyText: prev.bodyText + token
+                                                                }));
+                                                            }
+                                                        }}
                                                     >
                                                         <Plus size={10} />
                                                     </button>

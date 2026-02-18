@@ -159,6 +159,7 @@ router.post('/send-test', async (req, res, next) => {
   if (!to || !templateName) {
     const err = new Error('Missing "to" or "templateName"');
     err.status = 400;
+    err.expose = true;
     return next(err);
   }
 
@@ -167,15 +168,23 @@ router.post('/send-test', async (req, res, next) => {
   // The 'sendTemplateMessage' function in whatsappClient should handle this.
   
   try {
-    // We reuse the existing outbound logic or call the client directly
-    // The user provided a curl command that uses the graph API directly.
-    // Let's use the whatsappClient helper if available, or implement a direct call matching their request.
-    
-    // Using the client helper is cleaner:
-    const resp = await whatsappClient.sendTemplateMessage(to, templateName, languageCode || 'en_US', components);
+    const resp = await whatsappClient.sendTemplateMessage(
+      to,
+      templateName,
+      languageCode || 'en_US',
+      components
+    );
     res.json(resp.data);
   } catch (err) {
-    next(err);
+    // Surface Meta error details to the client instead of a generic message.
+    const e = new Error(
+      (err.response && err.response.error && err.response.error.message) ||
+      err.message ||
+      'Template send failed'
+    );
+    e.status = err.status || 500;
+    e.expose = true;
+    return next(e);
   }
 });
 
