@@ -23,6 +23,7 @@ export default function TemplatesPage() {
   const [testSelectedTemplate, setTestSelectedTemplate] = useState('');
   const [testVariables, setTestVariables] = useState({});
   const [sendingTest, setSendingTest] = useState(false);
+  const [testHeaderMedia, setTestHeaderMedia] = useState('');
 
   // Templates Data
   const [templates, setTemplates] = useState([]);
@@ -266,6 +267,16 @@ export default function TemplatesPage() {
       headerFile: file,
       headerFileName: file.name,
       headerPreviewUrl: previewUrl,
+      headerHandle: null
+    }));
+  };
+
+  const handleClearHeaderFile = () => {
+    setFormData(prev => ({
+      ...prev,
+      headerFile: null,
+      headerFileName: null,
+      headerPreviewUrl: null,
       headerHandle: null
     }));
   };
@@ -554,6 +565,36 @@ Are you sure you want to delete '${template.name}'?`;
       const lang = tmpl ? tmpl.language : 'en_US';
       
       const components = [];
+
+      // 0. Handle Header Media (IMAGE / VIDEO / DOCUMENT)
+      if (tmpl && ['IMAGE','VIDEO','DOCUMENT'].includes(tmpl.headerType)) {
+        const mediaVal = (testHeaderMedia || '').trim();
+        if (!mediaVal) {
+          alert('Please provide a header media URL or ID for this template.');
+          setSendingTest(false);
+          return;
+        }
+        const isUrl = /^https?:\/\//i.test(mediaVal);
+        const mediaObj = isUrl ? { link: mediaVal } : { id: mediaVal };
+        let paramType = 'image';
+        let mediaKey = 'image';
+        if (tmpl.headerType === 'VIDEO') {
+          paramType = 'video';
+          mediaKey = 'video';
+        } else if (tmpl.headerType === 'DOCUMENT') {
+          paramType = 'document';
+          mediaKey = 'document';
+        }
+        components.push({
+          type: 'header',
+          parameters: [
+            {
+              type: paramType,
+              [mediaKey]: mediaObj
+            }
+          ]
+        });
+      }
       
       // 1. Handle Body Variables
       if (tmpl && tmpl.bodyText) {
@@ -627,6 +668,7 @@ Are you sure you want to delete '${template.name}'?`;
       setTestPhoneNumber('');
       setTestSelectedTemplate('');
       setTestVariables({});
+      setTestHeaderMedia('');
     } catch (err) {
       console.error('Failed to send test message:', err);
       alert('Failed to send test message. Check console.');
@@ -682,6 +724,7 @@ Are you sure you want to delete '${template.name}'?`;
                        } else {
                           setTestVariables({});
                       }
+                      setTestHeaderMedia('');
                   }}
                 >
                   <option value="">Select a template...</option>
@@ -702,6 +745,31 @@ Are you sure you want to delete '${template.name}'?`;
                 />
                 <p className="text-xs text-slate-500">Enter number with country code, no + sign.</p>
               </div>
+
+              {/* Header media for IMAGE / VIDEO / DOCUMENT templates */}
+              {testSelectedTemplate && (() => {
+                  const tmpl = templates.find(t => t.name === testSelectedTemplate);
+                  if (!tmpl || !['IMAGE','VIDEO','DOCUMENT'].includes(tmpl.headerType)) return null;
+                  const label =
+                    tmpl.headerType === 'IMAGE'
+                      ? 'Image header (URL or media ID)'
+                      : tmpl.headerType === 'VIDEO'
+                      ? 'Video header (URL or media ID)'
+                      : 'Document header (URL or media ID)';
+                  return (
+                    <div className="space-y-2 border-t pt-2 mt-2">
+                      <label className="text-sm font-medium text-slate-700">{label}</label>
+                      <Input
+                        placeholder="Paste public URL or WhatsApp media ID"
+                        value={testHeaderMedia}
+                        onChange={e => setTestHeaderMedia(e.target.value)}
+                      />
+                      <p className="text-xs text-slate-500">
+                        Required for media header templates. Use a public link or an uploaded media ID.
+                      </p>
+                    </div>
+                  );
+              })()}
 
               {Object.keys(testVariables).length > 0 && (
                   <div className="space-y-2 border-t pt-2 mt-2">
@@ -1067,7 +1135,7 @@ Are you sure you want to delete '${template.name}'?`;
                             />
                           )}
                           {['IMAGE', 'DOCUMENT', 'VIDEO'].includes(formData.headerType) && (
-                             <div className="relative">
+                             <div className="relative space-y-2">
                                <input 
                                  type="file" 
                                  accept={
@@ -1089,6 +1157,20 @@ Are you sure you want to delete '${template.name}'?`;
                                               <span className="text-white text-xs font-medium bg-black/50 px-2 py-1 rounded">Click to replace</span>
                                           </div>
                                       </div>
+                                  ) : formData.headerPreviewUrl && formData.headerType === 'VIDEO' ? (
+                                      <div className="relative w-full h-full flex items-center justify-center group">
+                                          <video src={formData.headerPreviewUrl} className="max-h-full max-w-full object-contain p-2" controls />
+                                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                              <span className="text-white text-xs font-medium bg-black/50 px-2 py-1 rounded">Click to replace</span>
+                                          </div>
+                                      </div>
+                                  ) : formData.headerPreviewUrl && formData.headerType === 'DOCUMENT' ? (
+                                      <div className="relative w-full h-full flex items-center justify-center group">
+                                          <iframe src={formData.headerPreviewUrl} className="w-full h-full" title="Document preview" />
+                                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                              <span className="text-white text-xs font-medium bg-black/50 px-2 py-1 rounded">Click to replace</span>
+                                          </div>
+                                      </div>
                                   ) : formData.headerHandle || formData.headerFileName ? (
                                     <>
                                       {formData.headerType === 'DOCUMENT' ? <FileText className="w-8 h-8 text-blue-500" /> : 
@@ -1104,6 +1186,15 @@ Are you sure you want to delete '${template.name}'?`;
                                     </>
                                   )}
                                 </div>
+                                {(formData.headerFile || formData.headerHandle || formData.headerPreviewUrl) && (
+                                  <button
+                                    type="button"
+                                    onClick={handleClearHeaderFile}
+                                    className="text-xs text-red-500 hover:text-red-700 self-start"
+                                  >
+                                    Remove file
+                                  </button>
+                                )}
                              </div>
                           )}
                         </div>
@@ -1427,8 +1518,45 @@ Are you sure you want to delete '${template.name}'?`;
                      <div className="bg-white rounded-lg shadow-sm max-w-[90%] mb-2 overflow-hidden relative">
                         {/* Header */}
                         {formData.headerType === 'IMAGE' && (
-                          <div className="h-36 bg-slate-200 flex items-center justify-center">
-                            <ImageIcon className="text-slate-400 w-8 h-8" />
+                          <div className="h-36 bg-black flex items-center justify-center">
+                            {formData.headerPreviewUrl ? (
+                              <img
+                                src={formData.headerPreviewUrl}
+                                alt="Header"
+                                className="max-h-full max-w-full object-contain"
+                              />
+                            ) : (
+                              <ImageIcon className="text-slate-400 w-8 h-8" />
+                            )}
+                          </div>
+                        )}
+                        {formData.headerType === 'VIDEO' && (
+                          <div className="h-36 bg-black flex items-center justify-center">
+                            {formData.headerPreviewUrl ? (
+                              <video
+                                src={formData.headerPreviewUrl}
+                                className="max-h-full max-w-full object-contain"
+                                muted
+                                controls
+                              />
+                            ) : (
+                              <Video className="text-slate-400 w-8 h-8" />
+                            )}
+                          </div>
+                        )}
+                        {formData.headerType === 'DOCUMENT' && (
+                          <div className="h-20 bg-slate-100 flex items-center justify-between px-3 py-2 gap-2 border-b border-slate-200">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <FileText className="w-5 h-5 text-blue-500 flex-shrink-0" />
+                              <div className="flex flex-col min-w-0">
+                                <span className="text-xs font-medium text-slate-900 truncate">
+                                  {formData.headerFileName || 'Document'}
+                                </span>
+                                <span className="text-[10px] text-slate-500 truncate">
+                                  Tap to view document
+                                </span>
+                              </div>
+                            </div>
                           </div>
                         )}
                         {formData.headerType === 'TEXT' && formData.headerText && (
