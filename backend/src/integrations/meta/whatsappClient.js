@@ -324,23 +324,38 @@ async function uploadMessageTemplateMedia(wabaId, fileBuffer, mimeType, filename
   }
   if (!TOKEN) throw new Error('WHATSAPP_TOKEN required');
 
-  const url = `${GRAPH_BASE}/${wabaId}/message_template_media`;
-  const form = new FormData();
-  form.append('file', fileBuffer, { filename, contentType: mimeType });
-  if (mimeType) {
-    form.append('type', mimeType);
-  }
-  form.append('messaging_product', 'whatsapp');
-  
   try {
-    const res = await axios.post(url, form, {
+    const params = new URLSearchParams();
+    if (filename) params.append('file_name', filename);
+    if (fileBuffer && fileBuffer.length) params.append('file_length', String(fileBuffer.length));
+    if (mimeType) params.append('file_type', mimeType);
+
+    const uploadUrl = `${GRAPH_BASE}/${wabaId}/uploads?${params.toString()}`;
+
+    const uploadRes = await axios.post(uploadUrl, fileBuffer, {
       headers: {
-        ...form.getHeaders(),
-        'Authorization': `Bearer ${TOKEN}`
-      }
+        'Authorization': `Bearer ${TOKEN}`,
+        'Content-Type': 'application/octet-stream',
+      },
     });
-    // Response should contain { "h": "<HEADER_HANDLE>" }
-    return res.data; 
+
+    const uploadId = uploadRes.data && uploadRes.data.id;
+    if (!uploadId) {
+      throw new Error('Upload failed: Missing upload id from WhatsApp');
+    }
+
+    const metaRes = await axios.get(`${GRAPH_BASE}/${uploadId}`, {
+      headers: {
+        'Authorization': `Bearer ${TOKEN}`,
+      },
+    });
+
+    const handle = metaRes.data && metaRes.data.h;
+    if (!handle) {
+      throw new Error('Upload failed: Missing media handle (h) from WhatsApp');
+    }
+
+    return { h: handle };
   } catch (err) {
     throw new Error(`Template Media Upload failed: ${err.response?.data?.error?.message || err.message}`);
   }
