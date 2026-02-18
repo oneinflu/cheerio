@@ -109,7 +109,10 @@ router.post('/', async (req, res, next) => {
     const resp = await whatsappClient.createTemplate(WABA_ID, req.body);
     res.json(resp.data);
   } catch (err) {
-    next(err);
+    const e = new Error(err.message || 'Template creation failed');
+    e.status = err.status || 500;
+    e.expose = true;
+    return next(e);
   }
 });
 
