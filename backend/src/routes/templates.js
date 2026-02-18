@@ -121,11 +121,13 @@ router.post('/upload-example', upload.single('file'), async (req, res, next) => 
   if (!WABA_ID) {
     const err = new Error('WHATSAPP_BUSINESS_ACCOUNT_ID is not configured');
     err.status = 500;
+    err.expose = true;
     return next(err);
   }
   if (!req.file) {
     const err = new Error('File is required');
     err.status = 400;
+    err.expose = true;
     return next(err);
   }
   
@@ -136,10 +138,12 @@ router.post('/upload-example', upload.single('file'), async (req, res, next) => 
       req.file.mimetype, 
       req.file.originalname
     );
-    // resp should be { h: "..." }
     res.json(resp);
   } catch (err) {
-    next(err);
+    const e = new Error(err.message || 'Template media upload failed');
+    e.status = err.status || 500;
+    e.expose = true;
+    return next(e);
   }
 });
 

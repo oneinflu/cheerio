@@ -619,7 +619,7 @@ export default function App() {
                         {selectedConversation?.contactName || 'Unknown Contact'}
                       </h2>
                       <p className="text-xs text-slate-500">
-                        {selectedConversation?.status === 'open' ? 'Open Conversation' : 'Closed'}
+                        {selectedConversation?.status === 'closed' ? 'Closed' : 'Open Conversation'}
                       </p>
                     </div>
                   </div>
