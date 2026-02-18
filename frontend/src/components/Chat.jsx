@@ -51,6 +51,8 @@ export default function Chat({ socket, conversationId, messages, onRefresh, isLo
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  const headerFileInputRef = useRef(null);
+
   useEffect(() => {
     const loadTemplates = async () => {
       try {
@@ -1012,14 +1014,54 @@ export default function Chat({ socket, conversationId, messages, onRefresh, isLo
                   : 'Document header (URL or media ID)';
               const effectiveMedia = (templateHeaderMedia || currentTemplate.headerHandle || '').trim();
               const isUrl = /^https?:\/\//i.test(effectiveMedia);
+              const accept =
+                currentTemplate.headerType === 'IMAGE'
+                  ? 'image/*'
+                  : currentTemplate.headerType === 'VIDEO'
+                  ? 'video/*'
+                  : '*/*';
 
               return (
                 <div className="space-y-2 border-t pt-2 mt-2">
                   <label className="text-sm font-medium text-slate-700">{label}</label>
-                  <Input
-                    placeholder="Defaults to template media. Paste URL or media ID to override."
-                    value={templateHeaderMedia}
-                    onChange={(e) => setTemplateHeaderMedia(e.target.value)}
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => headerFileInputRef.current?.click()}
+                    >
+                      Upload file
+                    </Button>
+                    <Input
+                      placeholder="Defaults to template media. Paste URL or media ID to override."
+                      value={templateHeaderMedia}
+                      onChange={(e) => setTemplateHeaderMedia(e.target.value)}
+                    />
+                  </div>
+                  <input
+                    type="file"
+                    ref={headerFileInputRef}
+                    className="hidden"
+                    accept={accept}
+                    onChange={async (e) => {
+                      const file = e.target.files && e.target.files[0];
+                      if (!file) return;
+                      try {
+                        const uploadResp = await uploadMedia(conversationId, file);
+                        if (uploadResp && uploadResp.error) {
+                          throw new Error(uploadResp.message || 'Failed to upload header media');
+                        }
+                        if (!uploadResp.id) {
+                          throw new Error('Upload successful but no media URL returned');
+                        }
+                        setTemplateHeaderMedia(uploadResp.id);
+                      } catch (err) {
+                        alert(err?.message || 'Failed to upload header media');
+                      } finally {
+                        e.target.value = '';
+                      }
+                    }}
                   />
                   {effectiveMedia && (
                     <div className="mt-1">
