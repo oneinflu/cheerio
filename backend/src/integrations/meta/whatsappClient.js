@@ -22,6 +22,7 @@ const FormData = require('form-data');
 const GRAPH_BASE = process.env.WHATSAPP_GRAPH_BASE || 'https://graph.facebook.com/v21.0';
 const TOKEN = process.env.WHATSAPP_TOKEN || '';
 const USE_MOCK = String(process.env.WHATSAPP_USE_MOCK || '').toLowerCase() === 'true';
+const APP_ID = process.env.META_APP_ID || process.env.FACEBOOK_APP_ID || '';
 
 // Simple in-memory limiter: one request every LAG_MS. Adjust with env as needed.
 const LAG_MS = Number(process.env.WHATSAPP_RATE_LIMIT_MS || 100);
@@ -323,34 +324,41 @@ async function uploadMessageTemplateMedia(wabaId, fileBuffer, mimeType, filename
     return { h: 'mock_handle_' + Date.now() };
   }
   if (!TOKEN) throw new Error('WHATSAPP_TOKEN required');
+  if (!APP_ID) throw new Error('META_APP_ID or FACEBOOK_APP_ID required for template media upload');
 
   try {
-    const params = new URLSearchParams();
-    if (filename) params.append('file_name', filename);
-    if (fileBuffer && fileBuffer.length) params.append('file_length', String(fileBuffer.length));
-    if (mimeType) params.append('file_type', mimeType);
+    const length = fileBuffer && fileBuffer.length ? fileBuffer.length : 0;
 
-    const uploadUrl = `${GRAPH_BASE}/${wabaId}/uploads?${params.toString()}`;
+    const startRes = await axios.post(
+      `${GRAPH_BASE}/${APP_ID}/uploads`,
+      null,
+      {
+        params: {
+          file_name: filename,
+          file_length: length,
+          file_type: mimeType,
+          access_token: TOKEN,
+        },
+      }
+    );
 
-    const uploadRes = await axios.post(uploadUrl, fileBuffer, {
-      headers: {
-        'Authorization': `Bearer ${TOKEN}`,
-        'Content-Type': 'application/octet-stream',
-      },
-    });
-
-    const uploadId = uploadRes.data && uploadRes.data.id;
+    const uploadId = startRes.data && startRes.data.id;
     if (!uploadId) {
-      throw new Error('Upload failed: Missing upload id from WhatsApp');
+      throw new Error('Upload failed: Missing upload session id from WhatsApp');
     }
 
-    const metaRes = await axios.get(`${GRAPH_BASE}/${uploadId}`, {
-      headers: {
-        'Authorization': `Bearer ${TOKEN}`,
-      },
-    });
+    const uploadRes = await axios.post(
+      `${GRAPH_BASE}/${uploadId}`,
+      fileBuffer,
+      {
+        headers: {
+          Authorization: `OAuth ${TOKEN}`,
+          file_offset: 0,
+        },
+      }
+    );
 
-    const handle = metaRes.data && metaRes.data.h;
+    const handle = uploadRes.data && uploadRes.data.h;
     if (!handle) {
       throw new Error('Upload failed: Missing media handle (h) from WhatsApp');
     }
