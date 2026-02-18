@@ -90,6 +90,11 @@ export default function TemplatesPage() {
               }
           }
 
+          let headerHandle = '';
+          if (headerComp && headerComp.example && Array.isArray(headerComp.example.header_handle) && headerComp.example.header_handle.length > 0) {
+            headerHandle = headerComp.example.header_handle[0];
+          }
+
           return {
             id: t.id,
             name: t.name,
@@ -98,6 +103,7 @@ export default function TemplatesPage() {
             category: t.category,
             headerType: headerComp ? headerComp.format : 'NONE',
             headerText: headerComp && headerComp.format === 'TEXT' ? headerComp.text : '',
+            headerHandle,
             bodyText: bodyComp ? bodyComp.text : '',
             footerText: footerComp ? footerComp.text : '',
             buttons: buttonsComp ? buttonsComp.buttons : [],
@@ -568,7 +574,10 @@ Are you sure you want to delete '${template.name}'?`;
 
       // 0. Handle Header Media (IMAGE / VIDEO / DOCUMENT)
       if (tmpl && ['IMAGE','VIDEO','DOCUMENT'].includes(tmpl.headerType)) {
-        const mediaVal = (testHeaderMedia || '').trim();
+        let mediaVal = (testHeaderMedia || '').trim();
+        if (!mediaVal && tmpl.headerHandle) {
+          mediaVal = tmpl.headerHandle;
+        }
         if (!mediaVal) {
           alert('Please provide a header media URL or ID for this template.');
           setSendingTest(false);
@@ -724,7 +733,7 @@ Are you sure you want to delete '${template.name}'?`;
                        } else {
                           setTestVariables({});
                       }
-                      setTestHeaderMedia('');
+                      setTestHeaderMedia(t && t.headerHandle ? t.headerHandle : '');
                   }}
                 >
                   <option value="">Select a template...</option>
@@ -756,17 +765,49 @@ Are you sure you want to delete '${template.name}'?`;
                       : tmpl.headerType === 'VIDEO'
                       ? 'Video header (URL or media ID)'
                       : 'Document header (URL or media ID)';
+                  const effectiveMedia = (testHeaderMedia || tmpl.headerHandle || '').trim();
+                  const isUrl = /^https?:\/\//i.test(effectiveMedia);
+
                   return (
                     <div className="space-y-2 border-t pt-2 mt-2">
                       <label className="text-sm font-medium text-slate-700">{label}</label>
                       <Input
-                        placeholder="Paste public URL or WhatsApp media ID"
+                        placeholder="Defaults to template media. Paste URL or media ID to override."
                         value={testHeaderMedia}
                         onChange={e => setTestHeaderMedia(e.target.value)}
                       />
                       <p className="text-xs text-slate-500">
-                        Required for media header templates. Use a public link or an uploaded media ID.
+                        If left empty, we use this template&apos;s header_handle. You can override with a link or media ID.
                       </p>
+                      {effectiveMedia && (
+                        <div className="mt-1">
+                          {isUrl ? (
+                            tmpl.headerType === 'IMAGE' ? (
+                              <img
+                                src={effectiveMedia}
+                                alt="Header preview"
+                                className="max-h-32 max-w-full rounded border border-slate-200"
+                              />
+                            ) : tmpl.headerType === 'VIDEO' ? (
+                              <video
+                                src={effectiveMedia}
+                                className="max-h-32 max-w-full rounded border border-slate-200"
+                                controls
+                                muted
+                              />
+                            ) : (
+                              <div className="flex items-center gap-2 text-xs text-slate-600">
+                                <FileText className="w-4 h-4 text-blue-500" />
+                                <span className="truncate">{effectiveMedia}</span>
+                              </div>
+                            )
+                          ) : (
+                            <div className="text-[11px] text-slate-600">
+                              Using media ID: <span className="font-mono break-all">{effectiveMedia}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   );
               })()}
