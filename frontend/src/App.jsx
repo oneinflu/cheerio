@@ -79,6 +79,7 @@ export default function App() {
   }, [selectedId, conversations]);
 
   useEffect(() => {
+    if (!storedUser) return;
     getTeamUsers().then(res => {
       let data = [];
       if (res && res.data && Array.isArray(res.data.data)) {
@@ -90,7 +91,7 @@ export default function App() {
       }
       setTeamMembers(data);
     }).catch(err => console.error("Failed to fetch team members", err));
-  }, []);
+  }, [storedUser]);
 
   useEffect(() => {
     selectedIdRef.current = selectedId;

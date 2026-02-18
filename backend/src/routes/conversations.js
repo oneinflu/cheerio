@@ -15,6 +15,7 @@ const router = express.Router();
 const svc = require('../services/conversationClaim');
 const auth = require('../middlewares/auth');
 const db = require('../../db');
+const axios = require('axios');
 
 /**
  * GET /api/conversations/:conversationId/contact
@@ -57,14 +58,13 @@ router.put('/:conversationId/contact', auth.requireRole('admin','agent','supervi
     const { conversationId } = req.params;
     const { name, course } = req.body;
     
-    // Get contact_id
-    const cRes = await db.query('SELECT contact_id FROM conversations WHERE id = $1', [conversationId]);
+    const cRes = await db.query('SELECT contact_id, lead_id FROM conversations WHERE id = $1', [conversationId]);
     if (cRes.rows.length === 0) {
       return res.status(404).json({ error: 'Conversation not found' });
     }
     const contactId = cRes.rows[0].contact_id;
+    const leadId = cRes.rows[0].lead_id;
 
-    // Update contact
     await db.query(
       `UPDATE contacts 
        SET display_name = $1, 
@@ -72,7 +72,46 @@ router.put('/:conversationId/contact', auth.requireRole('admin','agent','supervi
        WHERE id = $3`,
       [name, course, contactId]
     );
-    
+
+    if (leadId && course) {
+      try {
+        const resp = await axios.post(`https://api.starforze.com/api/leads/${leadId}/course`, {
+          courseName: course
+        });
+
+        const leadData = resp.data && resp.data.data ? resp.data.data : null;
+        const assignedTo = leadData && leadData.assignedTo ? leadData.assignedTo : null;
+        const io = require('../realtime/io').getIO();
+
+        if (assignedTo && (assignedTo._id || assignedTo.id || assignedTo.email)) {
+          const userId = assignedTo._id || assignedTo.id;
+          const teamId = leadData.teamId || null;
+
+          if (userId) {
+            const checkRes = await db.query(
+              'SELECT 1 FROM conversation_assignments WHERE conversation_id = $1 AND released_at IS NULL',
+              [conversationId]
+            );
+
+            if (checkRes.rowCount === 0) {
+              await db.query(
+                `INSERT INTO conversation_assignments (id, conversation_id, team_id, assignee_user_id, claimed_at)
+                 VALUES (gen_random_uuid(), $1, $2, $3, NOW())`,
+                [conversationId, teamId, userId]
+              );
+
+              if (io) {
+                io.to(`conversation:${conversationId}`).emit('assignment:claimed', { conversationId, userId });
+                io.emit('assignment:claimed', { conversationId, userId });
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.error('[ContactUpdate] Failed to sync course/assignment with Starforze:', e.message);
+      }
+    }
+
     res.json({ success: true });
   } catch (err) {
     next(err);
