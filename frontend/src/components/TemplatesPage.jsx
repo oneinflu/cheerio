@@ -1238,6 +1238,21 @@ Are you sure you want to delete '${template.name}'?`;
                                 )}
                              </div>
                           )}
+                          {formData.headerType === 'IMAGE' && (
+                            <p className="text-[11px] text-slate-500 max-w-md">
+                              WhatsApp image templates: JPEG or PNG only, maximum size 5 MB. For best preview without cropping, use a wide aspect ratio around 1.9:1 (for example 955×500).
+                            </p>
+                          )}
+                          {formData.headerType === 'VIDEO' && (
+                            <p className="text-[11px] text-slate-500 max-w-md">
+                              WhatsApp video templates: MP4 or 3GPP (H.264 video and AAC audio), maximum size 16 MB. Use short horizontal videos for more reliable delivery and preview.
+                            </p>
+                          )}
+                          {formData.headerType === 'DOCUMENT' && (
+                            <p className="text-[11px] text-slate-500 max-w-md">
+                              WhatsApp document templates: common Office or PDF documents, maximum size 100 MB. Larger files or unsupported formats can cause template upload or delivery errors.
+                            </p>
+                          )}
                         </div>
                       </div>
 
