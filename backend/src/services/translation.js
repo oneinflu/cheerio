@@ -97,7 +97,10 @@ async function translateFromEnglish(text, targetLanguageCode) {
     'You translate text from English into the target language.\n' +
     'The target language code is: ' +
     lang +
-    '. Respond with ONLY the translated text, nothing else.';
+    '. Use natural words of this language but write them ONLY with the English alphabet (Latin script).\n' +
+    'Do NOT use native scripts like Devanagari, Tamil, Telugu, etc.\n' +
+    'Example: Hindi should be written as Hinglish style (aap kaise ho), Tamil as Tanglish (epdi irukke).\n' +
+    'Respond with ONLY the transliterated translation text, nothing else.';
 
   try {
     const resp = await axios.post(
@@ -118,7 +121,7 @@ async function translateFromEnglish(text, targetLanguageCode) {
       }
     );
 
-    const choice =
+    let choice =
       resp.data &&
       resp.data.choices &&
       resp.data.choices[0] &&
@@ -129,7 +132,56 @@ async function translateFromEnglish(text, targetLanguageCode) {
       return null;
     }
 
-    return choice.trim();
+    choice = choice.trim();
+
+    const hasNonLatin = /[^\u0000-\u007F]/.test(choice);
+    if (!hasNonLatin) {
+      return choice;
+    }
+
+    const translitPrompt =
+      'You are a transliteration engine.\n' +
+      'Convert the following text into the same language but written ONLY using the English alphabet (Latin script).\n' +
+      'Do not translate to English; keep the meaning and language, just change the script.\n' +
+      'Do not use any characters outside basic ASCII.\n' +
+      'Respond with ONLY the transliterated text.';
+
+    const translitResp = await axios.post(
+      'https://api.openai.com/v1/chat/completions',
+      {
+        model: OPENAI_TRANSLATE_MODEL,
+        messages: [
+          { role: 'system', content: translitPrompt },
+          { role: 'user', content: choice },
+        ],
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${OPENAI_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: 5000,
+      }
+    );
+
+    let translit =
+      translitResp.data &&
+      translitResp.data.choices &&
+      translitResp.data.choices[0] &&
+      translitResp.data.choices[0].message &&
+      translitResp.data.choices[0].message.content;
+
+    if (!translit || typeof translit !== 'string') {
+      return choice;
+    }
+
+    translit = translit.trim();
+    const translitHasNonLatin = /[^\u0000-\u007F]/.test(translit);
+    if (translitHasNonLatin) {
+      return choice;
+    }
+
+    return translit;
   } catch (err) {
     console.warn(
       '[translation] translateFromEnglish failed:',
@@ -144,4 +196,3 @@ module.exports = {
   detectAndTranslateToEnglish,
   translateFromEnglish,
 };
-

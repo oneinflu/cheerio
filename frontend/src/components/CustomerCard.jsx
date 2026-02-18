@@ -6,6 +6,16 @@ import { Button } from './ui/Button';
 import { User } from 'lucide-react';
 
 export default function CustomerCard({ conversationId }) {
+  const LANGUAGE_LABELS = {
+    en: 'English',
+    hi: 'Hindi',
+    ta: 'Tamil',
+    te: 'Telugu',
+    ml: 'Malayalam',
+    kn: 'Kannada',
+    mr: 'Marathi',
+    gu: 'Gujarati'
+  };
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
   const [formData, setFormData] = useState({
@@ -90,7 +100,7 @@ export default function CustomerCard({ conversationId }) {
             <div>
               <label className="text-xs font-medium text-slate-500">Preferred Language</label>
               <Input 
-                value={formData.preferredLanguage || ''}
+                value={LANGUAGE_LABELS[formData.preferredLanguage] || formData.preferredLanguage || ''}
                 disabled
                 className="h-8 bg-slate-50 mt-1 text-slate-500"
                 placeholder="Auto-detected from chat"
