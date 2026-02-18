@@ -6,6 +6,7 @@ import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { ProposalModal } from './ProposalModal';
 import { TemplateListModal } from './TemplateListModal';
+import { Modal } from './ui/Modal';
 import { Send, Paperclip, Image as ImageIcon, File, Mic, FileText, BookOpen, BarChart, DollarSign, Loader2, MessageSquare, MapPin, User, Video, Star, MoreHorizontal } from 'lucide-react';
 
 export default function Chat({ socket, conversationId, messages, onRefresh, isLoading }) {
@@ -26,6 +27,11 @@ export default function Chat({ socket, conversationId, messages, onRefresh, isLo
   const [recentMedia, setRecentMedia] = useState([]);
   const [isLoadingRecentMedia, setIsLoadingRecentMedia] = useState(false);
   const [recentMediaError, setRecentMediaError] = useState('');
+  const [contactInfo, setContactInfo] = useState({ name: '', number: '', course: '' });
+  const [showTemplateSendModal, setShowTemplateSendModal] = useState(false);
+  const [selectedTemplateForSend, setSelectedTemplateForSend] = useState(null);
+  const [templateVariables, setTemplateVariables] = useState({});
+  const [templateHeaderMedia, setTemplateHeaderMedia] = useState('');
   const typingTimeoutRef = useRef(null);
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -46,12 +52,84 @@ export default function Chat({ socket, conversationId, messages, onRefresh, isLo
   };
 
   useEffect(() => {
-    getTemplates().then(data => {
-      if (data && data.data) {
-        setTemplates(data.data);
+    const loadTemplates = async () => {
+      try {
+        const res = await getTemplates();
+        if (res && res.data) {
+          const mapped = res.data.map(t => {
+            const bodyComp = t.components && t.components.find(c => c.type === 'BODY');
+            const headerComp = t.components && t.components.find(c => c.type === 'HEADER');
+            const footerComp = t.components && t.components.find(c => c.type === 'FOOTER');
+            const buttonsComp = t.components && t.components.find(c => c.type === 'BUTTONS');
+
+            let examples = {};
+            if (bodyComp && bodyComp.example) {
+              if (t.parameter_format === 'NAMED' && bodyComp.example.body_text_named_params) {
+                bodyComp.example.body_text_named_params.forEach(p => {
+                  examples[p.param_name] = p.example;
+                });
+              } else if (bodyComp.example.body_text && Array.isArray(bodyComp.example.body_text[0])) {
+                bodyComp.example.body_text[0].forEach((ex, i) => {
+                  examples[(i + 1).toString()] = ex;
+                });
+              }
+            }
+
+            let headerHandle = '';
+            if (headerComp && headerComp.example && Array.isArray(headerComp.example.header_handle) && headerComp.example.header_handle.length > 0) {
+              headerHandle = headerComp.example.header_handle[0];
+            }
+
+            return {
+              id: t.id,
+              name: t.name,
+              language: t.language,
+              status: t.status,
+              category: t.category,
+              headerType: headerComp ? headerComp.format : 'NONE',
+              headerText: headerComp && headerComp.format === 'TEXT' ? headerComp.text : '',
+              headerHandle,
+              bodyText: bodyComp ? bodyComp.text : '',
+              footerText: footerComp ? footerComp.text : '',
+              buttons: buttonsComp ? buttonsComp.buttons : [],
+              parameterFormat: t.parameter_format || 'POSITIONAL',
+              examples,
+              is_starred: t.is_starred,
+              components: t.components || []
+            };
+          });
+          setTemplates(mapped);
+        } else {
+          setTemplates([]);
+        }
+      } catch (err) {
+        console.error('Failed to load templates in Chat:', err);
+        setTemplates([]);
       }
-    }).catch(err => console.error('Failed to load templates in Chat:', err));
+    };
+    loadTemplates();
   }, []);
+
+  useEffect(() => {
+    if (!conversationId) {
+      setContactInfo({ name: '', number: '', course: '' });
+      return;
+    }
+    const fetchContact = async () => {
+      try {
+        const res = await fetch(`/api/conversations/${conversationId}/contact`);
+        if (!res.ok) return;
+        const data = await res.json();
+        setContactInfo({
+          name: data.name || '',
+          number: data.number || '',
+          course: data.course || ''
+        });
+      } catch (e) {
+      }
+    };
+    fetchContact();
+  }, [conversationId]);
 
   useEffect(() => {
     if (!showMediaInput) return;
@@ -353,16 +431,141 @@ export default function Chat({ socket, conversationId, messages, onRefresh, isLo
     }
   };
 
-  const handleSendStarredTemplate = async (template) => {
+  const handleSendStarredTemplate = (template) => {
+    if (!template) return;
+    setSelectedTemplateForSend(template);
+    const vars = {};
+    if (template.bodyText) {
+      const regex = /{{([a-zA-Z0-9_]+)}}/g;
+      const matches = [...template.bodyText.matchAll(regex)];
+      matches.forEach((m) => {
+        const key = m[1];
+        if (Object.prototype.hasOwnProperty.call(vars, key)) return;
+        const lower = key.toLowerCase();
+        let val = '';
+        if (lower === 'name' && contactInfo.name) {
+          val = contactInfo.name;
+        } else if ((lower === 'phone' || lower === 'number' || lower === 'mobile') && contactInfo.number) {
+          val = contactInfo.number;
+        } else if (lower.includes('course') && contactInfo.course) {
+          val = contactInfo.course;
+        } else if (template.examples && Object.prototype.hasOwnProperty.call(template.examples, key)) {
+          val = template.examples[key];
+        }
+        vars[key] = val;
+      });
+    }
+    setTemplateVariables(vars);
+    setTemplateHeaderMedia(template.headerHandle || '');
+    setShowTemplateSendModal(true);
+  };
+
+  const handleSendTemplateFromChat = async () => {
+    if (!selectedTemplateForSend) return;
     setIsSending(true);
     setSendError('');
     try {
-      // Default language en_US for now, or use template.language if available
-      const lang = template.language || 'en_US';
-      const resp = await sendTemplate(conversationId, template.name, lang, []);
+      const tmpl =
+        templates.find(
+          (t) => t.name === selectedTemplateForSend.name && t.language === selectedTemplateForSend.language
+        ) || selectedTemplateForSend;
+      const lang = tmpl.language || 'en_US';
+      const components = [];
+
+      if (tmpl && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(tmpl.headerType)) {
+        let mediaVal = (templateHeaderMedia || '').trim();
+        if (!mediaVal && tmpl.headerHandle) {
+          mediaVal = tmpl.headerHandle;
+        }
+        if (!mediaVal) {
+          alert('Please provide a header media URL or ID for this template.');
+          setIsSending(false);
+          return;
+        }
+        const isUrl = /^https?:\/\//i.test(mediaVal);
+        const mediaObj = isUrl ? { link: mediaVal } : { id: mediaVal };
+        let paramType = 'image';
+        let mediaKey = 'image';
+        if (tmpl.headerType === 'VIDEO') {
+          paramType = 'video';
+          mediaKey = 'video';
+        } else if (tmpl.headerType === 'DOCUMENT') {
+          paramType = 'document';
+          mediaKey = 'document';
+        }
+        components.push({
+          type: 'header',
+          parameters: [
+            {
+              type: paramType,
+              [mediaKey]: mediaObj
+            }
+          ]
+        });
+      }
+
+      if (tmpl && tmpl.bodyText) {
+        const regex = /{{([a-zA-Z0-9_]+)}}/g;
+        const matches = [...tmpl.bodyText.matchAll(regex)];
+        if (matches.length > 0) {
+          const bodyParams = matches.map((m) => {
+            const key = m[1];
+            const param = {
+              type: 'text',
+              text: templateVariables[key] || `[${key}]`
+            };
+            if (tmpl.parameterFormat === 'NAMED') {
+              param.parameter_name = key;
+            }
+            return param;
+          });
+          components.push({
+            type: 'body',
+            parameters: bodyParams
+          });
+        }
+      }
+
+      if (tmpl && tmpl.buttons) {
+        tmpl.buttons.forEach((btn, idx) => {
+          if (btn.type === 'COPY_CODE') {
+            let codeValue = 'TESTCODE';
+            const codeVarName = Object.keys(templateVariables).find((k) => {
+              const lk = k.toLowerCase();
+              return lk.includes('code') || lk.includes('coupon') || lk === 'promocode';
+            });
+            if (codeVarName && templateVariables[codeVarName]) {
+              codeValue = templateVariables[codeVarName];
+            } else if (tmpl.examples) {
+              const exampleKey = Object.keys(tmpl.examples).find((k) => {
+                const lk = k.toLowerCase();
+                return lk.includes('code') || lk.includes('coupon');
+              });
+              if (exampleKey) codeValue = tmpl.examples[exampleKey];
+            }
+            components.push({
+              type: 'button',
+              sub_type: 'copy_code',
+              index: idx,
+              parameters: [
+                {
+                  type: 'coupon_code',
+                  coupon_code: codeValue
+                }
+              ]
+            });
+          }
+        });
+      }
+
+      const resp = await sendTemplate(conversationId, tmpl.name, lang, components);
       if (resp && resp.error) {
         throw new Error(resp.message || 'Failed to send template');
       }
+      setShowTemplateSendModal(false);
+      setSelectedTemplateForSend(null);
+      setTemplateVariables({});
+      setTemplateHeaderMedia('');
       await onRefresh();
     } catch (err) {
       setSendError(err?.message || 'Failed to send template');
@@ -384,6 +587,13 @@ export default function Chat({ socket, conversationId, messages, onRefresh, isLo
       handleSendText();
     }
   };
+
+  const currentTemplate =
+    selectedTemplateForSend &&
+    (templates.find(
+      (t) => t.name === selectedTemplateForSend.name && t.language === selectedTemplateForSend.language
+    ) ||
+      selectedTemplateForSend);
 
   if (!conversationId) {
     return (
@@ -777,6 +987,107 @@ export default function Chat({ socket, conversationId, messages, onRefresh, isLo
         onClose={() => setShowProposalModal(false)} 
         onSend={handleSendProposal} 
       />
+      <Modal
+        isOpen={showTemplateSendModal}
+        onClose={() => setShowTemplateSendModal(false)}
+        title="Send Template"
+      >
+        {currentTemplate && (
+          <div className="space-y-4">
+            <div className="space-y-1">
+              <div className="text-sm font-medium text-slate-900">{currentTemplate.name}</div>
+              <div className="text-xs text-slate-500 flex items-center gap-2">
+                <span>{currentTemplate.language}</span>
+                <span className="w-1 h-1 rounded-full bg-slate-300" />
+                <span>{currentTemplate.status}</span>
+              </div>
+            </div>
+
+            {['IMAGE', 'VIDEO', 'DOCUMENT'].includes(currentTemplate.headerType) && (() => {
+              const label =
+                currentTemplate.headerType === 'IMAGE'
+                  ? 'Image header (URL or media ID)'
+                  : currentTemplate.headerType === 'VIDEO'
+                  ? 'Video header (URL or media ID)'
+                  : 'Document header (URL or media ID)';
+              const effectiveMedia = (templateHeaderMedia || currentTemplate.headerHandle || '').trim();
+              const isUrl = /^https?:\/\//i.test(effectiveMedia);
+
+              return (
+                <div className="space-y-2 border-t pt-2 mt-2">
+                  <label className="text-sm font-medium text-slate-700">{label}</label>
+                  <Input
+                    placeholder="Defaults to template media. Paste URL or media ID to override."
+                    value={templateHeaderMedia}
+                    onChange={(e) => setTemplateHeaderMedia(e.target.value)}
+                  />
+                  {effectiveMedia && (
+                    <div className="mt-1">
+                      {isUrl ? (
+                        currentTemplate.headerType === 'IMAGE' ? (
+                          <img
+                            src={effectiveMedia}
+                            alt="Header preview"
+                            className="max-h-32 max-w-full rounded border border-slate-200"
+                          />
+                        ) : currentTemplate.headerType === 'VIDEO' ? (
+                          <video
+                            src={effectiveMedia}
+                            className="max-h-32 max-w-full rounded border border-slate-200"
+                            controls
+                            muted
+                          />
+                        ) : (
+                          <div className="flex items-center gap-2 text-xs text-slate-600">
+                            <FileText className="w-4 h-4 text-blue-500" />
+                            <span className="truncate">{effectiveMedia}</span>
+                          </div>
+                        )
+                      ) : (
+                        <div className="text-[11px] text-slate-600">
+                          Using media ID: <span className="font-mono break-all">{effectiveMedia}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {Object.keys(templateVariables).length > 0 && (
+              <div className="space-y-2 border-t pt-2 mt-2">
+                <label className="text-sm font-medium text-slate-700">Template Variables</label>
+                <div className="grid grid-cols-1 gap-2">
+                  {Object.keys(templateVariables).map((key) => (
+                    <div key={key} className="flex flex-col gap-1">
+                      <label className="text-xs text-slate-500 font-mono">{'{{' + key + '}}'}</label>
+                      <Input
+                        placeholder={`Value for ${key}`}
+                        value={templateVariables[key]}
+                        onChange={(e) =>
+                          setTemplateVariables((prev) => ({
+                            ...prev,
+                            [key]: e.target.value
+                          }))
+                        }
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="pt-2 flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setShowTemplateSendModal(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleSendTemplateFromChat} disabled={isSending}>
+                {isSending ? 'Sending...' : 'Send'}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
       <TemplateListModal 
         isOpen={showTemplateModal}
         onClose={() => setShowTemplateModal(false)}
