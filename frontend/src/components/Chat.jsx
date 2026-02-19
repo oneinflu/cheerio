@@ -458,7 +458,7 @@ export default function Chat({ socket, conversationId, messages, onRefresh, isLo
       });
     }
     setTemplateVariables(vars);
-    setTemplateHeaderMedia(template.headerHandle || '');
+    setTemplateHeaderMedia('');
     setShowTemplateSendModal(true);
   };
 
@@ -475,35 +475,29 @@ export default function Chat({ socket, conversationId, messages, onRefresh, isLo
       const components = [];
 
       if (tmpl && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(tmpl.headerType)) {
-        let mediaVal = (templateHeaderMedia || '').trim();
-        if (!mediaVal && tmpl.headerHandle) {
-          mediaVal = tmpl.headerHandle;
+        const mediaVal = (templateHeaderMedia || '').trim();
+        if (mediaVal) {
+          const isUrl = /^https?:\/\//i.test(mediaVal);
+          const mediaObj = isUrl ? { link: mediaVal } : { id: mediaVal };
+          let paramType = 'image';
+          let mediaKey = 'image';
+          if (tmpl.headerType === 'VIDEO') {
+            paramType = 'video';
+            mediaKey = 'video';
+          } else if (tmpl.headerType === 'DOCUMENT') {
+            paramType = 'document';
+            mediaKey = 'document';
+          }
+          components.push({
+            type: 'header',
+            parameters: [
+              {
+                type: paramType,
+                [mediaKey]: mediaObj
+              }
+            ]
+          });
         }
-        if (!mediaVal) {
-          alert('Please provide a header media URL or ID for this template.');
-          setIsSending(false);
-          return;
-        }
-        const isUrl = /^https?:\/\//i.test(mediaVal);
-        const mediaObj = isUrl ? { link: mediaVal } : { id: mediaVal };
-        let paramType = 'image';
-        let mediaKey = 'image';
-        if (tmpl.headerType === 'VIDEO') {
-          paramType = 'video';
-          mediaKey = 'video';
-        } else if (tmpl.headerType === 'DOCUMENT') {
-          paramType = 'document';
-          mediaKey = 'document';
-        }
-        components.push({
-          type: 'header',
-          parameters: [
-            {
-              type: paramType,
-              [mediaKey]: mediaObj
-            }
-          ]
-        });
       }
 
       if (tmpl && tmpl.bodyText) {

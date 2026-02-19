@@ -14,8 +14,8 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { Button } from './ui/Button';
-import { Save, ArrowLeft, Plus, Clock, MessageSquare, GitBranch, Zap, StopCircle, Loader2, Play, MessageCircle, Code, UserCheck, Tag, Mic } from 'lucide-react';
-import { getTemplates, runWorkflow, aiGenerateWorkflow } from '../api';
+import { Save, ArrowLeft, Plus, Clock, MessageSquare, GitBranch, Zap, StopCircle, Loader2, Play, MessageCircle, Code, UserCheck, Tag, Mic, Workflow as WorkflowIcon } from 'lucide-react';
+import { getTemplates, runWorkflow, aiGenerateWorkflow, getWorkflows } from '../api';
 
 // --- Custom Node Components ---
 
@@ -129,17 +129,34 @@ const ActionNode = ({ data, selected }) => {
   const isAssign = data.actionType === 'assign_agent';
   const isTag = data.actionType === 'add_tag' || data.actionType === 'remove_tag';
   const isVar = data.actionType === 'set_variable';
+  const isWorkflow = data.actionType === 'start_workflow';
   
   return (
-    <NodeWrapper selected={selected} title="Action" icon={isAssign ? UserCheck : (isTag ? Tag : Plus)} colorClass="bg-indigo-600">
+    <NodeWrapper
+      selected={selected}
+      title="Action"
+      icon={isAssign ? UserCheck : isWorkflow ? WorkflowIcon : isTag ? Tag : Plus}
+      colorClass="bg-indigo-600"
+    >
       <div className="text-xs text-slate-600 font-medium mb-1">
-        {data.actionType === 'assign_agent' ? 'Assign Agent' : 
-         data.actionType === 'add_tag' ? 'Add Tag' : 
-         data.actionType === 'remove_tag' ? 'Remove Tag' : 
-         data.actionType === 'set_variable' ? 'Set Variable' : 'Action'}
+        {data.actionType === 'assign_agent'
+          ? 'Assign Agent'
+          : data.actionType === 'add_tag'
+          ? 'Add Tag'
+          : data.actionType === 'remove_tag'
+          ? 'Remove Tag'
+          : data.actionType === 'set_variable'
+          ? 'Set Variable'
+          : data.actionType === 'start_workflow'
+          ? 'Start Workflow'
+          : 'Action'}
       </div>
       <div className="text-xs text-slate-500 truncate max-w-[180px]">
-        {isVar ? `${data.variableName || 'Key'} = ${data.variableValue || 'Val'}` : (data.actionValue || 'Configure...')}
+        {isVar
+          ? `${data.variableName || 'Key'} = ${data.variableValue || 'Val'}`
+          : isWorkflow
+          ? data.targetWorkflowName || 'Select workflow...'
+          : data.actionValue || 'Configure...'}
       </div>
       <Handle type="target" position={Position.Top} className="w-3 h-3 bg-slate-400" />
       <Handle type="source" position={Position.Bottom} className="w-3 h-3 bg-slate-400" />
@@ -219,6 +236,8 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
   const [selectedNode, setSelectedNode] = useState(null);
   const [templates, setTemplates] = useState([]);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
+  const [availableWorkflows, setAvailableWorkflows] = useState([]);
+  const [loadingWorkflows, setLoadingWorkflows] = useState(false);
   const [viewMode, setViewMode] = useState('canvas');
   const [draggingNodeId, setDraggingNodeId] = useState(null);
   const [expandedNodeId, setExpandedNodeId] = useState(null);
@@ -283,6 +302,30 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
     };
     fetchTemplates();
   }, []);
+
+  React.useEffect(() => {
+    const fetchWorkflows = async () => {
+      setLoadingWorkflows(true);
+      try {
+        const res = await getWorkflows();
+        if (Array.isArray(res)) {
+          const filtered =
+            initialWorkflow && initialWorkflow.id
+              ? res.filter((w) => w.id !== initialWorkflow.id)
+              : res;
+          setAvailableWorkflows(filtered);
+        } else {
+          setAvailableWorkflows([]);
+        }
+      } catch (err) {
+        console.error('Failed to load workflows:', err);
+        setAvailableWorkflows([]);
+      } finally {
+        setLoadingWorkflows(false);
+      }
+    };
+    fetchWorkflows();
+  }, [initialWorkflow]);
 
   const onConnect = useCallback(
     (params) => setEdges((eds) => addEdge(params, eds)),
@@ -1845,12 +1888,22 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                   <select 
                     className="w-full border border-slate-300 rounded-md p-2 text-sm"
                     value={selectedNode.data.actionType || 'add_tag'}
-                    onChange={(e) => updateNodeData('actionType', e.target.value)}
+                    onChange={(e) => {
+                      const type = e.target.value;
+                      updateNodeFields(selectedNode.id, {
+                        actionType: type,
+                        actionValue: '',
+                        variableName: '',
+                        variableValue: '',
+                        targetWorkflowName: '',
+                      });
+                    }}
                   >
                     <option value="add_tag">Add Tag</option>
                     <option value="remove_tag">Remove Tag</option>
                     <option value="assign_agent">Assign Agent</option>
                     <option value="set_variable">Set Variable</option>
+                    <option value="start_workflow">Start Workflow</option>
                   </select>
                   
                   {selectedNode.data.actionType === 'assign_agent' ? (
@@ -1883,6 +1936,34 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                            onChange={(e) => updateNodeData('variableValue', e.target.value)}
                          />
                       </div>
+                    </div>
+                  ) : selectedNode.data.actionType === 'start_workflow' ? (
+                    <div className="space-y-1">
+                      <label className="text-xs text-slate-500">Workflow to start</label>
+                      <select
+                        className="w-full border border-slate-300 rounded-md p-2 text-sm"
+                        value={selectedNode.data.actionValue || ''}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          const wf = availableWorkflows.find(
+                            (w) => String(w.id) === String(value)
+                          );
+                          updateNodeFields(selectedNode.id, {
+                            actionValue: value,
+                            targetWorkflowName: wf ? wf.name : '',
+                          });
+                        }}
+                      >
+                        <option value="">Select workflow...</option>
+                        {availableWorkflows.map((wf) => (
+                          <option key={wf.id} value={wf.id}>
+                            {wf.name}
+                          </option>
+                        ))}
+                      </select>
+                      {loadingWorkflows && (
+                        <p className="text-[10px] text-slate-400">Loading workflows...</p>
+                      )}
                     </div>
                   ) : (
                     <div className="space-y-1">

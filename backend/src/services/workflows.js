@@ -386,6 +386,18 @@ async function runWorkflow(id, phoneNumber) {
                 } else {
                     console.log(`[WorkflowRunner] User ${actionValue} not found`);
                 }
+            } else if (actionType === 'start_workflow') {
+                const targetId = actionValue;
+                if (!targetId) {
+                    console.log('[WorkflowRunner] start_workflow action has no target id');
+                } else if (String(targetId) === String(id)) {
+                    console.log('[WorkflowRunner] Skipping start_workflow to same workflow id');
+                } else {
+                    console.log(`[WorkflowRunner] Starting linked workflow ${targetId} for ${phoneNumber}`);
+                    runWorkflow(targetId, phoneNumber).catch((err) => {
+                        console.error(`[WorkflowRunner] Linked workflow ${targetId} failed: ${err.message}`);
+                    });
+                }
             }
         } catch (err) {
             console.error(`[WorkflowRunner] Action failed: ${err.message}`);

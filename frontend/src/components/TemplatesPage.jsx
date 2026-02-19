@@ -573,19 +573,12 @@ Are you sure you want to delete '${template.name}'?`;
       const tmpl = templates.find(t => t.name === testSelectedTemplate);
       const lang = tmpl ? tmpl.language : 'en_US';
       
-      const components = [];
+    const components = [];
 
-      // 0. Handle Header Media (IMAGE / VIDEO / DOCUMENT)
-      if (tmpl && ['IMAGE','VIDEO','DOCUMENT'].includes(tmpl.headerType)) {
-        let mediaVal = (testHeaderMedia || '').trim();
-        if (!mediaVal && tmpl.headerHandle) {
-          mediaVal = tmpl.headerHandle;
-        }
-        if (!mediaVal) {
-          alert('Please provide a header media URL or ID for this template.');
-          setSendingTest(false);
-          return;
-        }
+    // 0. Handle Header Media (IMAGE / VIDEO / DOCUMENT)
+    if (tmpl && ['IMAGE','VIDEO','DOCUMENT'].includes(tmpl.headerType)) {
+      const mediaVal = (testHeaderMedia || '').trim();
+      if (mediaVal) {
         const isUrl = /^https?:\/\//i.test(mediaVal);
         const mediaObj = isUrl ? { link: mediaVal } : { id: mediaVal };
         let paramType = 'image';
@@ -607,6 +600,7 @@ Are you sure you want to delete '${template.name}'?`;
           ]
         });
       }
+    }
       
       // 1. Handle Body Variables
       if (tmpl && tmpl.bodyText) {
