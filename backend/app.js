@@ -30,6 +30,7 @@ const rulesRouter = require('./src/routes/rules');
 const authRouter = require('./src/routes/auth');
 const teamRouter = require('./src/routes/team');
 const settingsRouter = require('./src/routes/settings');
+const whatsappFlowsRouter = require('./src/routes/whatsappFlows');
 const auth = require('./src/middlewares/auth');
 
 // Read environment-based config for HTTP concerns. Defaults are safe for dev.
@@ -113,6 +114,7 @@ function createApp() {
   app.use('/api', dashboardRouter);
   app.use('/api', rulesRouter);
   app.use('/api', settingsRouter);
+  app.use('/api', whatsappFlowsRouter);
 
   /**
    * Serve static assets in production.

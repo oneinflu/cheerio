@@ -476,6 +476,47 @@ export async function aiGenerateWorkflow(description) {
   return res.json();
 }
 
+export async function listWhatsappFlows() {
+  const headers = getAuthHeaders();
+  const res = await fetch('/api/whatsapp/flows', {
+    method: 'GET',
+    headers,
+  });
+  if (!res.ok) {
+    throw new Error('Failed to load flows');
+  }
+  const data = await res.json();
+  return data && data.data ? data.data : [];
+}
+
+export async function createWhatsappFlow(payload) {
+  const headers = getAuthHeaders();
+  const res = await fetch('/api/whatsapp/flows', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(txt || 'Failed to create flow');
+  }
+  return res.json();
+}
+
+export async function updateWhatsappFlow(id, payload) {
+  const headers = getAuthHeaders();
+  const res = await fetch(`/api/whatsapp/flows/${id}`, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(txt || 'Failed to update flow');
+  }
+  return res.json();
+}
+
 export async function forceReassignConversation(conversationId, teamId, newAssigneeUserId) {
   const headers = getAuthHeaders();
   const res = await fetch('/api/conversations/reassign', {

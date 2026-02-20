@@ -8,6 +8,7 @@ import DashboardPage from './components/DashboardPage.jsx';
 import TeamPage from './components/TeamPage.jsx';
 import SettingsPage from './components/SettingsPage.jsx';
 import TemplatesPage from './components/TemplatesPage.jsx';
+import FlowsPage from './components/FlowsPage.jsx';
 import WorkflowsPage from './components/WorkflowsPage.jsx';
 import WorkflowBuilder from './components/WorkflowBuilder.jsx';
 import RulesPage from './components/RulesPage.jsx';
@@ -16,7 +17,7 @@ import LoginPage from './components/LoginPage.jsx';
 import GuestChat from './components/GuestChat.jsx';
 import { connectSocket } from './socket.js';
 import { getInbox, getMessages, claimConversation, reassignConversation, forceReassignConversation, releaseConversation, markAsRead, resolveConversation, deleteConversation, blockConversation, unblockConversation, pinConversation, updateWorkflow, getTeamUser, getTeamUsers, reassignExternalLead } from './api.js';
-import { LayoutDashboard, MessageSquare, Users, Settings, LogOut, Search, Bell, FileText, Workflow, Shield, ChevronsUpDown, Check } from 'lucide-react';
+import { LayoutDashboard, MessageSquare, Users, Settings, LogOut, Search, Bell, FileText, Workflow, Shield, ChevronsUpDown, Check, Zap, GitBranch } from 'lucide-react';
 import { Button } from './components/ui/Button';
 import { Badge } from './components/ui/Badge';
 import { Card, CardHeader, CardTitle, CardContent } from './components/ui/Card';
@@ -561,6 +562,15 @@ export default function App() {
             <FileText size={20} />
           </Button>
           <Button
+            variant={activePage === 'flows' ? 'secondary' : 'ghost'}
+            size="icon"
+            className="w-10 h-10 rounded-lg"
+            onClick={() => setActivePage('flows')}
+            title="Flows"
+          >
+            <GitBranch size={20} />
+          </Button>
+          <Button
             variant={activePage === 'workflows' ? 'secondary' : 'ghost'}
             size="icon"
             className="w-10 h-10 rounded-lg"
@@ -575,7 +585,7 @@ export default function App() {
             className="w-10 h-10 rounded-lg"
             onClick={() => setActivePage('rules')}
           >
-            <Workflow size={20} />
+            <Zap size={20} />
           </Button>
 
         
@@ -615,6 +625,7 @@ export default function App() {
         {activePage === 'settings' && <SettingsPage currentUser={currentUser} />}
 
         {activePage === 'templates' && <TemplatesPage />}
+        {activePage === 'flows' && <FlowsPage />}
         
         {activePage === 'workflows' && (
           editingWorkflow ? (

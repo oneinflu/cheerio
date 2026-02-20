@@ -159,6 +159,24 @@ async function runMigrations() {
         } else {
           console.log('[migrate] lead_stages and team_working_hours tables already exist.');
         }
+
+        const flowsTableRes = await client.query(`
+          SELECT EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE  table_schema = 'public'
+            AND    table_name   = 'whatsapp_flows'
+          );
+        `);
+
+        if (!flowsTableRes.rows[0].exists) {
+          console.log('[migrate] Adding whatsapp_flows table...');
+          await client.query('BEGIN');
+          await runSQLFile(client, path.join(__dirname, '..', 'db', 'migrations', '0009_whatsapp_flows.sql'));
+          await client.query('COMMIT');
+          console.log('[migrate] Applied whatsapp_flows migration.');
+        } else {
+          console.log('[migrate] whatsapp_flows table already exists.');
+        }
         
         return;
       }
