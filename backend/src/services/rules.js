@@ -133,10 +133,18 @@ async function evaluateMessageRules(phoneNumber, textBody) {
   const lowerText = textBody.toLowerCase();
 
   for (const rule of rules) {
-    const value = (rule.match_value || '').toLowerCase();
-    if (!value) continue;
+    const raw = (rule.match_value || '').toLowerCase();
+    if (!raw) continue;
 
-    if (lowerText.includes(value)) {
+    const tokens = raw
+      .split(',')
+      .map((v) => v.trim())
+      .filter(Boolean);
+
+    if (!tokens.length) continue;
+
+    const hit = tokens.some((token) => lowerText.includes(token));
+    if (hit) {
       matched.push(rule);
       await performRuleAction(rule, phoneNumber);
     }
@@ -162,10 +170,18 @@ async function evaluateCourseRules(phoneNumber, courseValue) {
   const lowerCourse = String(courseValue).toLowerCase();
 
   for (const rule of rules) {
-    const value = (rule.match_value || '').toLowerCase();
-    if (!value) continue;
+    const raw = (rule.match_value || '').toLowerCase();
+    if (!raw) continue;
 
-    if (lowerCourse === value) {
+    const tokens = raw
+      .split(',')
+      .map((v) => v.trim())
+      .filter(Boolean);
+
+    if (!tokens.length) continue;
+
+    const hit = tokens.some((token) => lowerCourse === token);
+    if (hit) {
       matched.push(rule);
       await performRuleAction(rule, phoneNumber);
     }
@@ -284,4 +300,3 @@ module.exports = {
   evaluateMessageRules,
   evaluateCourseRules,
 };
-

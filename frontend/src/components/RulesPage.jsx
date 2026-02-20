@@ -319,7 +319,7 @@ export default function RulesPage() {
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-700">
-                Match value
+                Match value (you can use multiple, comma separated)
               </label>
               <Input
                 required
@@ -332,8 +332,8 @@ export default function RulesPage() {
                 }
                 placeholder={
                   formData.event_type === 'message_text'
-                    ? 'e.g. hi'
-                    : 'e.g. CPA'
+                    ? 'e.g. hi, cpa, cma'
+                    : 'e.g. CPA, CMA'
                 }
               />
             </div>
@@ -433,4 +433,3 @@ export default function RulesPage() {
     </div>
   );
 }
-
