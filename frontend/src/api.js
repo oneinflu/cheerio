@@ -497,8 +497,27 @@ export async function createWhatsappFlow(payload) {
     body: JSON.stringify(payload),
   });
   if (!res.ok) {
-    const txt = await res.text();
-    throw new Error(txt || 'Failed to create flow');
+    let text = '';
+    let details = null;
+    try {
+      text = await res.text();
+      try {
+        const json = JSON.parse(text);
+        if (json && json.details) {
+          details = json.details;
+        }
+        if (!text && json && (json.error || json.message)) {
+          text = json.error || json.message;
+        }
+      } catch {
+      }
+    } catch {
+    }
+    const err = new Error(text || 'Failed to create flow');
+    if (details) {
+      err.details = details;
+    }
+    throw err;
   }
   return res.json();
 }
@@ -511,8 +530,27 @@ export async function updateWhatsappFlow(id, payload) {
     body: JSON.stringify(payload),
   });
   if (!res.ok) {
-    const txt = await res.text();
-    throw new Error(txt || 'Failed to update flow');
+    let text = '';
+    let details = null;
+    try {
+      text = await res.text();
+      try {
+        const json = JSON.parse(text);
+        if (json && json.details) {
+          details = json.details;
+        }
+        if (!text && json && (json.error || json.message)) {
+          text = json.error || json.message;
+        }
+      } catch {
+      }
+    } catch {
+    }
+    const err = new Error(text || 'Failed to update flow');
+    if (details) {
+      err.details = details;
+    }
+    throw err;
   }
   return res.json();
 }

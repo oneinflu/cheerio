@@ -23,6 +23,7 @@ const GRAPH_BASE = process.env.WHATSAPP_GRAPH_BASE || 'https://graph.facebook.co
 const TOKEN = process.env.WHATSAPP_TOKEN || '';
 const USE_MOCK = String(process.env.WHATSAPP_USE_MOCK || '').toLowerCase() === 'true';
 const APP_ID = process.env.META_APP_ID || process.env.FACEBOOK_APP_ID || '';
+const WABA_ID = process.env.WHATSAPP_BUSINESS_ACCOUNT_ID || '';
 
 // Simple in-memory limiter: one request every LAG_MS. Adjust with env as needed.
 const LAG_MS = Number(process.env.WHATSAPP_RATE_LIMIT_MS || 100);
@@ -450,6 +451,131 @@ async function deleteTemplate(wabaId, name, hsmId) {
   });
 }
 
+async function createFlow({ name, categories, flowJson, publish = true, cloneFlowId, endpointUri }) {
+  if (USE_MOCK) {
+    console.log('[Mock WhatsApp Client] Skipping real flow creation.');
+    return { id: 'mock_flow_' + Date.now(), success: true, validation_errors: [] };
+  }
+  if (!TOKEN) throw new Error('WHATSAPP_TOKEN required');
+  if (!WABA_ID) throw new Error('WHATSAPP_BUSINESS_ACCOUNT_ID required for Flows API');
+
+  const url = `${GRAPH_BASE}/${WABA_ID}/flows`;
+  const payload = {
+    name,
+    categories: Array.isArray(categories) && categories.length ? categories : ['OTHER'],
+  };
+
+  if (flowJson) {
+    payload.flow_json = typeof flowJson === 'string' ? flowJson : JSON.stringify(flowJson);
+    if (publish) {
+      payload.publish = true;
+    }
+  }
+  if (cloneFlowId) {
+    payload.clone_flow_id = cloneFlowId;
+  }
+  if (endpointUri) {
+    payload.endpoint_uri = endpointUri;
+  }
+
+  await delayUntilAvailable();
+
+  try {
+    const res = await axios.post(url, payload, {
+      headers: {
+        Authorization: `Bearer ${TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    return res.data;
+  } catch (err) {
+    const apiError = err.response && err.response.data;
+    const msg =
+      apiError && apiError.error && apiError.error.message
+        ? apiError.error.message
+        : err.message;
+    const e = new Error(msg);
+    e.status = err.response && err.response.status ? err.response.status : 500;
+    e.response = apiError || null;
+    throw e;
+  }
+}
+
+async function updateFlowMetadata(flowId, data) {
+  if (USE_MOCK) {
+    console.log('[Mock WhatsApp Client] Skipping real flow metadata update.', flowId, data);
+    return { success: true };
+  }
+  if (!TOKEN) throw new Error('WHATSAPP_TOKEN required');
+  if (!flowId) throw new Error('flowId is required');
+
+  const url = `${GRAPH_BASE}/${flowId}`;
+
+  await delayUntilAvailable();
+
+  try {
+    const res = await axios.post(url, data, {
+      headers: {
+        Authorization: `Bearer ${TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    return res.data;
+  } catch (err) {
+    const apiError = err.response && err.response.data;
+    const msg =
+      apiError && apiError.error && apiError.error.message
+        ? apiError.error.message
+        : err.message;
+    const e = new Error(msg);
+    e.status = err.response && err.response.status ? err.response.status : 500;
+    e.response = apiError || null;
+    throw e;
+  }
+}
+
+async function updateFlowJson(flowId, flowJson) {
+  if (USE_MOCK) {
+    console.log('[Mock WhatsApp Client] Skipping real flow JSON update.');
+    return { success: true, validation_errors: [] };
+  }
+  if (!TOKEN) throw new Error('WHATSAPP_TOKEN required');
+  if (!flowId) throw new Error('flowId is required');
+
+  const url = `${GRAPH_BASE}/${flowId}/assets`;
+  const form = new FormData();
+  const jsonStr = typeof flowJson === 'string' ? flowJson : JSON.stringify(flowJson);
+
+  form.append('name', 'flow.json');
+  form.append('asset_type', 'FLOW_JSON');
+  form.append('file', Buffer.from(jsonStr), {
+    filename: 'flow.json',
+    contentType: 'application/json',
+  });
+
+  await delayUntilAvailable();
+
+  try {
+    const res = await axios.post(url, form, {
+      headers: {
+        ...form.getHeaders(),
+        Authorization: `Bearer ${TOKEN}`,
+      },
+    });
+    return res.data;
+  } catch (err) {
+    const apiError = err.response && err.response.data;
+    const msg =
+      apiError && apiError.error && apiError.error.message
+        ? apiError.error.message
+        : err.message;
+    const e = new Error(msg);
+    e.status = err.response && err.response.status ? err.response.status : 500;
+    e.response = apiError || null;
+    throw e;
+  }
+}
+
 module.exports = {
   sendText,
   sendMedia,
@@ -462,4 +588,7 @@ module.exports = {
   getMedia,
   uploadMedia,
   uploadMessageTemplateMedia,
+  createFlow,
+  updateFlowMetadata,
+  updateFlowJson,
 };

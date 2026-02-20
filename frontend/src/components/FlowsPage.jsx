@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, GripVertical, Copy as CopyIcon, Plus } from 'lucide-react';
 import { listWhatsappFlows, createWhatsappFlow, updateWhatsappFlow } from '../api';
 import { Button } from './ui/Button';
 import { Input, Textarea } from './ui/Input';
@@ -254,9 +254,12 @@ export default function FlowsPage() {
   const [jsonText, setJsonText] = useState('');
   const [jsonError, setJsonError] = useState(null);
   const [endpointMode, setEndpointMode] = useState('without');
+  const [endpointUri, setEndpointUri] = useState('');
   const [selectedTemplateKey, setSelectedTemplateKey] = useState('default');
   const [showJsonEditor, setShowJsonEditor] = useState(false);
   const [activeScreenIndex, setActiveScreenIndex] = useState(0);
+  const [draggingIndex, setDraggingIndex] = useState(null);
+  const [validationErrors, setValidationErrors] = useState(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -292,8 +295,26 @@ export default function FlowsPage() {
     setDescription(flow.description || '');
     setCategories(flow.categories || []);
     setSelectedTemplateKey(null);
-    setJsonText(JSON.stringify(flow.flow_json || {}, null, 2));
+    const rawJson = flow.flow_json || {};
+    setJsonText(JSON.stringify(rawJson, null, 2));
+    let mode = 'without';
+    let uri = '';
+    if (rawJson && typeof rawJson === 'object') {
+      const meta = rawJson.meta || {};
+      if (meta.endpoint_mode === 'with') {
+        mode = 'with';
+      }
+      if (typeof meta.endpoint_uri === 'string') {
+        uri = meta.endpoint_uri;
+      }
+      if (rawJson.data_api_version === '3.0') {
+        mode = 'with';
+      }
+    }
+    setEndpointMode(mode);
+    setEndpointUri(uri);
     setJsonError(null);
+    setValidationErrors(null);
     setActiveScreenIndex(0);
   }
 
@@ -303,11 +324,13 @@ export default function FlowsPage() {
     setDescription('');
     setCategories([]);
     setEndpointMode('without');
+    setEndpointUri('');
     setSelectedTemplateKey('default');
     const tpl = TEMPLATES.default;
     const baseJson = tpl.buildJson();
     setJsonText(JSON.stringify(baseJson, null, 2));
     setJsonError(null);
+    setValidationErrors(null);
     setActiveScreenIndex(0);
   }
 
@@ -318,6 +341,7 @@ export default function FlowsPage() {
     const json = tpl.buildJson();
     setJsonText(JSON.stringify(json, null, 2));
     setJsonError(null);
+    setValidationErrors(null);
     setActiveScreenIndex(0);
   }
 
@@ -326,6 +350,7 @@ export default function FlowsPage() {
     setSaving(true);
     setError(null);
     setJsonError(null);
+    setValidationErrors(null);
     let parsed = null;
     try {
       parsed = jsonText ? JSON.parse(jsonText) : {};
@@ -335,11 +360,36 @@ export default function FlowsPage() {
       return;
     }
 
+    const enriched = { ...parsed };
+    if (endpointMode === 'with') {
+      enriched.data_api_version = enriched.data_api_version || '3.0';
+      const meta = enriched.meta && typeof enriched.meta === 'object' ? { ...enriched.meta } : {};
+      meta.endpoint_mode = 'with';
+      if (endpointUri) {
+        meta.endpoint_uri = endpointUri;
+      }
+      enriched.meta = meta;
+    } else {
+      if (enriched.data_api_version) {
+        delete enriched.data_api_version;
+      }
+      if (enriched.meta && typeof enriched.meta === 'object') {
+        const meta = { ...enriched.meta };
+        delete meta.endpoint_uri;
+        meta.endpoint_mode = 'without';
+        if (Object.keys(meta).length === 0) {
+          delete enriched.meta;
+        } else {
+          enriched.meta = meta;
+        }
+      }
+    }
+
     const payload = {
       name: name || 'Untitled Flow',
       description: description || null,
       categories: categories && Array.isArray(categories) ? categories : [],
-      flow_json: parsed,
+      flow_json: enriched,
     };
 
     try {
@@ -356,9 +406,297 @@ export default function FlowsPage() {
       selectFlow(saved);
     } catch (err) {
       setError(err.message || 'Failed to save flow');
+      if (err.details && Array.isArray(err.details.validation_errors)) {
+        setValidationErrors(err.details.validation_errors);
+      }
     } finally {
       setSaving(false);
     }
+  }
+
+  function applyJsonUpdate(mutator) {
+    let parsed;
+    try {
+      parsed = jsonText ? JSON.parse(jsonText) : {};
+    } catch {
+      return;
+    }
+    const next = mutator(parsed) || parsed;
+    setJsonText(JSON.stringify(next, null, 2));
+    setJsonError(null);
+  }
+
+  function handleCopyJson() {
+    if (!navigator || !navigator.clipboard) {
+      setJsonError('Clipboard is not available in this browser');
+      return;
+    }
+    navigator.clipboard
+      .writeText(jsonText || '')
+      .then(() => {
+        setJsonError(null);
+      })
+      .catch(() => {
+        setJsonError('Failed to copy JSON to clipboard');
+      });
+  }
+
+  function addScreen() {
+    let currentScreens = [];
+    try {
+      const parsed = jsonText ? JSON.parse(jsonText) : {};
+      currentScreens = Array.isArray(parsed.screens) ? parsed.screens : [];
+    } catch {
+      currentScreens = [];
+    }
+    const nextIndex = currentScreens.length;
+    applyJsonUpdate((parsed) => {
+      const screens = Array.isArray(parsed.screens) ? [...parsed.screens] : [];
+      const index = screens.length;
+      const screen = {
+        id: `SCREEN_${index + 1}`,
+        title: `Screen ${index + 1}`,
+        terminal: true,
+        layout: {
+          type: 'SingleColumnLayout',
+          children: [],
+        },
+      };
+      screens.push(screen);
+      return { ...parsed, screens };
+    });
+    setActiveScreenIndex(nextIndex);
+  }
+
+  function removeScreen(index) {
+    let parsed;
+    try {
+      parsed = jsonText ? JSON.parse(jsonText) : {};
+    } catch {
+      return;
+    }
+    const screens = Array.isArray(parsed.screens) ? [...parsed.screens] : [];
+    if (index < 0 || index >= screens.length) {
+      return;
+    }
+    screens.splice(index, 1);
+    const next = { ...parsed, screens };
+    setJsonText(JSON.stringify(next, null, 2));
+    setJsonError(null);
+    if (screens.length === 0) {
+      setActiveScreenIndex(0);
+    } else if (activeScreenIndex >= screens.length) {
+      setActiveScreenIndex(screens.length - 1);
+    }
+  }
+
+  function updateActiveScreenTitle(value) {
+    applyJsonUpdate((parsed) => {
+      const screens = Array.isArray(parsed.screens) ? [...parsed.screens] : [];
+      if (screens.length === 0) {
+        return parsed;
+      }
+      const index =
+        activeScreenIndex >= 0 && activeScreenIndex < screens.length
+          ? activeScreenIndex
+          : 0;
+      const screen = { ...screens[index], title: value };
+      screens[index] = screen;
+      return { ...parsed, screens };
+    });
+  }
+
+  function buildComponent(definition) {
+    if (definition === 'text_heading') {
+      return {
+        type: 'TextHeading',
+        text: 'Heading',
+      };
+    }
+    if (definition === 'text_body') {
+      return {
+        type: 'TextBody',
+        text: 'Body text',
+      };
+    }
+    if (definition === 'text_input_short') {
+      return {
+        type: 'TextInput',
+        name: `input_${Date.now()}`,
+        label: 'Your answer',
+        required: false,
+      };
+    }
+    if (definition === 'selection_single') {
+      return {
+        type: 'RadioButtonsGroup',
+        name: `choice_${Date.now()}`,
+        label: 'Select an option',
+        'data-source': [
+          { id: 'option_1', title: 'Option 1' },
+          { id: 'option_2', title: 'Option 2' },
+        ],
+        required: false,
+      };
+    }
+    if (definition === 'footer') {
+      return {
+        type: 'Footer',
+        label: 'Continue',
+        'on-click-action': {
+          name: 'complete',
+          payload: {},
+        },
+      };
+    }
+    return null;
+  }
+
+  function addComponentToActiveScreen(definition) {
+    const component = buildComponent(definition);
+    if (!component) {
+      return;
+    }
+    applyJsonUpdate((parsed) => {
+      const screens = Array.isArray(parsed.screens) ? [...parsed.screens] : [];
+      let index = activeScreenIndex;
+      if (!Number.isInteger(index) || index < 0 || index >= screens.length) {
+        if (screens.length === 0) {
+          const screen = {
+            id: 'SCREEN_1',
+            title: 'Screen 1',
+            terminal: true,
+            layout: {
+              type: 'SingleColumnLayout',
+              children: [],
+            },
+          };
+          screens.push(screen);
+          index = 0;
+        } else {
+          index = 0;
+        }
+      }
+      const screen = { ...screens[index] };
+      const layout =
+        screen.layout && typeof screen.layout === 'object'
+          ? { ...screen.layout }
+          : { type: 'SingleColumnLayout', children: [] };
+      const children = Array.isArray(layout.children)
+        ? [...layout.children]
+        : [];
+      const footerIndex = children.findIndex(
+        (child) => child && child.type === 'Footer'
+      );
+      if (footerIndex >= 0) {
+        children.splice(footerIndex, 0, component);
+      } else {
+        children.push(component);
+      }
+      layout.children = children;
+      screen.layout = layout;
+      screens[index] = screen;
+      return { ...parsed, screens };
+    });
+  }
+
+  function updateComponentAt(index, updater) {
+    applyJsonUpdate((parsed) => {
+      const screens = Array.isArray(parsed.screens) ? [...parsed.screens] : [];
+      if (screens.length === 0) {
+        return parsed;
+      }
+      const screenIndex =
+        activeScreenIndex >= 0 && activeScreenIndex < screens.length
+          ? activeScreenIndex
+          : 0;
+      const screen = { ...screens[screenIndex] };
+      const layout =
+        screen.layout && typeof screen.layout === 'object'
+          ? { ...screen.layout }
+          : { type: 'SingleColumnLayout', children: [] };
+      const children = Array.isArray(layout.children)
+        ? [...layout.children]
+        : [];
+      if (index < 0 || index >= children.length) {
+        return parsed;
+      }
+      const child = { ...children[index] };
+      const nextChild = updater(child) || child;
+      children[index] = nextChild;
+      layout.children = children;
+      screen.layout = layout;
+      screens[screenIndex] = screen;
+      return { ...parsed, screens };
+    });
+  }
+
+  function removeComponent(index) {
+    applyJsonUpdate((parsed) => {
+      const screens = Array.isArray(parsed.screens) ? [...parsed.screens] : [];
+      if (screens.length === 0) {
+        return parsed;
+      }
+      const screenIndex =
+        activeScreenIndex >= 0 && activeScreenIndex < screens.length
+          ? activeScreenIndex
+          : 0;
+      const screen = { ...screens[screenIndex] };
+      const layout =
+        screen.layout && typeof screen.layout === 'object'
+          ? { ...screen.layout }
+          : { type: 'SingleColumnLayout', children: [] };
+      const children = Array.isArray(layout.children)
+        ? [...layout.children]
+        : [];
+      if (index < 0 || index >= children.length) {
+        return parsed;
+      }
+      children.splice(index, 1);
+      layout.children = children;
+      screen.layout = layout;
+      screens[screenIndex] = screen;
+      return { ...parsed, screens };
+    });
+  }
+
+  function moveComponent(fromIndex, toIndex) {
+    if (fromIndex === toIndex) {
+      return;
+    }
+    applyJsonUpdate((parsed) => {
+      const screens = Array.isArray(parsed.screens) ? [...parsed.screens] : [];
+      if (screens.length === 0) {
+        return parsed;
+      }
+      const screenIndex =
+        activeScreenIndex >= 0 && activeScreenIndex < screens.length
+          ? activeScreenIndex
+          : 0;
+      const screen = { ...screens[screenIndex] };
+      const layout =
+        screen.layout && typeof screen.layout === 'object'
+          ? { ...screen.layout }
+          : { type: 'SingleColumnLayout', children: [] };
+      const children = Array.isArray(layout.children)
+        ? [...layout.children]
+        : [];
+      if (
+        fromIndex < 0 ||
+        fromIndex >= children.length ||
+        toIndex < 0 ||
+        toIndex >= children.length
+      ) {
+        return parsed;
+      }
+      const updated = [...children];
+      const [moved] = updated.splice(fromIndex, 1);
+      updated.splice(toIndex, 0, moved);
+      layout.children = updated;
+      screen.layout = layout;
+      screens[screenIndex] = screen;
+      return { ...parsed, screens };
+    });
   }
 
   let preview = null;
@@ -380,12 +718,14 @@ export default function FlowsPage() {
   let headingText = null;
   let bodyText = null;
   let footerLabel = 'Complete';
+  let activeChildren = [];
   if (
     activeScreen &&
     activeScreen.layout &&
     Array.isArray(activeScreen.layout.children)
   ) {
-    for (const child of activeScreen.layout.children) {
+    activeChildren = activeScreen.layout.children;
+    for (const child of activeChildren) {
       if (!headingText && child.type === 'TextHeading' && child.text) {
         headingText = child.text;
       }
@@ -455,6 +795,32 @@ export default function FlowsPage() {
                 {saving ? 'Saving...' : 'Save'}
               </Button>
             </div>
+            {validationErrors && Array.isArray(validationErrors) && validationErrors.length > 0 && (
+              <div className="rounded-md border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-900 space-y-1">
+                <div className="font-semibold text-amber-800">
+                  Meta validation errors
+                </div>
+                <ul className="list-disc list-inside space-y-0.5">
+                  {validationErrors.map((ve, idx) => {
+                    const pointer =
+                      ve &&
+                      Array.isArray(ve.pointers) &&
+                      ve.pointers.length > 0 &&
+                      ve.pointers[0].path
+                        ? ve.pointers[0].path
+                        : null;
+                    return (
+                      <li key={idx}>
+                        {ve && ve.message ? ve.message : 'Validation error'}
+                        {pointer && (
+                          <span className="text-amber-700">{` (${pointer})`}</span>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
             <div className="space-y-1">
               <div className="text-xs text-slate-600">Name</div>
               <Input
@@ -574,37 +940,52 @@ export default function FlowsPage() {
                     With Endpoint
                   </button>
                 </div>
-                <div className="p-2 space-y-1">
-                  {Object.values(TEMPLATES).map((tpl) => (
-                    <button
-                      key={tpl.key}
-                      type="button"
-                      onClick={() => applyTemplate(tpl.key)}
-                      className={`w-full flex items-start gap-2 rounded-md px-3 py-2 text-left border ${
-                        selectedTemplateKey === tpl.key
-                          ? 'border-blue-500 bg-blue-50'
-                          : 'border-transparent hover:bg-slate-50'
-                      }`}
-                    >
-                      <span className="mt-0.5">
-                        <span
-                          className={`inline-block h-3 w-3 rounded-full border ${
-                            selectedTemplateKey === tpl.key
-                              ? 'border-blue-600 bg-blue-600'
-                              : 'border-slate-400 bg-white'
-                          }`}
-                        />
-                      </span>
-                      <span className="flex-1">
-                        <div className="text-xs font-medium text-slate-900">
-                          {tpl.title}
-                        </div>
-                        <div className="text-[11px] text-slate-500">
-                          {tpl.description}
-                        </div>
-                      </span>
-                    </button>
-                  ))}
+                <div className="p-2 space-y-2">
+                  {endpointMode === 'with' && (
+                    <div className="space-y-1">
+                      <div className="text-[11px] text-slate-600">
+                        Endpoint URL
+                      </div>
+                      <Input
+                        value={endpointUri}
+                        onChange={(e) => setEndpointUri(e.target.value)}
+                        placeholder="https://example.com/whatsapp-flow-endpoint"
+                        className="h-8 text-xs"
+                      />
+                    </div>
+                  )}
+                  <div className="space-y-1">
+                    {Object.values(TEMPLATES).map((tpl) => (
+                      <button
+                        key={tpl.key}
+                        type="button"
+                        onClick={() => applyTemplate(tpl.key)}
+                        className={`w-full flex items-start gap-2 rounded-md px-3 py-2 text-left border ${
+                          selectedTemplateKey === tpl.key
+                            ? 'border-blue-500 bg-blue-50'
+                            : 'border-transparent hover:bg-slate-50'
+                        }`}
+                      >
+                        <span className="mt-0.5">
+                          <span
+                            className={`inline-block h-3 w-3 rounded-full border ${
+                              selectedTemplateKey === tpl.key
+                                ? 'border-blue-600 bg-blue-600'
+                                : 'border-slate-400 bg-white'
+                            }`}
+                          />
+                        </span>
+                        <span className="flex-1">
+                          <div className="text-xs font-medium text-slate-900">
+                            {tpl.title}
+                          </div>
+                          <div className="text-[11px] text-slate-500">
+                            {tpl.description}
+                          </div>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
@@ -620,11 +1001,21 @@ export default function FlowsPage() {
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
                     <div className="text-xs text-slate-600">Flow JSON</div>
-                    {jsonError && (
-                      <div className="text-[11px] text-red-500">
-                        {jsonError}
-                      </div>
-                    )}
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-slate-700 underline-offset-2 hover:underline"
+                        onClick={handleCopyJson}
+                      >
+                        <CopyIcon className="w-3 h-3" />
+                        <span>Copy JSON</span>
+                      </button>
+                      {jsonError && (
+                        <div className="text-[11px] text-red-500">
+                          {jsonError}
+                        </div>
+                      )}
+                    </div>
                   </div>
                   <Textarea
                     value={jsonText}
@@ -639,6 +1030,232 @@ export default function FlowsPage() {
             <div className="flex items-center justify-between mb-2">
               <div className="font-semibold text-slate-800 text-sm">
                 Flow Preview
+              </div>
+            </div>
+            <div className="mb-3 grid grid-cols-2 gap-3">
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs text-slate-600">Screens</div>
+                    <Button
+                      type="button"
+                      size="xs"
+                      className="h-7 px-2 text-[11px]"
+                      onClick={addScreen}
+                    >
+                      <Plus className="w-3 h-3 mr-1" />
+                      Add screen
+                    </Button>
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {previewScreens.map((screen, index) => (
+                      <div
+                        key={screen.id || index}
+                        className="inline-flex items-center rounded-full border border-slate-200 bg-white overflow-hidden"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setActiveScreenIndex(index)}
+                          className={`px-2 py-1 text-[11px] ${
+                            safeScreenIndex === index
+                              ? 'bg-slate-900 text-white'
+                              : 'text-slate-700 hover:bg-slate-50'
+                          }`}
+                        >
+                          {screen.title || `Screen ${index + 1}`}
+                        </button>
+                        <button
+                          type="button"
+                          className="px-1 text-[11px] text-slate-400 hover:text-red-500"
+                          onClick={() => removeScreen(index)}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                    {previewScreens.length === 0 && (
+                      <div className="text-[11px] text-slate-400">
+                        No screens yet.
+                      </div>
+                    )}
+                  </div>
+                  {activeScreen && (
+                    <div className="space-y-1">
+                      <div className="text-[11px] text-slate-600">
+                        Active screen title
+                      </div>
+                      <Input
+                        value={activeScreen.title || ''}
+                        onChange={(e) => updateActiveScreenTitle(e.target.value)}
+                        className="h-7 text-[11px]"
+                        placeholder="Screen title"
+                      />
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-1">
+                  <div className="text-xs text-slate-600">Add component</div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className="px-2 py-1 rounded-md border border-slate-200 bg-white text-[11px] hover:bg-slate-50"
+                      onClick={() => addComponentToActiveScreen('text_heading')}
+                    >
+                      Text heading
+                    </button>
+                    <button
+                      type="button"
+                      className="px-2 py-1 rounded-md border border-slate-200 bg-white text-[11px] hover:bg-slate-50"
+                      onClick={() => addComponentToActiveScreen('text_body')}
+                    >
+                      Text body
+                    </button>
+                    <button
+                      type="button"
+                      className="px-2 py-1 rounded-md border border-slate-200 bg-white text-[11px] hover:bg-slate-50"
+                      onClick={() =>
+                        addComponentToActiveScreen('text_input_short')
+                      }
+                    >
+                      Text answer
+                    </button>
+                    <button
+                      type="button"
+                      className="px-2 py-1 rounded-md border border-slate-200 bg-white text-[11px] hover:bg-slate-50"
+                      onClick={() =>
+                        addComponentToActiveScreen('selection_single')
+                      }
+                    >
+                      Selection
+                    </button>
+                    <button
+                      type="button"
+                      className="px-2 py-1 rounded-md border border-slate-200 bg-white text-[11px] hover:bg-slate-50"
+                      onClick={() => addComponentToActiveScreen('footer')}
+                    >
+                      Footer button
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <div className="text-xs text-slate-600">Components</div>
+                  {activeChildren.length > 0 && (
+                    <div className="text-[10px] text-slate-400">
+                      Drag to reorder
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-1 max-h-56 overflow-y-auto border border-slate-200 rounded-md bg-white px-1 py-1">
+                  {activeChildren.length === 0 && (
+                    <div className="text-[11px] text-slate-400 px-2 py-1">
+                      No components yet. Use the buttons on the left to add.
+                    </div>
+                  )}
+                  {activeChildren.map((child, index) => {
+                    const isFooter = child && child.type === 'Footer';
+                    const label =
+                      child && child.type === 'TextHeading'
+                        ? 'Heading'
+                        : child && child.type === 'TextBody'
+                        ? 'Body'
+                        : child && child.type === 'TextInput'
+                        ? 'Text answer'
+                        : child && child.type === 'RadioButtonsGroup'
+                        ? 'Selection'
+                        : child && child.type
+                        ? child.type
+                        : 'Component';
+                    const isDragging = draggingIndex === index;
+                    return (
+                      <div
+                        key={index}
+                        className={`flex items-center gap-2 rounded-md px-2 py-1 text-xs border ${
+                          isDragging
+                            ? 'border-blue-500 bg-blue-50'
+                            : 'border-slate-200 bg-white'
+                        }`}
+                        draggable
+                        onDragStart={() => setDraggingIndex(index)}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          if (
+                            draggingIndex === null ||
+                            draggingIndex === index
+                          ) {
+                            return;
+                          }
+                          moveComponent(draggingIndex, index);
+                          setDraggingIndex(index);
+                        }}
+                        onDragEnd={() => setDraggingIndex(null)}
+                      >
+                        <GripVertical className="w-3 h-3 text-slate-400 flex-shrink-0" />
+                        <div className="flex-1 space-y-1">
+                          <div className="flex items-center justify-between">
+                            <div className="text-[11px] text-slate-500">
+                              {label}
+                            </div>
+                            {isFooter && (
+                              <span className="text-[10px] text-slate-400 uppercase">
+                                Footer
+                              </span>
+                            )}
+                          </div>
+                          {child &&
+                            (child.type === 'TextHeading' ||
+                              child.type === 'TextBody') && (
+                              <Input
+                                value={child.text || ''}
+                                onChange={(e) =>
+                                  updateComponentAt(index, (c) => ({
+                                    ...c,
+                                    text: e.target.value,
+                                  }))
+                                }
+                                className="h-7 text-[11px]"
+                                placeholder="Text"
+                              />
+                            )}
+                          {child && child.type === 'TextInput' && (
+                            <Input
+                              value={child.label || ''}
+                              onChange={(e) =>
+                                updateComponentAt(index, (c) => ({
+                                  ...c,
+                                  label: e.target.value,
+                                }))
+                              }
+                              className="h-7 text-[11px]"
+                              placeholder="Question"
+                            />
+                          )}
+                          {child && child.type === 'RadioButtonsGroup' && (
+                            <Input
+                              value={child.label || ''}
+                              onChange={(e) =>
+                                updateComponentAt(index, (c) => ({
+                                  ...c,
+                                  label: e.target.value,
+                                }))
+                              }
+                              className="h-7 text-[11px]"
+                              placeholder="Question"
+                            />
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          className="text-[11px] text-slate-400 hover:text-red-500 px-1"
+                          onClick={() => removeComponent(index)}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
             <div className="flex-1 flex items-center justify-center">
