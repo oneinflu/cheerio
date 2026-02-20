@@ -336,6 +336,63 @@ export async function getWorkflows() {
   return res.json();
 }
 
+export async function getLeadStages(teamId) {
+  const headers = getAuthHeaders();
+  const qs = teamId ? `?teamId=${encodeURIComponent(teamId)}` : '';
+  const res = await fetch(`/api/settings/lead-stages${qs}`, { headers });
+  return res.json();
+}
+
+export async function createLeadStage(data) {
+  const headers = getAuthHeaders();
+  const res = await fetch('/api/settings/lead-stages', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
+export async function updateLeadStage(id, data, teamId) {
+  const headers = getAuthHeaders();
+  const qs = teamId ? `?teamId=${encodeURIComponent(teamId)}` : '';
+  const res = await fetch(`/api/settings/lead-stages/${id}${qs}`, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
+export async function deleteLeadStage(id, teamId) {
+  const headers = getAuthHeaders();
+  const qs = teamId ? `?teamId=${encodeURIComponent(teamId)}` : '';
+  await fetch(`/api/settings/lead-stages/${id}${qs}`, {
+    method: 'DELETE',
+    headers,
+  });
+}
+
+export async function getWorkingHours(teamId) {
+  const headers = getAuthHeaders();
+  const qs = teamId ? `?teamId=${encodeURIComponent(teamId)}` : '';
+  const res = await fetch(`/api/settings/working-hours${qs}`, {
+    headers,
+  });
+  return res.json();
+}
+
+export async function saveWorkingHours(data, teamId) {
+  const headers = getAuthHeaders();
+  const qs = teamId ? `?teamId=${encodeURIComponent(teamId)}` : '';
+  const res = await fetch(`/api/settings/working-hours${qs}`, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
 export async function getRules() {
   const headers = getAuthHeaders();
   const res = await fetch('/api/rules', { headers });

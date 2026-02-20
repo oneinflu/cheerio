@@ -29,6 +29,7 @@ const workflowsRouter = require('./src/routes/workflows');
 const rulesRouter = require('./src/routes/rules');
 const authRouter = require('./src/routes/auth');
 const teamRouter = require('./src/routes/team');
+const settingsRouter = require('./src/routes/settings');
 const auth = require('./src/middlewares/auth');
 
 // Read environment-based config for HTTP concerns. Defaults are safe for dev.
@@ -111,6 +112,7 @@ function createApp() {
   app.use('/api/workflows', workflowsRouter);
   app.use('/api', dashboardRouter);
   app.use('/api', rulesRouter);
+  app.use('/api', settingsRouter);
 
   /**
    * Serve static assets in production.

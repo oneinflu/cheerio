@@ -141,6 +141,24 @@ async function runMigrations() {
         } else {
           console.log('[migrate] automation_rules table already exists.');
         }
+
+        const leadStagesRes = await client.query(`
+          SELECT EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE  table_schema = 'public'
+            AND    table_name   = 'lead_stages'
+          );
+        `);
+
+        if (!leadStagesRes.rows[0].exists) {
+          console.log('[migrate] Adding lead_stages and team_working_hours tables...');
+          await client.query('BEGIN');
+          await runSQLFile(client, path.join(__dirname, '..', 'db', 'migrations', '0008_lead_stages_working_hours.sql'));
+          await client.query('COMMIT');
+          console.log('[migrate] Applied lead_stages and team_working_hours migration.');
+        } else {
+          console.log('[migrate] lead_stages and team_working_hours tables already exist.');
+        }
         
         return;
       }

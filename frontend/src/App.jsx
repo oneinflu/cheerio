@@ -612,7 +612,7 @@ export default function App() {
           />
         )}
 
-        {activePage === 'settings' && <SettingsPage />}
+        {activePage === 'settings' && <SettingsPage currentUser={currentUser} />}
 
         {activePage === 'templates' && <TemplatesPage />}
         
