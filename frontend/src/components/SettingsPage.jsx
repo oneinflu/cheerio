@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
+import { Modal } from './ui/Modal';
 import { ListChecks, Clock } from 'lucide-react';
 import { getLeadStages, createLeadStage, updateLeadStage, deleteLeadStage, getWorkingHours, saveWorkingHours } from '../api';
 
@@ -32,6 +33,7 @@ export default function SettingsPage({ currentUser }) {
   const [loadingHours, setLoadingHours] = useState(false);
   const [savingHours, setSavingHours] = useState(false);
   const [hoursError, setHoursError] = useState(null);
+  const [isHoursModalOpen, setIsHoursModalOpen] = useState(false);
 
   const dayLabels = {
     mon: 'Monday',
@@ -100,7 +102,7 @@ export default function SettingsPage({ currentUser }) {
     if (!teamId) return;
     try {
       const name = `Stage ${leadStages.length + 1}`;
-      const created = await createLeadStage({ name });
+      const created = await createLeadStage({ name }, teamId);
       if (created && created.id) {
         setLeadStages((prev) => [...prev, created]);
       }
@@ -289,83 +291,120 @@ export default function SettingsPage({ currentUser }) {
               </div>
             )}
 
-            <div className="space-y-2">
-              <label className="text-xs font-medium text-slate-600">
-                Timezone
-              </label>
-              <Input
-                value={timezone}
-                onChange={(e) => setTimezone(e.target.value)}
-                className="h-9 text-sm"
-                placeholder="e.g. Asia/Kolkata"
-              />
-            </div>
-
-            <div className="border border-slate-200 rounded-md overflow-hidden">
-              <div className="grid grid-cols-4 text-[11px] font-medium text-slate-500 bg-slate-50 px-3 py-2">
-                <div>Day</div>
-                <div>Closed</div>
-                <div>Open</div>
-                <div>Close</div>
+            <div className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+              <div className="flex flex-col">
+                <span className="font-medium text-slate-700">
+                  {timezone || 'Timezone not set'}
+                </span>
+                <span className="text-[11px] text-slate-500">
+                  Configure daily open and close times for your team.
+                </span>
               </div>
-              <div className="max-h-64 overflow-y-auto">
-                {Object.keys(dayLabels).map((key) => {
-                  const cfg = workingHours[key] || {};
-                  return (
-                    <div
-                      key={key}
-                      className="grid grid-cols-4 items-center text-xs px-3 py-2 border-t border-slate-100"
-                    >
-                      <div className="text-slate-700">{dayLabels[key]}</div>
-                      <div>
-                        <input
-                          type="checkbox"
-                          checked={Boolean(cfg.closed)}
-                          onChange={(e) =>
-                            handleHoursChange(key, 'closed', e.target.checked)
-                          }
-                        />
-                      </div>
-                      <div>
-                        <input
-                          type="time"
-                          className="w-full border border-slate-200 rounded-md px-2 py-1 text-xs"
-                          disabled={Boolean(cfg.closed)}
-                          value={cfg.open || ''}
-                          onChange={(e) =>
-                            handleHoursChange(key, 'open', e.target.value)
-                          }
-                        />
-                      </div>
-                      <div>
-                        <input
-                          type="time"
-                          className="w-full border border-slate-200 rounded-md px-2 py-1 text-xs"
-                          disabled={Boolean(cfg.closed)}
-                          value={cfg.close || ''}
-                          onChange={(e) =>
-                            handleHoursChange(key, 'close', e.target.value)
-                          }
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="flex justify-end">
               <Button
                 type="button"
-                onClick={handleSaveHours}
-                disabled={savingHours || loadingHours}
+                size="sm"
+                variant="outline"
+                onClick={() => setIsHoursModalOpen(true)}
               >
-                {savingHours ? 'Saving...' : 'Save Working Hours'}
+                Set Working Hours
               </Button>
             </div>
           </CardContent>
         </Card>
       </div>
+
+      <Modal
+        isOpen={isHoursModalOpen}
+        onClose={() => setIsHoursModalOpen(false)}
+        title="Working Hours"
+      >
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-xs font-medium text-slate-600">
+              Timezone
+            </label>
+            <Input
+              value={timezone}
+              onChange={(e) => setTimezone(e.target.value)}
+              className="h-9 text-sm"
+              placeholder="e.g. Asia/Kolkata"
+            />
+          </div>
+
+          <div className="border border-slate-200 rounded-md overflow-hidden">
+            <div className="grid grid-cols-4 text-[11px] font-medium text-slate-500 bg-slate-50 px-3 py-2">
+              <div>Day</div>
+              <div>Closed</div>
+              <div>Open</div>
+              <div>Close</div>
+            </div>
+            <div className="max-h-64 overflow-y-auto">
+              {Object.keys(dayLabels).map((key) => {
+                const cfg = workingHours[key] || {};
+                return (
+                  <div
+                    key={key}
+                    className="grid grid-cols-4 items-center text-xs px-3 py-2 border-t border-slate-100"
+                  >
+                    <div className="text-slate-700">{dayLabels[key]}</div>
+                    <div>
+                      <input
+                        type="checkbox"
+                        checked={Boolean(cfg.closed)}
+                        onChange={(e) =>
+                          handleHoursChange(key, 'closed', e.target.checked)
+                        }
+                      />
+                    </div>
+                    <div>
+                      <input
+                        type="time"
+                        className="w-full border border-slate-200 rounded-md px-2 py-1 text-xs"
+                        disabled={Boolean(cfg.closed)}
+                        value={cfg.open || ''}
+                        onChange={(e) =>
+                          handleHoursChange(key, 'open', e.target.value)
+                        }
+                      />
+                    </div>
+                    <div>
+                      <input
+                        type="time"
+                        className="w-full border border-slate-200 rounded-md px-2 py-1 text-xs"
+                        disabled={Boolean(cfg.closed)}
+                        value={cfg.close || ''}
+                        onChange={(e) =>
+                          handleHoursChange(key, 'close', e.target.value)
+                        }
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setIsHoursModalOpen(false)}
+            >
+              Close
+            </Button>
+            <Button
+              type="button"
+              onClick={async () => {
+                await handleSaveHours();
+                setIsHoursModalOpen(false);
+              }}
+              disabled={savingHours || loadingHours}
+            >
+              {savingHours ? 'Saving...' : 'Save Working Hours'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

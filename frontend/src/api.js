@@ -343,9 +343,10 @@ export async function getLeadStages(teamId) {
   return res.json();
 }
 
-export async function createLeadStage(data) {
+export async function createLeadStage(data, teamId) {
   const headers = getAuthHeaders();
-  const res = await fetch('/api/settings/lead-stages', {
+  const qs = teamId ? `?teamId=${encodeURIComponent(teamId)}` : '';
+  const res = await fetch(`/api/settings/lead-stages${qs}`, {
     method: 'POST',
     headers,
     body: JSON.stringify(data),
