@@ -3,10 +3,24 @@ const express = require('express');
 const router = express.Router();
 const whatsappClient = require('../integrations/meta/whatsappClient');
 const db = require('../../db');
+const auth = require('../middlewares/auth');
 const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage() });
+const cloudinaryLib = require('cloudinary').v2;
 
 const WABA_ID = process.env.WHATSAPP_BUSINESS_ACCOUNT_ID;
+const HAS_CLOUDINARY =
+  !!process.env.CLOUDINARY_CLOUD_NAME &&
+  !!process.env.CLOUDINARY_API_KEY &&
+  !!process.env.CLOUDINARY_API_SECRET;
+
+if (HAS_CLOUDINARY) {
+  cloudinaryLib.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET,
+  });
+}
 
 /**
  * GET /api/templates
@@ -147,6 +161,76 @@ router.post('/upload-example', upload.single('file'), async (req, res, next) => 
     e.status = err.status || 500;
     e.expose = true;
     return next(e);
+  }
+});
+
+/**
+ * POST /api/templates/upload-test-media
+ * Upload media for test template sending (returns URL or ID).
+ *
+ * This uses Cloudinary (if configured) and returns a payload similar to
+ * the /api/whatsapp/upload endpoint: { id, url, kind, mime_type, original_filename }.
+ */
+router.post('/upload-test-media', auth.requireRole('admin','agent','supervisor'), upload.single('file'), async (req, res, next) => {
+  try {
+    if (!HAS_CLOUDINARY) {
+      const err = new Error('Cloudinary is not configured for media uploads');
+      err.status = 500;
+      err.expose = true;
+      throw err;
+    }
+    if (!req.file) {
+      const err = new Error('File is required');
+      err.status = 400;
+      err.expose = true;
+      throw err;
+    }
+
+    const base64 = req.file.buffer.toString('base64');
+    const dataUri = `data:${req.file.mimetype};base64,${base64}`;
+
+    let cloudResult;
+    try {
+      cloudResult = await cloudinaryLib.uploader.upload(dataUri, {
+        resource_type: 'auto',
+        folder: process.env.CLOUDINARY_FOLDER || 'whatsapp_media',
+        use_filename: true,
+        unique_filename: true,
+      });
+    } catch (cloudErr) {
+      const err = new Error(`[upload-test-media] Cloudinary upload failed: ${cloudErr.message}`);
+      err.status = 500;
+      err.expose = true;
+      throw err;
+    }
+
+    if (!cloudResult || !cloudResult.secure_url) {
+      const err = new Error('Cloudinary upload did not return a secure_url');
+      err.status = 500;
+      err.expose = true;
+      throw err;
+    }
+
+    const mimeType = req.file.mimetype || null;
+    const kind =
+      mimeType && mimeType.startsWith('image/')
+        ? 'image'
+        : mimeType && mimeType.startsWith('video/')
+        ? 'video'
+        : mimeType && mimeType.startsWith('audio/')
+        ? 'audio'
+        : 'document';
+
+    res.status(200).json({
+      id: cloudResult.secure_url,
+      url: cloudResult.secure_url,
+      cloudinary_public_id: cloudResult.public_id,
+      kind,
+      mime_type: mimeType,
+      original_filename: req.file.originalname || null,
+    });
+  } catch (err) {
+    return next(err);
   }
 });
 

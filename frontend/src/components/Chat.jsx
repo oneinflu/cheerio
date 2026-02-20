@@ -32,6 +32,7 @@ export default function Chat({ socket, conversationId, messages, onRefresh, isLo
   const [selectedTemplateForSend, setSelectedTemplateForSend] = useState(null);
   const [templateVariables, setTemplateVariables] = useState({});
   const [templateHeaderMedia, setTemplateHeaderMedia] = useState('');
+  const [isUploadingHeader, setIsUploadingHeader] = useState(false);
   const typingTimeoutRef = useRef(null);
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -1024,13 +1025,15 @@ export default function Chat({ socket, conversationId, messages, onRefresh, isLo
                       variant="outline"
                       size="sm"
                       onClick={() => headerFileInputRef.current?.click()}
+                      disabled={isUploadingHeader}
                     >
-                      Upload file
+                      {isUploadingHeader ? 'Uploading...' : 'Upload file'}
                     </Button>
                     <Input
                       placeholder="Defaults to template media. Paste URL or media ID to override."
                       value={templateHeaderMedia}
                       onChange={(e) => setTemplateHeaderMedia(e.target.value)}
+                      disabled={isUploadingHeader}
                     />
                   </div>
                   <input
@@ -1041,6 +1044,7 @@ export default function Chat({ socket, conversationId, messages, onRefresh, isLo
                     onChange={async (e) => {
                       const file = e.target.files && e.target.files[0];
                       if (!file) return;
+                      setIsUploadingHeader(true);
                       try {
                         const uploadResp = await uploadMedia(conversationId, file);
                         if (uploadResp && uploadResp.error) {
@@ -1053,6 +1057,7 @@ export default function Chat({ socket, conversationId, messages, onRefresh, isLo
                       } catch (err) {
                         alert(err?.message || 'Failed to upload header media');
                       } finally {
+                        setIsUploadingHeader(false);
                         e.target.value = '';
                       }
                     }}

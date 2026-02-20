@@ -10,6 +10,7 @@ import SettingsPage from './components/SettingsPage.jsx';
 import TemplatesPage from './components/TemplatesPage.jsx';
 import WorkflowsPage from './components/WorkflowsPage.jsx';
 import WorkflowBuilder from './components/WorkflowBuilder.jsx';
+import RulesPage from './components/RulesPage.jsx';
 import TeamMembersPage from './components/TeamMembersPage.jsx';
 import LoginPage from './components/LoginPage.jsx';
 import GuestChat from './components/GuestChat.jsx';
@@ -568,6 +569,15 @@ export default function App() {
             <Workflow size={20} />
           </Button>
 
+          <Button
+            variant={activePage === 'rules' ? 'secondary' : 'ghost'}
+            size="icon"
+            className="w-10 h-10 rounded-lg"
+            onClick={() => setActivePage('rules')}
+          >
+            <Workflow size={20} />
+          </Button>
+
         
         </nav>
         <div className="flex flex-col items-center space-y-2 pb-4 w-full px-2">
@@ -617,6 +627,8 @@ export default function App() {
             <WorkflowsPage onOpenBuilder={setEditingWorkflow} />
           )
         )}
+
+        {activePage === 'rules' && <RulesPage />}
 
         {activePage === 'team-members' && <TeamMembersPage />}
 

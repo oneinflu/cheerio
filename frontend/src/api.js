@@ -228,6 +228,26 @@ export async function uploadTemplateExampleMedia(file) {
   return json;
 }
 
+export async function uploadTemplateTestMedia(file) {
+  const headers = getAuthHeaders(null); // No Content-Type for FormData
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const res = await fetch('/api/templates/upload-test-media', {
+    method: 'POST',
+    headers,
+    body: formData,
+  });
+  const json = await res.json();
+  if (!res.ok) {
+    const msg =
+      (json && (json.error || json.message)) ||
+      'Template test media upload failed';
+    throw new Error(msg);
+  }
+  return json;
+}
+
 export async function resolveConversation(conversationId) {
   const headers = getAuthHeaders();
   const res = await fetch(`/api/conversations/${conversationId}/status`, {
@@ -314,6 +334,40 @@ export async function getWorkflows() {
   const headers = getAuthHeaders();
   const res = await fetch('/api/workflows', { headers });
   return res.json();
+}
+
+export async function getRules() {
+  const headers = getAuthHeaders();
+  const res = await fetch('/api/rules', { headers });
+  return res.json();
+}
+
+export async function createRule(data) {
+  const headers = getAuthHeaders();
+  const res = await fetch('/api/rules', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
+export async function updateRule(id, data) {
+  const headers = getAuthHeaders();
+  const res = await fetch(`/api/rules/${id}`, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
+export async function deleteRule(id) {
+  const headers = getAuthHeaders();
+  await fetch(`/api/rules/${id}`, {
+    method: 'DELETE',
+    headers,
+  });
 }
 
 export async function createWorkflow(data) {

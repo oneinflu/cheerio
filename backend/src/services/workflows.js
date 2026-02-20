@@ -114,6 +114,43 @@ async function deleteWorkflow(id) {
   return { success: true };
 }
 
+async function triggerWorkflowsForEvent(triggerType, phoneNumber, context = {}, excludeWorkflowId = null) {
+  if (!triggerType || !phoneNumber) {
+    return;
+  }
+  try {
+    const res = await db.query(
+      `
+      SELECT id, steps
+      FROM workflows
+      WHERE status = 'active'
+      `
+    );
+    const rows = res.rows || [];
+    for (const row of rows) {
+      const id = row.id;
+      if (excludeWorkflowId && String(id) === String(excludeWorkflowId)) continue;
+      const steps = row.steps || {};
+      const wfTrigger = steps.trigger || steps.event || null;
+      if (wfTrigger === triggerType) {
+        console.log(
+          `[WorkflowEvents] Triggering workflow ${id} for event ${triggerType} and phone ${phoneNumber}`
+        );
+        runWorkflow(id, phoneNumber).catch((err) => {
+          console.error(
+            `[WorkflowEvents] Workflow ${id} failed for event ${triggerType}: ${err.message}`
+          );
+        });
+      }
+    }
+  } catch (err) {
+    console.error(
+      `[WorkflowEvents] Failed to trigger workflows for event ${triggerType}:`,
+      err
+    );
+  }
+}
+
 async function checkUserReply(phoneNumber, sinceTime) {
   if (!sinceTime) {
     console.log('[WorkflowRunner] checkUserReply: No sinceTime provided');
@@ -307,6 +344,13 @@ async function runWorkflow(id, phoneNumber) {
                         )
                         WHERE id = $2
                     `, [actionValue, contactId]);
+                }
+                try {
+                  triggerWorkflowsForEvent('tag_added', phoneNumber, { tag: actionValue }, id);
+                } catch (e) {
+                  console.error(
+                    `[WorkflowRunner] Failed to trigger tag_added workflows: ${e.message}`
+                  );
                 }
             } else if (actionType === 'remove_tag') {
                 const convRes = await db.query('SELECT contact_id FROM conversations WHERE id = $1', [conversationId]);
@@ -893,5 +937,6 @@ module.exports = {
   updateWorkflow,
   deleteWorkflow,
   runWorkflow,
+  triggerWorkflowsForEvent,
   generateWorkflowFromDescription,
 };

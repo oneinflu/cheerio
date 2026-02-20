@@ -41,6 +41,8 @@ const { getIO } = require('../realtime/io');
 const crypto = require('crypto');
 const axios = require('axios');
 const translation = require('../services/translation');
+const { triggerWorkflowsForEvent } = require('../services/workflows');
+const { evaluateMessageRules, evaluateCourseRules } = require('../services/rules');
 
 // Verify token for GET challenge.
 const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN || '';
@@ -353,6 +355,22 @@ router.post('/', async (req, res, next) => {
             await client.query('COMMIT');
             client.release();
 
+            if (isFirstMessage) {
+              try {
+                await triggerWorkflowsForEvent('first_message', senderWaId, { conversationId });
+              } catch (e) {
+                console.error('[WorkflowEvents] Failed to trigger first_message workflows from webhook:', e);
+              }
+            }
+
+            try {
+              if (textBody) {
+                await evaluateMessageRules(senderWaId, textBody);
+              }
+            } catch (e) {
+              console.error('[Rules] Failed to evaluate message rules from webhook:', e);
+            }
+
             // Emit realtime event to notify agents.
             const io = getIO();
             if (io && messageId) {
@@ -420,12 +438,29 @@ router.post('/', async (req, res, next) => {
                     const leadData = response.data?.data;
                     const assignedTo = leadData?.assignedTo;
                     
-                    // Save lead_id to conversation
                     const leadId = leadData?.lead?._id;
                     if (leadId) {
                         try {
                            await db.query('UPDATE conversations SET lead_id = $1 WHERE id = $2', [leadId, conversationId]);
                            console.log(`[Lead Webhook] Linked lead ${leadId} to conversation ${conversationId}`);
+                           try {
+                             await triggerWorkflowsForEvent('new_lead', senderWaId, {
+                               conversationId,
+                               leadId,
+                             });
+                           } catch (e) {
+                             console.error(
+                               '[WorkflowEvents] Failed to trigger new_lead workflows from webhook:',
+                               e
+                             );
+                           }
+                           try {
+                             if (textBody) {
+                               await evaluateCourseRules(senderWaId, textBody);
+                             }
+                           } catch (e) {
+                             console.error('[Rules] Failed to evaluate course rules from webhook:', e);
+                           }
                         } catch (leadUpdateErr) {
                            console.error(`[Lead Webhook] Failed to link lead ${leadId}:`, leadUpdateErr.message);
                         }

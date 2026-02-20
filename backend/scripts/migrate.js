@@ -123,6 +123,24 @@ async function runMigrations() {
         } else {
            console.log('[migrate] template_settings table already exists.');
         }
+
+        const rulesTableRes = await client.query(`
+          SELECT EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE  table_schema = 'public'
+            AND    table_name   = 'automation_rules'
+          );
+        `);
+
+        if (!rulesTableRes.rows[0].exists) {
+          console.log('[migrate] Adding automation_rules table...');
+          await client.query('BEGIN');
+          await runSQLFile(client, path.join(__dirname, '..', 'db', 'migrations', '0007_create_automation_rules.sql'));
+          await client.query('COMMIT');
+          console.log('[migrate] Applied automation_rules migration.');
+        } else {
+          console.log('[migrate] automation_rules table already exists.');
+        }
         
         return;
       }
@@ -164,4 +182,3 @@ if (require.main === module) {
 }
 
 module.exports = { runMigrations };
-

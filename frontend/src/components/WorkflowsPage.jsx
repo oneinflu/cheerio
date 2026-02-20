@@ -98,6 +98,22 @@ export default function WorkflowsPage({ onOpenBuilder }) {
     }
   };
 
+  const handleTriggerChange = async (workflow, value) => {
+    const currentSteps = workflow.steps || {};
+    const updatedSteps = { ...currentSteps };
+    if (value) {
+      updatedSteps.trigger = value;
+    } else {
+      delete updatedSteps.trigger;
+    }
+    try {
+      await updateWorkflow(workflow.id, { ...workflow, steps: updatedSteps });
+      fetchWorkflows();
+    } catch (err) {
+      console.error('Failed to update workflow trigger:', err);
+    }
+  };
+
   const filteredWorkflows = workflows.filter(w => 
     w.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (w.description || '').toLowerCase().includes(searchTerm.toLowerCase())
@@ -126,7 +142,7 @@ export default function WorkflowsPage({ onOpenBuilder }) {
         </div>
       </div>
 
-      <div className="p-8 space-y-6">
+          <div className="p-8 space-y-6">
         <div className="relative max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <Input 
@@ -151,6 +167,7 @@ export default function WorkflowsPage({ onOpenBuilder }) {
               <thead className="bg-slate-50 text-slate-600 font-medium border-b border-slate-200">
                 <tr>
                   <th className="px-6 py-4">Name</th>
+                  <th className="px-6 py-4">Trigger</th>
                   <th className="px-6 py-4">Status</th>
                   <th className="px-6 py-4">Created At</th>
                   <th className="px-6 py-4 text-right">Actions</th>
@@ -164,6 +181,18 @@ export default function WorkflowsPage({ onOpenBuilder }) {
                       {workflow.description && (
                         <div className="text-slate-500 text-xs mt-0.5 line-clamp-1">{workflow.description}</div>
                       )}
+                    </td>
+                    <td className="px-6 py-4">
+                      <select
+                        className="flex h-9 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs"
+                        value={(workflow.steps && workflow.steps.trigger) || ''}
+                        onChange={(e) => handleTriggerChange(workflow, e.target.value)}
+                      >
+                        <option value="">Manual only</option>
+                        <option value="new_lead">New Lead Created</option>
+                        <option value="first_message">User Sends First Message</option>
+                        <option value="tag_added">Tag Added</option>
+                      </select>
                     </td>
                     <td className="px-6 py-4">
                       <Badge variant={workflow.status === 'active' ? 'success' : 'secondary'}>

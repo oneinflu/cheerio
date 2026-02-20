@@ -6,7 +6,7 @@ import { Input } from './ui/Input';
 import { Badge } from './ui/Badge';
 import { Plus, Search, Smartphone, Image as ImageIcon, CheckCircle, Clock, AlertCircle, ChevronRight, FileText, MoreVertical, RefreshCw, Send, Upload, Megaphone, Ticket, Timer, ShoppingBag, Bell, ShieldCheck, ArrowLeft, Video, Trash2, Star } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { getTemplates, createTemplate, sendTestTemplate, uploadTemplateExampleMedia, deleteTemplate } from '../api';
+import { getTemplates, createTemplate, sendTestTemplate, uploadTemplateExampleMedia, uploadTemplateTestMedia, deleteTemplate } from '../api';
 
 export default function TemplatesPage() {
   const [selectedId, setSelectedId] = useState(null);
@@ -24,6 +24,8 @@ export default function TemplatesPage() {
   const [testVariables, setTestVariables] = useState({});
   const [sendingTest, setSendingTest] = useState(false);
   const [testHeaderMedia, setTestHeaderMedia] = useState('');
+  const testHeaderFileInputRef = React.useRef(null);
+  const [isUploadingTestHeader, setIsUploadingTestHeader] = useState(false);
 
   // Templates Data
   const [templates, setTemplates] = useState([]);
@@ -764,17 +766,61 @@ Are you sure you want to delete '${template.name}'?`;
                       : 'Document header (URL or media ID)';
                   const effectiveMedia = (testHeaderMedia || tmpl.headerHandle || '').trim();
                   const isUrl = /^https?:\/\//i.test(effectiveMedia);
-
+                  const accept =
+                    tmpl.headerType === 'IMAGE'
+                      ? 'image/*'
+                      : tmpl.headerType === 'VIDEO'
+                      ? 'video/*'
+                      : '*/*';
+                  
                   return (
                     <div className="space-y-2 border-t pt-2 mt-2">
                       <label className="text-sm font-medium text-slate-700">{label}</label>
-                      <Input
-                        placeholder="Defaults to template media. Paste URL or media ID to override."
-                        value={testHeaderMedia}
-                        onChange={e => setTestHeaderMedia(e.target.value)}
+                      <div className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => testHeaderFileInputRef.current?.click()}
+                          disabled={isUploadingTestHeader}
+                        >
+                          {isUploadingTestHeader ? 'Uploading...' : 'Upload file'}
+                        </Button>
+                        <Input
+                          placeholder="Defaults to template media. Paste URL or media ID to override."
+                          value={testHeaderMedia}
+                          onChange={e => setTestHeaderMedia(e.target.value)}
+                          disabled={isUploadingTestHeader}
+                        />
+                      </div>
+                      <input
+                        type="file"
+                        ref={testHeaderFileInputRef}
+                        className="hidden"
+                        accept={accept}
+                        onChange={async (e) => {
+                          const file = e.target.files && e.target.files[0];
+                          if (!file) return;
+                          setIsUploadingTestHeader(true);
+                          try {
+                            const uploadResp = await uploadTemplateTestMedia(file);
+                            if (!uploadResp || (!uploadResp.id && !uploadResp.url)) {
+                              throw new Error('Upload successful but no media URL returned');
+                            }
+                            const mediaIdOrUrl = uploadResp.id || uploadResp.url;
+                            setTestHeaderMedia(mediaIdOrUrl);
+                          } catch (err) {
+                            alert(err?.message || 'Failed to upload header media');
+                          } finally {
+                            setIsUploadingTestHeader(false);
+                            if (e.target) {
+                              e.target.value = '';
+                            }
+                          }
+                        }}
                       />
                       <p className="text-xs text-slate-500">
-                        If left empty, we use this template&apos;s header_handle. You can override with a link or media ID.
+                        If left empty, we use this template&apos;s default header media. You can override with a link or media ID.
                       </p>
                       {effectiveMedia && (
                         <div className="mt-1">

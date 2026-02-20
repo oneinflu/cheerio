@@ -26,6 +26,7 @@ const templatesRouter = require('./src/routes/templates');
 const mediaRouter = require('./src/routes/media');
 const dashboardRouter = require('./src/routes/dashboard');
 const workflowsRouter = require('./src/routes/workflows');
+const rulesRouter = require('./src/routes/rules');
 const authRouter = require('./src/routes/auth');
 const teamRouter = require('./src/routes/team');
 const auth = require('./src/middlewares/auth');
@@ -109,6 +110,7 @@ function createApp() {
   app.use('/api/media', mediaRouter);
   app.use('/api/workflows', workflowsRouter);
   app.use('/api', dashboardRouter);
+  app.use('/api', rulesRouter);
 
   /**
    * Serve static assets in production.
