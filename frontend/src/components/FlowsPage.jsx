@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { listWhatsappFlows, createWhatsappFlow, updateWhatsappFlow } from '../api';
-import Button from './ui/Button';
-import Input from './ui/Input';
-import Textarea from './ui/Textarea';
+import { Button } from './ui/Button';
+import { Input, Textarea } from './ui/Input';
 
 export default function FlowsPage() {
   const [flows, setFlows] = useState([]);
@@ -268,4 +267,3 @@ export default function FlowsPage() {
     </div>
   );
 }
-
