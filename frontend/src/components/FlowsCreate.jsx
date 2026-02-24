@@ -198,17 +198,181 @@ export default function FlowsCreate({ onCancel, onSave }) {
     setStep(2);
   };
 
+  const mapToMetaComponent = (component) => {
+    const base = {
+      visible: true,
+      name: component.id || `cmp_${Math.random().toString(36).substr(2, 9)}`,
+    };
+
+    switch (component.type) {
+      case 'Text':
+        // Map variants/classes to Meta styles
+        let fontSize = 'body';
+        let fontWeight = 'normal';
+        
+        if (component.variant === 'largeHeading' || (component.className && component.className.includes('text-lg'))) {
+          fontSize = 'headline';
+          fontWeight = 'bold';
+        } else if (component.className && component.className.includes('font-bold')) {
+          fontWeight = 'bold';
+        } else if (component.className && component.className.includes('text-xs')) {
+          fontSize = 'caption';
+        }
+
+        return {
+          type: 'Text',
+          text: component.text || '',
+          'font-size': fontSize,
+          'font-weight': fontWeight,
+          visible: true
+        };
+
+      case 'Input':
+      case 'TextArea':
+        return {
+          type: 'TextInput',
+          ...base,
+          label: component.label || 'Input',
+          required: component.required || false,
+          'input-type': component.inputType || 'text',
+          multiline: component.type === 'TextArea' || component.multiline || false,
+          'helper-text': component.placeholder || ''
+        };
+
+      case 'Checkbox':
+        // Handle both single boolean checkbox and multiple choice group
+        if (component.options && component.options.length > 0) {
+           return {
+             type: 'CheckboxGroup',
+             ...base,
+             label: component.label || 'Select options',
+             required: component.required || false,
+             options: component.options.map(opt => ({
+               id: opt.replace(/\s+/g, '_').toLowerCase(),
+               text: opt
+             }))
+           };
+        } else {
+           // Single checkbox (e.g. Terms) - mapped to CheckboxGroup with 1 option
+           return {
+             type: 'CheckboxGroup',
+             ...base,
+             label: component.label || '', // The label often sits above
+             required: component.required || false,
+             options: [
+               {
+                 id: 'checked',
+                 text: component.text || component.label || 'Yes'
+               }
+             ]
+           };
+        }
+
+      case 'Radio':
+        return {
+          type: 'RadioButtonsGroup',
+          ...base,
+          label: component.label || 'Select one',
+          required: component.required || false,
+          options: (component.options || []).map(opt => ({
+            id: opt.replace(/\s+/g, '_').toLowerCase(),
+            text: opt
+          }))
+        };
+
+      case 'Dropdown':
+        return {
+          type: 'Dropdown',
+          ...base,
+          label: component.label || 'Select',
+          required: component.required || false,
+          options: (component.options || []).map(opt => ({
+             id: opt.replace(/\s+/g, '_').toLowerCase(),
+             text: opt
+          }))
+        };
+
+      case 'Date':
+        return {
+          type: 'DatePicker',
+          ...base,
+          label: component.label || 'Select date',
+          required: component.required || false
+        };
+        
+      case 'Label':
+         return {
+            type: 'Text',
+            text: component.text || '',
+            'font-size': 'body',
+            'font-weight': 'bold',
+            visible: true
+         };
+
+      default:
+        return null;
+    }
+  };
+
+  const transformToMetaFlow = (screens) => {
+    const transformedScreens = screens.map((screen, index) => {
+      const isLastScreen = index === screens.length - 1;
+      const nextScreen = isLastScreen ? null : screens[index + 1];
+      
+      // Filter and map components
+      const children = (screen.content || [])
+        .map(mapToMetaComponent)
+        .filter(Boolean);
+
+      // Add Footer
+      children.push({
+        type: 'Footer',
+        label: screen.button || (isLastScreen ? 'Submit' : 'Continue'),
+        'on-click-action': isLastScreen
+          ? {
+              name: 'complete',
+              payload: {
+                screen_id: screen.id,
+                values: '${form}' // Collects all form values
+              }
+            }
+          : {
+              name: 'navigate',
+              next: {
+                type: 'screen',
+                name: nextScreen ? nextScreen.id : ''
+              }
+            }
+      });
+
+      return {
+        id: screen.id,
+        title: screen.title || 'Untitled Screen',
+        terminal: isLastScreen,
+        data: {},
+        layout: {
+          type: 'SingleColumnLayout',
+          children
+        }
+      };
+    });
+
+    return {
+      version: '3.0',
+      screens: transformedScreens
+    };
+  };
+
   const handleSaveFlow = async (screens, status) => {
     setIsSaving(true);
     try {
+      const flowJson = transformToMetaFlow(screens);
+      
       const payload = {
         name: formData.name,
         categories: formData.categories,
         status,
-        flow_json: {
-          version: '3.0',
-          screens
-        }
+        flow_json: flowJson
       };
       await createWhatsappFlow(payload);
       clearStorage();
