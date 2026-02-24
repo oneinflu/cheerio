@@ -260,6 +260,7 @@ export default function FlowsPage() {
   const [activeScreenIndex, setActiveScreenIndex] = useState(0);
   const [draggingIndex, setDraggingIndex] = useState(null);
   const [validationErrors, setValidationErrors] = useState(null);
+  const [publishOnSave, setPublishOnSave] = useState(true);
 
   useEffect(() => {
     let isMounted = true;
@@ -316,6 +317,7 @@ export default function FlowsPage() {
     setJsonError(null);
     setValidationErrors(null);
     setActiveScreenIndex(0);
+    setPublishOnSave(true);
   }
 
   function resetForm() {
@@ -332,6 +334,7 @@ export default function FlowsPage() {
     setJsonError(null);
     setValidationErrors(null);
     setActiveScreenIndex(0);
+    setPublishOnSave(true);
   }
 
   function applyTemplate(key) {
@@ -390,6 +393,7 @@ export default function FlowsPage() {
       description: description || null,
       categories: categories && Array.isArray(categories) ? categories : [],
       flow_json: enriched,
+      publish: publishOnSave,
     };
 
     try {
@@ -715,6 +719,13 @@ export default function FlowsPage() {
   const activeScreen =
     previewScreens.length > 0 ? previewScreens[safeScreenIndex] : null;
 
+  const selectedFlow =
+    selectedFlowId != null
+      ? flows.find((f) => f.id === selectedFlowId) || null
+      : null;
+  const hasRemoteFlowId =
+    selectedFlow && selectedFlow.flow_id && String(selectedFlow.flow_id).length > 0;
+
   let headingText = null;
   let bodyText = null;
   let footerLabel = 'Complete';
@@ -788,12 +799,58 @@ export default function FlowsPage() {
         <div className="flex-1 grid grid-cols-2 gap-4 p-4">
           <form onSubmit={handleSave} className="flex flex-col gap-4">
             <div className="flex items-center justify-between">
-              <div className="font-semibold text-slate-800 text-sm">
-                Flow Details
+              <div className="flex flex-col gap-1">
+                <div className="font-semibold text-slate-800 text-sm">
+                  Flow Details
+                </div>
+                {selectedFlow && (
+                  <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+                    <span>Local id: {selectedFlow.id}</span>
+                    {hasRemoteFlowId ? (
+                      <>
+                        <span className="h-1 w-1 rounded-full bg-slate-300" />
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-700 border border-emerald-200">
+                          <span>Linked to WhatsApp</span>
+                          <button
+                            type="button"
+                            className="underline underline-offset-2 hover:text-emerald-900"
+                            onClick={() => {
+                              if (navigator && navigator.clipboard) {
+                                navigator.clipboard.writeText(
+                                  String(selectedFlow.flow_id)
+                                );
+                              }
+                            }}
+                          >
+                            Copy flow_id
+                          </button>
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="h-1 w-1 rounded-full bg-slate-300" />
+                        <span className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2 py-0.5 text-slate-600 border border-slate-200">
+                          Not yet created on WhatsApp
+                        </span>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
-              <Button type="submit" size="sm" disabled={saving}>
-                {saving ? 'Saving...' : 'Save'}
-              </Button>
+              <div className="flex items-center gap-4">
+                <label className="flex items-center gap-2 text-[11px] text-slate-500">
+                  <input
+                    type="checkbox"
+                    className="h-3 w-3"
+                    checked={publishOnSave}
+                    onChange={(e) => setPublishOnSave(e.target.checked)}
+                  />
+                  <span>Publish on save</span>
+                </label>
+                <Button type="submit" size="sm" disabled={saving}>
+                  {saving ? 'Saving...' : 'Save'}
+                </Button>
+              </div>
             </div>
             {validationErrors && Array.isArray(validationErrors) && validationErrors.length > 0 && (
               <div className="rounded-md border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-900 space-y-1">
