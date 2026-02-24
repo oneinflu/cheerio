@@ -14,8 +14,8 @@ const BASE_URL = 'https://graph.facebook.com/v20.0';
 // ─────────────────────────────────────────────
 
 function getToken() {
-  const token = process.env.WHATSAPP_ACCESS_TOKEN;
-  if (!token) throw new Error('WHATSAPP_ACCESS_TOKEN env variable is not set');
+  const token = process.env.WHATSAPP_TOKEN;
+  if (!token) throw new Error('WHATSAPP_TOKEN env variable is not set');
   return token;
 }
 
