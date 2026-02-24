@@ -23,9 +23,33 @@ const TEMPLATES = [
   { id: 'support', label: 'Customer support', description: 'Help customers resolve issues' },
 ];
 
+const TEMPLATE_PREVIEWS = {
+  default: {
+    title: 'This is a sample form',
+    type: 'default',
+  },
+  purchase: {
+    title: 'Join Now',
+    type: 'purchase',
+  },
+  feedback: {
+    title: 'This is a sample form',
+    type: 'feedback',
+  },
+  survey: {
+    title: 'Question 1 of 3',
+    type: 'survey',
+  },
+  support: {
+    title: 'Get help',
+    type: 'support',
+  },
+};
+
 export default function FlowsCreate({ onCancel, onSave }) {
   const [step, setStep] = useState(1);
   const [isSaving, setIsSaving] = useState(false);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     categories: [],
@@ -71,6 +95,140 @@ export default function FlowsCreate({ onCancel, onSave }) {
       />
     );
   }
+
+  const previewMeta = TEMPLATE_PREVIEWS[formData.template] || TEMPLATE_PREVIEWS.default;
+
+  const renderPreviewContent = () => {
+    const type = previewMeta.type;
+    if (type === 'purchase') {
+      return (
+        <div className="p-3 text-[11px] text-slate-900 space-y-3">
+          <div className="text-[12px] font-semibold leading-snug">
+            Get early access to our Mega Sales Day deals. Register now!
+          </div>
+          <div className="space-y-2 mt-2">
+            <div className="space-y-1">
+              <div className="text-[10px] text-slate-600">Name</div>
+              <div className="h-7 rounded border border-slate-200 bg-slate-50" />
+            </div>
+            <div className="space-y-1">
+              <div className="text-[10px] text-slate-600">Email</div>
+              <div className="h-7 rounded border border-slate-200 bg-slate-50" />
+            </div>
+          </div>
+          <div className="space-y-1 mt-1">
+            <label className="flex items-start gap-2 text-[10px] text-slate-700">
+              <input type="checkbox" className="mt-0.5 w-3 h-3 border-slate-300" />
+              <span>
+                I agree to the terms. <span className="text-green-700">Read now</span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2 text-[10px] text-slate-700">
+              <input type="checkbox" className="mt-0.5 w-3 h-3 border-slate-300" />
+              <span>[Optional] Keep me up to date about offers and promotions</span>
+            </label>
+          </div>
+          <button className="w-full mt-3 h-7 rounded-full bg-green-600 text-white text-[11px] font-medium">
+            Continue
+          </button>
+        </div>
+      );
+    }
+    if (type === 'survey') {
+      return (
+        <div className="p-3 text-[11px] text-slate-900 space-y-3">
+          <div className="text-[10px] text-slate-500">Question 1 of 3</div>
+          <div className="text-[12px] font-semibold leading-snug">
+            You’ve found the perfect deal, what do you do next?
+          </div>
+          <div className="text-[10px] text-slate-600 mt-1">Choose all that apply:</div>
+          <div className="mt-2 space-y-1">
+            {[
+              'Buy it right away',
+              'Check reviews before buying',
+              'Share it with friends + family',
+              'Buy multiple, while it’s cheap',
+              'None of the above',
+            ].map(option => (
+              <label key={option} className="flex items-center gap-2 text-[10px] text-slate-800">
+                <input type="checkbox" className="w-3 h-3 border-slate-300" />
+                <span>{option}</span>
+              </label>
+            ))}
+          </div>
+          <button className="w-full mt-3 h-7 rounded-full bg-green-600 text-white text-[11px] font-medium">
+            Continue
+          </button>
+        </div>
+      );
+    }
+    if (type === 'support') {
+      return (
+        <div className="p-3 text-[11px] text-slate-900 space-y-3">
+          <div className="text-[12px] font-semibold leading-snug mb-1">Get help</div>
+          <div className="space-y-2">
+            <div className="space-y-1">
+              <div className="text-[10px] text-slate-600">Name</div>
+              <div className="h-7 rounded border border-slate-200 bg-slate-50" />
+            </div>
+            <div className="space-y-1">
+              <div className="text-[10px] text-slate-600">Order number</div>
+              <div className="h-7 rounded border border-slate-200 bg-slate-50" />
+            </div>
+          </div>
+          <div className="mt-2 space-y-1">
+            <div className="text-[10px] text-slate-600 mb-1">Choose a topic</div>
+            {['Orders and payments', 'Maintenance', 'Delivery', 'Returns', 'Other'].map(topic => (
+              <label key={topic} className="flex items-center justify-between text-[10px] text-slate-800">
+                <span>{topic}</span>
+                <span className="w-2 h-2 rounded-full border border-slate-300" />
+              </label>
+            ))}
+          </div>
+          <div className="mt-2 space-y-1">
+            <div className="text-[10px] text-slate-600">Description of issue (Optional)</div>
+            <div className="h-14 rounded border border-slate-200 bg-slate-50" />
+          </div>
+          <button className="w-full mt-3 h-7 rounded-full bg-green-600 text-white text-[11px] font-medium">
+            Done
+          </button>
+        </div>
+      );
+    }
+    return (
+      <div className="p-3 text-[11px] text-slate-900 space-y-3">
+        <div className="text-[12px] font-semibold leading-snug">
+          This is a sample lead-gen form!
+        </div>
+        <div className="space-y-2 mt-2">
+          <div className="space-y-1">
+            <div className="text-[10px] text-slate-600">Your Name</div>
+            <div className="h-7 rounded border border-slate-200 bg-slate-50" />
+          </div>
+          <div className="space-y-1">
+            <div className="text-[10px] text-slate-600">Appointment Time</div>
+            <div className="h-7 rounded border border-slate-200 bg-slate-50" />
+          </div>
+        </div>
+        <div className="mt-2 space-y-1">
+          <div className="text-[10px] text-slate-600">Interested Services</div>
+          {['Service 1', 'Service 2', 'Service 3'].map(service => (
+            <label key={service} className="flex items-center gap-2 text-[10px] text-slate-800">
+              <input type="checkbox" className="w-3 h-3 border-slate-300" />
+              <span>{service}</span>
+            </label>
+          ))}
+        </div>
+        <label className="mt-1 flex items-center gap-2 text-[10px] text-slate-800">
+          <input type="checkbox" className="w-3 h-3 border-slate-300" />
+          <span>Send reminders for appointment?</span>
+        </label>
+        <button className="w-full mt-3 h-7 rounded-full bg-green-600 text-white text-[11px] font-medium">
+          Continue
+        </button>
+      </div>
+    );
+  };
 
   return (
     <div className="h-full flex flex-col bg-white">
@@ -164,34 +322,38 @@ export default function FlowsCreate({ onCancel, onSave }) {
         <div className="w-[400px] bg-slate-50 p-8 flex flex-col">
           <div className="flex justify-between items-center mb-6">
             <h3 className="font-medium text-slate-700">Preview</h3>
-            <select className="text-xs border-none bg-transparent font-medium text-slate-600 focus:ring-0 cursor-pointer">
-              <option>Get help</option>
+            <select
+              className="text-xs border-none bg-transparent font-medium text-slate-600 focus:ring-0 cursor-pointer"
+              defaultValue={previewMeta.title}
+            >
+              <option>{previewMeta.title}</option>
             </select>
           </div>
 
           <div className="flex-1 flex items-center justify-center">
-             {/* Phone Mockup */}
-             <div className="w-[300px] h-[600px] bg-white rounded-[2.5rem] border-8 border-slate-200 shadow-xl relative overflow-hidden flex flex-col">
-               {/* Mock Header */}
-               <div className="h-14 bg-white border-b border-slate-100 flex items-center px-4 pt-4">
-                 <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-green-600">
-                   <Smartphone className="w-4 h-4" />
-                 </div>
-                 <div className="ml-3 h-2 w-24 bg-slate-200 rounded-full"></div>
-               </div>
-
-               {/* Mock Chat Body */}
-               <div className="flex-1 bg-[#efeae2] p-4 flex flex-col justify-center items-center relative">
-                 {/* Chat Bubble */}
-                 <div className="bg-white p-2 rounded-lg shadow-sm max-w-[80%] w-full mb-4">
-                    <div className="h-2 w-16 bg-slate-200 rounded-full mb-2"></div>
-                    <div className="h-10 bg-slate-100 rounded mb-2"></div>
-                    <div className="h-8 bg-green-50 text-green-600 text-xs font-medium flex items-center justify-center rounded cursor-pointer">
-                      Preview Flow
-                    </div>
-                 </div>
-               </div>
-             </div>
+            <div className="w-[300px] h-[600px] bg-white rounded-[2.5rem] border-8 border-slate-200 shadow-xl relative overflow-hidden flex flex-col">
+              <div className="h-14 bg-white border-b border-slate-100 flex items-center px-4 pt-4">
+                <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-green-600">
+                  <Smartphone className="w-4 h-4" />
+                </div>
+                <div className="ml-3 h-2 w-24 bg-slate-200 rounded-full" />
+              </div>
+              <div className="flex-1 bg-[#efeae2] p-4 flex flex-col justify-center items-center relative">
+                <div className="bg-white rounded-lg shadow-sm max-w-[80%] w-full mb-4">
+                  {isPreviewOpen ? (
+                    renderPreviewContent()
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setIsPreviewOpen(true)}
+                      className="w-full px-3 py-2 text-xs font-medium text-green-700 bg-green-50 hover:bg-green-100 rounded-md"
+                    >
+                      Open preview
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
