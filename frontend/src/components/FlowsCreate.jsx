@@ -200,10 +200,25 @@ export default function FlowsCreate({ onCancel, onSave }) {
 
   const mapToMetaComponent = (component) => {
     // Generate a clean name for the form field - MUST be lowercase, no spaces
-    const fieldName = (component.name || component.id || `field_${Math.random().toString(36).substr(2, 9)}`)
-      .toLowerCase()
-      .replace(/[^a-z0-9_]/g, '_')
-      .replace(/^_+|_+$/g, ''); // Trim underscores
+    // Prefer component.name if set, otherwise derive from label, otherwise fallback to clean ID or random
+    let cleanName = '';
+    if (component.name) {
+      cleanName = component.name.toLowerCase();
+    } else if (component.label) {
+      // Create ID from label (e.g. "Your Name" -> "your_name")
+      cleanName = component.label.toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '');
+    } 
+    
+    if (!cleanName || cleanName.length < 2) {
+       // Fallback to ID or random if label yielded empty/short string
+       cleanName = (component.id || `field_${Math.random().toString(36).substr(2, 9)}`)
+        .toLowerCase()
+        .replace(/[^a-z0-9_]/g, '_');
+    }
+
+    const fieldName = cleanName;
 
     const base = {
       visible: true,
@@ -226,8 +241,6 @@ export default function FlowsCreate({ onCancel, onSave }) {
           type: 'Text',
           text: component.text || '',
           style: style,
-          // visible: true // 'visible' is not strictly required for Text but allowed in general components? 
-          // Actually Text component in v5.0 usually just has type, text, style.
         };
 
       case 'Input':
@@ -240,7 +253,7 @@ export default function FlowsCreate({ onCancel, onSave }) {
            inputType = component.inputType;
         } else if (labelLower.includes('email')) {
            inputType = 'email';
-        } else if (labelLower.includes('phone')) {
+        } else if (labelLower.includes('phone') || labelLower.includes('mobile')) {
            inputType = 'phone';
         } else if (labelLower.includes('number')) {
            inputType = 'number';
@@ -252,24 +265,19 @@ export default function FlowsCreate({ onCancel, onSave }) {
         if (!['text', 'email', 'phone', 'number', 'password'].includes(inputType)) {
            inputType = 'text';
         }
+
+        // Determine required status - Auto-require contact fields for lead gen best practice
+        let isRequired = component.required || false;
+        if (['email', 'phone'].includes(inputType) || labelLower.includes('name')) {
+           isRequired = true;
+        }
         
         return {
           type: 'TextInput',
           ...base,
           label: component.label || 'Input',
-          required: component.required || false,
+          required: isRequired,
           'input-type': inputType,
-          // Multiline is NOT supported in standard TextInput v5.0 based on strict rules provided?
-          // The user rules didn't explicitly forbid 'multiline', but listed allowed keys: type, name, label, input-type.
-          // It said "DO NOT generate unsupported components".
-          // Standard TextInput DOES support multiline in some versions, but if I follow "Required keys... Allowed input-types..." strictly...
-          // I will omit multiline to be safe if the user didn't list it in "Allowed keys".
-          // Wait, the user listed "Required keys", not "All allowed keys". 
-          // "TextInput Rules... 1. Required keys... 2. Allowed input-types...".
-          // It didn't say "Only these keys allowed". 
-          // However, "UNSUPPORTED FEATURES... Never generate...".
-          // I'll keep multiline if it was there, but the user's prompt is very strict.
-          // Let's stick to the minimal valid set.
         };
 
       case 'Checkbox':
@@ -383,7 +391,6 @@ export default function FlowsCreate({ onCancel, onSave }) {
         id: screen.id,
         title: screen.title || 'Untitled Screen',
         terminal: isLastScreen,
-        data: {},
         layout: {
           type: 'SingleColumnLayout',
           children: [
