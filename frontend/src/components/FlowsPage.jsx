@@ -1217,7 +1217,7 @@ export default function FlowsPage() {
 
                   <div className="flex-1 overflow-y-auto p-6">
                     {activeScreen ? (
-                      <div className="max-w-md mx-auto space-y-4">
+                      <div className="max-w-4xl mx-auto space-y-4">
                          <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-4 space-y-4">
                            <div className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-2">Screen Content</div>
                            
