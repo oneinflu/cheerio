@@ -1169,7 +1169,7 @@ export default function FlowsPage() {
                   </div>
                 </div>
 
-                <div className="flex flex-col bg-[#F0F2F5] relative">
+                <div className="flex flex-col bg-slate-50/50 relative">
                   <div className="p-3 border-b border-slate-200 bg-white flex items-center justify-between shrink-0">
                     <div className="text-xs font-semibold text-slate-800">
                       {activeScreen ? (activeScreen.title || 'Screen') : 'No Screen Selected'}
@@ -1217,7 +1217,7 @@ export default function FlowsPage() {
 
                   <div className="flex-1 overflow-y-auto p-6">
                     {activeScreen ? (
-                      <div className="max-w-4xl mx-auto space-y-4">
+                      <div className="max-w-4xl mx-auto space-y-6">
                          <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-4 space-y-4">
                            <div className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-2">Screen Content</div>
                            
@@ -1387,7 +1387,7 @@ export default function FlowsPage() {
                   </div>
                 </div>
 
-                <div className="flex flex-col bg-slate-100 items-center justify-center p-6 border-l border-slate-200">
+                <div className="flex flex-col bg-slate-100 items-center justify-center p-4 border-l border-slate-200">
                   <div className="w-[300px] bg-white rounded-[2.5rem] border-[8px] border-slate-900 shadow-xl overflow-hidden relative h-[600px] flex flex-col ring-1 ring-black/5">
                     <div className="h-7 bg-slate-900 w-full flex items-center justify-center relative z-20">
                       <div className="w-24 h-4 bg-black rounded-b-xl" />
