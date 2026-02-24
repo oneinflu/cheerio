@@ -35,11 +35,53 @@ function sendFlowMetaError(res, err, fallbackMessage) {
   return res.status(status).json(payload);
 }
 
+router.post('/whatsapp/flows/sync', auth.requireRole('admin', 'supervisor'), async (req, res, next) => {
+  try {
+    const WABA_ID = process.env.WHATSAPP_BUSINESS_ACCOUNT_ID;
+    if (!WABA_ID) {
+      throw new Error('WHATSAPP_BUSINESS_ACCOUNT_ID not configured');
+    }
+
+    const remoteRes = await whatsappClient.getFlows(WABA_ID);
+    const remoteFlows = (remoteRes.data && remoteRes.data.data) ? remoteRes.data.data : [];
+
+    const upserted = [];
+
+    for (const flow of remoteFlows) {
+      // flow: { id, name, status, categories, validation_errors }
+      const flowId = flow.id;
+      const name = flow.name;
+      const status = flow.status;
+      const categories = flow.categories || [];
+      
+      const result = await db.query(
+        `
+        INSERT INTO whatsapp_flows (flow_id, name, status, categories, flow_json)
+        VALUES ($1, $2, $3, $4, '{}'::jsonb)
+        ON CONFLICT (flow_id) 
+        DO UPDATE SET
+          name = EXCLUDED.name,
+          status = EXCLUDED.status,
+          categories = EXCLUDED.categories,
+          updated_at = NOW()
+        RETURNING id, flow_id, name, status, categories, created_at, updated_at
+        `,
+        [flowId, name, status, categories]
+      );
+      upserted.push(result.rows[0]);
+    }
+
+    res.json({ count: upserted.length, data: upserted });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get('/whatsapp/flows', auth.requireRole('admin', 'supervisor'), async (req, res, next) => {
   try {
     const result = await db.query(
       `
-      SELECT id, flow_id, name, description, categories, flow_json, created_at, updated_at
+      SELECT id, flow_id, name, status, description, categories, flow_json, created_at, updated_at
       FROM whatsapp_flows
       ORDER BY created_at DESC
       `

@@ -176,6 +176,23 @@ async function runMigrations() {
           console.log('[migrate] Applied whatsapp_flows migration.');
         } else {
           console.log('[migrate] whatsapp_flows table already exists.');
+
+          // Check if status column exists in whatsapp_flows
+          const flowsStatusRes = await client.query(`
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name='whatsapp_flows' AND column_name='status'
+          `);
+
+          if (flowsStatusRes.rowCount === 0) {
+            console.log('[migrate] Adding status column to whatsapp_flows...');
+            await client.query('BEGIN');
+            await runSQLFile(client, path.join(__dirname, '..', 'db', 'migrations', '0010_add_status_to_whatsapp_flows.sql'));
+            await client.query('COMMIT');
+            console.log('[migrate] Applied whatsapp_flows status migration.');
+          } else {
+            console.log('[migrate] whatsapp_flows status column already exists.');
+          }
         }
         
         return;

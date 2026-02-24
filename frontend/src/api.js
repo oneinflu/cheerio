@@ -489,6 +489,18 @@ export async function listWhatsappFlows() {
   return data && data.data ? data.data : [];
 }
 
+export async function syncWhatsappFlows() {
+  const headers = getAuthHeaders();
+  const res = await fetch('/api/whatsapp/flows/sync', {
+    method: 'POST',
+    headers,
+  });
+  if (!res.ok) {
+    throw new Error('Failed to sync flows');
+  }
+  return res.json();
+}
+
 export async function createWhatsappFlow(payload) {
   const headers = getAuthHeaders();
   const res = await fetch('/api/whatsapp/flows', {

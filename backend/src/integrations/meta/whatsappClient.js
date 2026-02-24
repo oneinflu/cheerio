@@ -576,6 +576,15 @@ async function updateFlowJson(flowId, flowJson) {
   }
 }
 
+async function getFlows(wabaId, limit = 100) {
+  if (USE_MOCK) {
+    console.log('[Mock WhatsApp Client] Skipping real flow fetch.');
+    return { status: 200, data: { data: [] } };
+  }
+  const url = `${GRAPH_BASE}/${wabaId}/flows?limit=${limit}&fields=id,name,status,categories,validation_errors`;
+  return getJSON(url);
+}
+
 module.exports = {
   sendText,
   sendMedia,
@@ -591,4 +600,5 @@ module.exports = {
   createFlow,
   updateFlowMetadata,
   updateFlowJson,
+  getFlows,
 };
