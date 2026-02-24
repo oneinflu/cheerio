@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   ArrowLeft, 
   Plus, 
@@ -58,17 +58,44 @@ const COMPONENT_GROUPS = [
 ];
 
 export default function FlowBuilder({ onBack, flowData, onSave, initialScreens }) {
-  const [screens, setScreens] = useState(initialScreens || [
-    { 
-      id: 'screen_1', 
-      title: 'Get help', 
-      content: [
-        { id: 'c1', type: 'Text', text: 'Please provide details below.', className: 'mb-4' },
-        { id: 'c2', type: 'Input', label: 'Phone Number', placeholder: 'Enter phone number', required: true, maxLength: 20 },
-      ] 
-    }
-  ]);
-  const [activeScreenId, setActiveScreenId] = useState(screens[0]?.id || 'screen_1');
+  const [screens, setScreens] = useState(() => {
+    const saved = localStorage.getItem('whatsapp_flow_builder_screens');
+    return saved ? JSON.parse(saved) : (initialScreens || [
+      { 
+        id: 'screen_1', 
+        title: 'Get help', 
+        content: [
+          { id: 'c1', type: 'Text', text: 'Please provide details below.', className: 'mb-4' },
+          { id: 'c2', type: 'Input', label: 'Phone Number', placeholder: 'Enter phone number', required: true, maxLength: 20 },
+        ] 
+      }
+    ]);
+  });
+  
+  const [activeScreenId, setActiveScreenId] = useState(() => {
+    return localStorage.getItem('whatsapp_flow_builder_active_screen') || (screens[0]?.id || 'screen_1');
+  });
+
+  useEffect(() => {
+    localStorage.setItem('whatsapp_flow_builder_screens', JSON.stringify(screens));
+  }, [screens]);
+
+  useEffect(() => {
+    localStorage.setItem('whatsapp_flow_builder_active_screen', activeScreenId);
+  }, [activeScreenId]);
+
+  const handleBack = () => {
+    localStorage.removeItem('whatsapp_flow_builder_screens');
+    localStorage.removeItem('whatsapp_flow_builder_active_screen');
+    onBack();
+  };
+
+  const handleSave = (screens, status) => {
+    localStorage.removeItem('whatsapp_flow_builder_screens');
+    localStorage.removeItem('whatsapp_flow_builder_active_screen');
+    onSave(screens, status);
+  };
+
   const [draggingItem, setDraggingItem] = useState(null);
   const [dragOverItem, setDragOverItem] = useState(null);
 
@@ -268,7 +295,7 @@ export default function FlowBuilder({ onBack, flowData, onSave, initialScreens }
         onDragEnd={handleComponentDragEnd}
         onDragOver={(e) => e.preventDefault()}
         className={`bg-white border rounded-lg p-4 mb-3 transition-all ${
-          draggedItem?.type === 'component' && draggedItem.index === index ? 'opacity-50' : ''
+          draggingItem?.type === 'component' && draggingItem.index === index ? 'opacity-50' : ''
         } ${dragOverItem === index && draggingItem?.type === 'component' ? 'border-green-500 border-2' : 'border-slate-200'}`}
       >
         <div className="flex justify-between items-start mb-4">
@@ -392,7 +419,7 @@ export default function FlowBuilder({ onBack, flowData, onSave, initialScreens }
       {/* Header */}
       <div className="flex justify-between items-center bg-white border-b border-slate-200 px-6 py-3 shadow-sm z-10">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" onClick={onBack} className="text-slate-500 hover:text-slate-800">
+          <Button variant="ghost" onClick={handleBack} className="text-slate-500 hover:text-slate-800">
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back
           </Button>
@@ -400,10 +427,10 @@ export default function FlowBuilder({ onBack, flowData, onSave, initialScreens }
           <h2 className="font-semibold text-slate-800">{flowData.name || 'Untitled Flow'}</h2>
         </div>
         <div className="flex gap-3">
-          <Button variant="outline" onClick={() => onSave(screens, 'DRAFT')} className="text-slate-700 border-slate-300 hover:bg-slate-50">
+          <Button variant="outline" onClick={() => handleSave(screens, 'DRAFT')} className="text-slate-700 border-slate-300 hover:bg-slate-50">
             Save as Draft
           </Button>
-          <Button className="bg-[#0f3529] hover:bg-[#0a261d] text-white" onClick={() => onSave(screens, 'PUBLISHED')}>
+          <Button className="bg-[#0f3529] hover:bg-[#0a261d] text-white" onClick={() => handleSave(screens, 'PUBLISHED')}>
             Publish
           </Button>
         </div>
@@ -434,7 +461,7 @@ export default function FlowBuilder({ onBack, flowData, onSave, initialScreens }
                      activeScreenId === screen.id 
                        ? 'bg-white border-green-500 shadow-sm ring-1 ring-green-500' 
                        : 'bg-white border-slate-200 hover:border-slate-300'
-                  } ${draggedItem?.type === 'screen' && draggedItem.index === idx ? 'opacity-50' : ''}`}
+                  } ${draggingItem?.type === 'screen' && draggingItem.index === idx ? 'opacity-50' : ''}`}
                 >
                   <div className="cursor-grab text-slate-400">
                     <GripVertical className="w-4 h-4" />

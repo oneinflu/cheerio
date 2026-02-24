@@ -3,7 +3,11 @@ import FlowsList from './FlowsList';
 import FlowsCreate from './FlowsCreate';
 
 export default function FlowsPage() {
-  const [view, setView] = useState('list'); // 'list' | 'create'
+  const [view, setView] = useState(() => localStorage.getItem('whatsapp_flows_view') || 'list'); // 'list' | 'create'
+
+  React.useEffect(() => {
+    localStorage.setItem('whatsapp_flows_view', view);
+  }, [view]);
 
   return (
     <div className="w-full h-screen bg-slate-50/50">

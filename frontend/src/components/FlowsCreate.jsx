@@ -145,15 +145,41 @@ const TEMPLATE_FLOWS = {
 };
 
 export default function FlowsCreate({ onCancel, onSave }) {
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState(() => {
+    const saved = localStorage.getItem('whatsapp_flows_create_step');
+    return saved ? parseInt(saved, 10) : 1;
+  });
   const [isSaving, setIsSaving] = useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [currentScreenIndex, setCurrentScreenIndex] = useState(0);
-  const [formData, setFormData] = useState({
-    name: '',
-    categories: [],
-    template: 'default'
+  const [formData, setFormData] = useState(() => {
+    const saved = localStorage.getItem('whatsapp_flows_create_data');
+    return saved ? JSON.parse(saved) : {
+      name: '',
+      categories: [],
+      template: 'default'
+    };
   });
+
+  useEffect(() => {
+    localStorage.setItem('whatsapp_flows_create_step', step);
+  }, [step]);
+
+  useEffect(() => {
+    localStorage.setItem('whatsapp_flows_create_data', JSON.stringify(formData));
+  }, [formData]);
+
+  const clearStorage = () => {
+    localStorage.removeItem('whatsapp_flows_create_step');
+    localStorage.removeItem('whatsapp_flows_create_data');
+    localStorage.removeItem('whatsapp_flow_builder_screens');
+    localStorage.removeItem('whatsapp_flow_builder_active_screen');
+  };
+
+  const handleCancel = () => {
+    clearStorage();
+    onCancel();
+  };
 
   // Reset preview state when template changes
   useEffect(() => {
@@ -166,6 +192,9 @@ export default function FlowsCreate({ onCancel, onSave }) {
       alert('Please enter a form name');
       return;
     }
+    // Clear builder storage to ensure fresh start
+    localStorage.removeItem('whatsapp_flow_builder_screens');
+    localStorage.removeItem('whatsapp_flow_builder_active_screen');
     setStep(2);
   };
 
@@ -182,6 +211,7 @@ export default function FlowsCreate({ onCancel, onSave }) {
         }
       };
       await createWhatsappFlow(payload);
+      clearStorage();
       onSave();
     } catch (err) {
       console.error(err);
@@ -275,7 +305,7 @@ export default function FlowsCreate({ onCancel, onSave }) {
       <div className="border-b border-slate-200 px-8 py-4 flex justify-between items-center bg-white">
         <h2 className="text-lg font-semibold text-slate-900">Create WhatsApp Form</h2>
         <div className="flex gap-3">
-          <Button variant="outline" onClick={onCancel}>
+          <Button variant="outline" onClick={handleCancel}>
             Cancel
           </Button>
           <Button className="bg-green-600 hover:bg-green-700 text-white" onClick={handleNext}>
