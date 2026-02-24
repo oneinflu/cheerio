@@ -103,15 +103,15 @@ const TEMPLATE_FLOWS = {
               id: 'screen_1',
               title: 'Get help',
               layout: [
-                  { type: 'Input', label: 'Name' },
-                  { type: 'Input', label: 'Order number' },
-                  { type: 'Label', text: 'Choose a topic', className: 'font-medium mt-4 mb-2 text-slate-900' },
+                  { type: 'Input', placeholder: 'Name', className: 'mb-4' },
+                  { type: 'Input', placeholder: 'Order number', className: 'mb-4' },
+                  { type: 'Label', text: 'Choose a topic', className: 'font-medium text-slate-900 mb-3' },
                   { type: 'Radio', label: 'Orders and payments' },
                   { type: 'Radio', label: 'Maintenance' },
                   { type: 'Radio', label: 'Delivery' },
                   { type: 'Radio', label: 'Returns' },
                   { type: 'Radio', label: 'Other' },
-                  { type: 'Input', label: 'Description of issue (Optional)', multiline: true, className: 'mt-4' }
+                  { type: 'Input', placeholder: 'Description of issue (Optional)', multiline: true, rows: 4, className: 'mt-6' }
               ],
               button: 'Done'
           }
@@ -246,13 +246,13 @@ export default function FlowsCreate({ onCancel, onSave }) {
         );
       case 'Radio':
         return (
-          <label key={idx} className={`flex items-center gap-3 mb-2 cursor-pointer ${cmp.className || ''}`}>
+          <label key={idx} className={`flex items-center justify-between mb-4 cursor-pointer ${cmp.className || ''}`}>
+            <span className="text-sm text-slate-700">{cmp.label}</span>
             <input 
               type="radio" 
               name={`screen_${currentScreenIndex}`} 
               className="w-5 h-5 border-slate-300 text-green-600 focus:ring-green-500" 
             />
-            <span className="text-sm text-slate-700">{cmp.label}</span>
           </label>
         );
       case 'Label':
