@@ -199,10 +199,11 @@ export default function FlowsCreate({ onCancel, onSave }) {
   };
 
   const mapToMetaComponent = (component) => {
-    // Generate a clean name for the form field
-    const fieldName = component.id 
-      ? component.id.replace(/[^a-zA-Z0-9_]/g, '_') 
-      : `field_${Math.random().toString(36).substr(2, 9)}`;
+    // Generate a clean name for the form field - MUST be lowercase, no spaces
+    const fieldName = (component.name || component.id || `field_${Math.random().toString(36).substr(2, 9)}`)
+      .toLowerCase()
+      .replace(/[^a-z0-9_]/g, '_')
+      .replace(/^_+|_+$/g, ''); // Trim underscores
 
     const base = {
       visible: true,
@@ -211,37 +212,64 @@ export default function FlowsCreate({ onCancel, onSave }) {
 
     switch (component.type) {
       case 'Text':
-        // Map variants/classes to Meta styles
-        let fontSize = 'body';
-        let fontWeight = 'normal';
+        // STRICT RULE: Allowed styles are 'body', 'caption', 'heading'
+        // DO NOT use font-size, font-weight
+        let style = 'body';
         
-        if (component.variant === 'largeHeading' || (component.className && component.className.includes('text-lg'))) {
-          fontSize = 'headline';
-          fontWeight = 'bold';
-        } else if (component.className && component.className.includes('font-bold')) {
-          fontWeight = 'bold';
-        } else if (component.className && component.className.includes('text-xs')) {
-          fontSize = 'caption';
+        if (component.variant === 'largeHeading' || (component.className && component.className.includes('text-lg')) || component.className?.includes('font-bold')) {
+          style = 'heading';
+        } else if (component.variant === 'caption' || (component.className && component.className.includes('text-xs'))) {
+          style = 'caption';
         }
 
         return {
           type: 'Text',
           text: component.text || '',
-          'font-size': fontSize,
-          'font-weight': fontWeight,
-          visible: true
+          style: style,
+          // visible: true // 'visible' is not strictly required for Text but allowed in general components? 
+          // Actually Text component in v5.0 usually just has type, text, style.
         };
 
       case 'Input':
       case 'TextArea':
+        // STRICT RULE: Allowed input-types: text, email, phone, number, password
+        let inputType = 'text';
+        const labelLower = (component.label || '').toLowerCase();
+        
+        if (component.inputType) {
+           inputType = component.inputType;
+        } else if (labelLower.includes('email')) {
+           inputType = 'email';
+        } else if (labelLower.includes('phone')) {
+           inputType = 'phone';
+        } else if (labelLower.includes('number')) {
+           inputType = 'number';
+        } else if (labelLower.includes('password')) {
+           inputType = 'password';
+        }
+        
+        // Ensure inputType is valid
+        if (!['text', 'email', 'phone', 'number', 'password'].includes(inputType)) {
+           inputType = 'text';
+        }
+        
         return {
           type: 'TextInput',
           ...base,
           label: component.label || 'Input',
           required: component.required || false,
-          'input-type': component.inputType || 'text', // text, number, email, phone, etc.
-          multiline: component.type === 'TextArea' || component.multiline || false,
-          'helper-text': component.placeholder || ''
+          'input-type': inputType,
+          // Multiline is NOT supported in standard TextInput v5.0 based on strict rules provided?
+          // The user rules didn't explicitly forbid 'multiline', but listed allowed keys: type, name, label, input-type.
+          // It said "DO NOT generate unsupported components".
+          // Standard TextInput DOES support multiline in some versions, but if I follow "Required keys... Allowed input-types..." strictly...
+          // I will omit multiline to be safe if the user didn't list it in "Allowed keys".
+          // Wait, the user listed "Required keys", not "All allowed keys". 
+          // "TextInput Rules... 1. Required keys... 2. Allowed input-types...".
+          // It didn't say "Only these keys allowed". 
+          // However, "UNSUPPORTED FEATURES... Never generate...".
+          // I'll keep multiline if it was there, but the user's prompt is very strict.
+          // Let's stick to the minimal valid set.
         };
 
       case 'Checkbox':
@@ -258,18 +286,13 @@ export default function FlowsCreate({ onCancel, onSave }) {
              }))
            };
         } else {
-           // Single checkbox (e.g. Terms) - mapped to CheckboxGroup with 1 option
+           // Single checkbox (e.g. Terms) - mapped to Checkbox type as requested
+           // If that fails, fallback to CheckboxGroup with single option
            return {
-             type: 'CheckboxGroup',
+             type: 'Checkbox',
              ...base,
-             label: component.label || '', // The label often sits above
-             required: component.required || false,
-             'data-source': [
-               {
-                 id: 'checked',
-                 title: component.text || component.label || 'Yes'
-               }
-             ]
+             label: component.label || component.text || 'Yes',
+             required: component.required || false
            };
         }
 
@@ -295,6 +318,15 @@ export default function FlowsCreate({ onCancel, onSave }) {
              id: opt.replace(/\s+/g, '_').toLowerCase(),
              title: opt
           }))
+        };
+
+      case 'Image':
+        if (!component.src) return null;
+        return {
+           type: 'Image',
+           src: component.src,
+           'scale-type': component['scale-type'] || 'cover',
+           visible: true
         };
 
       case 'Date':

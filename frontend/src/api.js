@@ -197,6 +197,23 @@ export async function uploadMedia(conversationId, file) {
   return res.json();
 }
 
+export async function uploadFlowMedia(file) {
+  const headers = getAuthHeaders(null); // No Content-Type for FormData
+  const formData = new FormData();
+  formData.append('file', file);
+  
+  const res = await fetch('/api/templates/upload-test-media', {
+    method: 'POST',
+    headers,
+    body: formData,
+  });
+  
+  if (!res.ok) {
+     throw new Error('Upload failed');
+  }
+  return res.json();
+}
+
 export async function fetchMediaLibrary(limit = 20) {
   const headers = getAuthHeaders();
   const params = new URLSearchParams();

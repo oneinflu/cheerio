@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
+import { uploadFlowMedia } from '../api';
 
 const COMPONENT_GROUPS = [
   {
@@ -300,6 +301,31 @@ export default function FlowBuilder({ onBack, flowData, onSave, initialScreens }
         ? { ...s, content: s.content.filter(c => c.id !== cmpId) }
         : s
     ));
+  };
+
+  const handleImageUpload = async (e, componentId) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Set uploading state
+    updateComponent(componentId, { uploading: true });
+
+    try {
+      const response = await uploadFlowMedia(file);
+      if (response && response.url) {
+        updateComponent(componentId, { 
+          src: response.url, 
+          uploading: false,
+          'scale-type': 'cover' 
+        });
+      } else {
+        throw new Error('No URL in response');
+      }
+    } catch (err) {
+      console.error("Image upload failed", err);
+      alert("Failed to upload image. Please try again.");
+      updateComponent(componentId, { uploading: false });
+    }
   };
 
   const renderComponentEditor = (cmp, index) => {
@@ -732,14 +758,57 @@ export default function FlowBuilder({ onBack, flowData, onSave, initialScreens }
                            </div>
                          );
                       case 'Image':
-                         return (
-                           <div
-                             key={idx}
-                             className="w-full h-32 border border-dashed border-slate-300 rounded-lg flex items-center justify-center text-[11px] text-slate-400 bg-slate-50"
-                           >
-                             Image
-                           </div>
-                         );
+                        return (
+                          <div key={idx} className="relative w-full">
+                            {c.src ? (
+                              <div className="relative w-full h-40 bg-slate-100 rounded-lg overflow-hidden border border-slate-200 group/image">
+                                <img 
+                                  src={c.src} 
+                                  alt="Flow media" 
+                                  className={`w-full h-full object-${c['scale-type'] || 'cover'}`}
+                                />
+                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/image:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                  <label className="cursor-pointer bg-white text-slate-800 px-3 py-1.5 rounded-full text-xs font-medium hover:bg-slate-50 flex items-center gap-1 shadow-sm">
+                                    <ImageIcon className="w-3 h-3" /> Replace
+                                    <input 
+                                      type="file" 
+                                      className="hidden" 
+                                      accept="image/*"
+                                      onChange={(e) => handleImageUpload(e, c.id)}
+                                    />
+                                  </label>
+                                  <button 
+                                    onClick={(e) => { e.stopPropagation(); updateComponent(c.id, { src: null }); }}
+                                    className="bg-white text-red-600 px-3 py-1.5 rounded-full text-xs font-medium hover:bg-red-50 shadow-sm flex items-center gap-1"
+                                  >
+                                    <Trash2 className="w-3 h-3" /> Remove
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <label className={`w-full h-32 border-2 border-dashed rounded-lg flex flex-col items-center justify-center cursor-pointer transition-all ${c.uploading ? 'bg-slate-50 border-slate-300' : 'bg-slate-50 border-slate-300 hover:border-green-400 hover:bg-green-50'}`}>
+                                {c.uploading ? (
+                                  <div className="flex flex-col items-center gap-2">
+                                    <div className="w-5 h-5 border-2 border-green-500 border-t-transparent rounded-full animate-spin"></div>
+                                    <span className="text-xs text-slate-500">Uploading...</span>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <ImageIcon className="w-6 h-6 text-slate-400 mb-2" />
+                                    <span className="text-xs text-slate-500 font-medium">Click to upload image</span>
+                                    <span className="text-[10px] text-slate-400 mt-1">JPG, PNG up to 5MB</span>
+                                    <input 
+                                      type="file" 
+                                      className="hidden" 
+                                      accept="image/*"
+                                      onChange={(e) => handleImageUpload(e, c.id)}
+                                    />
+                                  </>
+                                )}
+                              </label>
+                            )}
+                          </div>
+                        );
                       default:
                          return null;
                    }
