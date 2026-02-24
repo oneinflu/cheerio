@@ -434,7 +434,7 @@ export default function FlowsCreate({ onCancel, onSave }) {
       const payload = {
         name: formData.name,
         categories: formData.categories,
-        status,
+        publish: status === 'PUBLISHED',
         flow_json: flowJson
       };
       await createWhatsappFlow(payload);
