@@ -1,30 +1,60 @@
 import React, { useState, useRef } from 'react';
 import { 
   ArrowLeft, 
-  Save, 
   Plus, 
   GripVertical, 
   Trash2, 
-  ChevronDown, 
-  ChevronUp, 
-  Smartphone,
-  Copy,
-  MoreVertical,
-  Settings
+  ChevronRight,
+  Type,
+  Image as ImageIcon,
+  MessageCircle,
+  CheckSquare,
+  Calendar
 } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 
-// Component Types Configuration
-const COMPONENT_TYPES = [
-  { type: 'Text', label: 'Text', icon: 'Type' },
-  { type: 'Label', label: 'Label', icon: 'Type' },
-  { type: 'Input', label: 'Short Answer', icon: 'AlignHorizontalLeft' },
-  { type: 'TextArea', label: 'Paragraph', icon: 'AlignLeft' },
-  { type: 'Radio', label: 'Single Choice', icon: 'List' },
-  { type: 'Checkbox', label: 'Multiple Choice', icon: 'CheckSquare' },
-  { type: 'Dropdown', label: 'Dropdown', icon: 'ChevronDown' },
-  { type: 'Date', label: 'Date', icon: 'Calendar' },
+const COMPONENT_GROUPS = [
+  {
+    key: 'text',
+    label: 'Text',
+    icon: Type,
+    items: [
+      { key: 'largeHeading', type: 'Text', variant: 'largeHeading', label: 'Large Heading' },
+      { key: 'smallHeading', type: 'Text', variant: 'smallHeading', label: 'Small Heading' },
+      { key: 'caption', type: 'Text', variant: 'caption', label: 'Caption' },
+      { key: 'body', type: 'Text', variant: 'body', label: 'Body' }
+    ]
+  },
+  {
+    key: 'media',
+    label: 'Media',
+    icon: ImageIcon,
+    items: [
+      { key: 'image', type: 'Image', variant: 'image', label: 'Image' }
+    ]
+  },
+  {
+    key: 'textAnswer',
+    label: 'Text Answer',
+    icon: MessageCircle,
+    items: [
+      { key: 'shortAnswer', type: 'Input', variant: 'shortAnswer', label: 'Short Answer' },
+      { key: 'paragraph', type: 'TextArea', variant: 'paragraph', label: 'Paragraph' },
+      { key: 'datePicker', type: 'Date', variant: 'datePicker', label: 'Date picker' }
+    ]
+  },
+  {
+    key: 'selection',
+    label: 'Selection',
+    icon: CheckSquare,
+    items: [
+      { key: 'singleChoice', type: 'Radio', variant: 'singleChoice', label: 'Single Choice' },
+      { key: 'multipleChoice', type: 'Checkbox', variant: 'multipleChoice', label: 'Multiple Choice' },
+      { key: 'dropdown', type: 'Dropdown', variant: 'dropdown', label: 'Dropdown' },
+      { key: 'optIn', type: 'Checkbox', variant: 'optIn', label: 'Opt-in' }
+    ]
+  }
 ];
 
 export default function FlowBuilder({ onBack, flowData, onSave, initialScreens }) {
@@ -109,14 +139,81 @@ export default function FlowBuilder({ onBack, flowData, onSave, initialScreens }
     setScreens(screens.map(s => s.id === activeScreenId ? { ...s, title } : s));
   };
 
-  const addComponent = (type) => {
-    const newComponent = {
-      id: `cmp_${Date.now()}`,
+  const addComponent = (config) => {
+    const id = `cmp_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const { type, variant, label } = config;
+    const base = {
+      id,
       type,
-      label: type === 'Text' ? 'Body text' : type,
-      placeholder: '',
+      variant,
       required: false
     };
+
+    let newComponent;
+
+    if (type === 'Text') {
+      let className = 'text-sm text-slate-700';
+      if (variant === 'largeHeading') className = 'text-lg font-semibold text-slate-900';
+      else if (variant === 'smallHeading') className = 'text-sm font-semibold text-slate-900';
+      else if (variant === 'caption') className = 'text-xs text-slate-500';
+      newComponent = {
+        ...base,
+        text: label,
+        className
+      };
+    } else if (type === 'Label') {
+      newComponent = {
+        ...base,
+        text: label,
+        className: 'text-sm font-medium text-slate-900'
+      };
+    } else if (type === 'Input') {
+      newComponent = {
+        ...base,
+        label: label || 'Short answer',
+        placeholder: '',
+      };
+    } else if (type === 'TextArea') {
+      newComponent = {
+        ...base,
+        label: label || 'Paragraph',
+        placeholder: '',
+        rows: 3
+      };
+    } else if (type === 'Radio' || type === 'Checkbox' || type === 'Dropdown') {
+      const defaultLabel =
+        variant === 'singleChoice' ? 'Single Choice' :
+        variant === 'multipleChoice' ? 'Multiple Choice' :
+        variant === 'dropdown' ? 'Dropdown' :
+        variant === 'optIn' ? 'Opt-in' :
+        label;
+      const defaultOptions =
+        variant === 'optIn'
+          ? ['I agree to receive updates']
+          : ['Option 1', 'Option 2'];
+
+      newComponent = {
+        ...base,
+        label: defaultLabel,
+        options: defaultOptions
+      };
+    } else if (type === 'Date') {
+      newComponent = {
+        ...base,
+        label: 'Date picker'
+      };
+    } else if (type === 'Image') {
+      newComponent = {
+        ...base,
+        label: 'Image'
+      };
+    } else {
+      newComponent = {
+        ...base,
+        label: label || type
+      };
+    }
+
     setScreens(screens.map(s => 
       s.id === activeScreenId 
         ? { ...s, content: [...s.content, newComponent] }
@@ -141,6 +238,27 @@ export default function FlowBuilder({ onBack, flowData, onSave, initialScreens }
   };
 
   const renderComponentEditor = (cmp, index) => {
+    const variant = cmp.variant;
+    const displayType =
+      variant === 'largeHeading' ? 'Large Heading' :
+      variant === 'smallHeading' ? 'Small Heading' :
+      variant === 'caption' ? 'Caption' :
+      variant === 'body' ? 'Body' :
+      variant === 'shortAnswer' ? 'Short Answer' :
+      variant === 'paragraph' ? 'Paragraph' :
+      variant === 'datePicker' ? 'Date picker' :
+      variant === 'singleChoice' ? 'Single Choice' :
+      variant === 'multipleChoice' ? 'Multiple Choice' :
+      variant === 'dropdown' ? 'Dropdown' :
+      variant === 'optIn' ? 'Opt-in' :
+      cmp.type === 'Image' ? 'Image' :
+      cmp.type === 'Input' ? 'Short Answer' :
+      cmp.type === 'TextArea' ? 'Paragraph' :
+      cmp.type === 'Radio' ? 'Single Choice' :
+      cmp.type === 'Checkbox' ? 'Multiple Choice' :
+      cmp.type === 'Text' ? 'Text' :
+      cmp.type;
+
     return (
       <div 
         key={cmp.id}
@@ -159,12 +277,8 @@ export default function FlowBuilder({ onBack, flowData, onSave, initialScreens }
               <GripVertical className="w-5 h-5" />
             </div>
             <span className="font-semibold text-slate-700 text-sm flex items-center gap-2">
-               {cmp.type === 'Input' && 'Short Answer'}
-               {cmp.type === 'TextArea' && 'Paragraph'}
-               {cmp.type === 'Radio' && 'Single Choice'}
-               {cmp.type === 'Checkbox' && 'Multiple Choice'}
-               {cmp.type === 'Text' && 'Text'}
-               <span className="text-xs font-normal text-slate-400">• {cmp.label}</span>
+               {displayType}
+               <span className="text-xs font-normal text-slate-400">• {(cmp.label || cmp.text || '').toString().slice(0, 30)}</span>
             </span>
           </div>
           <button 
@@ -257,7 +371,7 @@ export default function FlowBuilder({ onBack, flowData, onSave, initialScreens }
           )}
 
           {/* Required Toggle */}
-          {cmp.type !== 'Text' && (
+          {cmp.type !== 'Text' && cmp.type !== 'Label' && cmp.type !== 'Image' && (
              <div className="flex items-center justify-between pt-2 border-t border-slate-100">
                 <span className="text-xs font-medium text-slate-700">Required</span>
                 <button 
@@ -343,17 +457,31 @@ export default function FlowBuilder({ onBack, flowData, onSave, initialScreens }
                    <Button size="sm" variant="outline" className="text-xs h-8 gap-2">
                       <Plus className="w-3 h-3" /> Add content
                    </Button>
-                   <div className="absolute right-0 top-full mt-1 w-48 bg-white border border-slate-200 rounded-lg shadow-xl py-1 hidden group-hover:block z-50">
-                      {COMPONENT_TYPES.map(type => (
-                         <button 
-                            key={type.type}
-                            onClick={() => addComponent(type.type)}
-                            className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                   <div className="absolute right-0 top-full mt-1 w-52 bg-white border border-slate-200 rounded-lg shadow-xl py-1 hidden group-hover:block z-50">
+                     {COMPONENT_GROUPS.map(group => (
+                       <div key={group.key} className="relative group/item">
+                         <button
+                           className="w-full px-4 py-2 text-xs text-slate-700 hover:bg-slate-50 flex items-center justify-between gap-2"
                          >
-                            {/* Icon placeholder - could map actual icons here */}
-                            <span>{type.label}</span>
+                           <span className="flex items-center gap-2">
+                             <group.icon className="w-4 h-4 text-slate-500" />
+                             <span>{group.label}</span>
+                           </span>
+                           <ChevronRight className="w-3 h-3 text-slate-400" />
                          </button>
-                      ))}
+                         <div className="absolute left-full top-0 ml-1 w-48 bg-white border border-slate-200 rounded-lg shadow-xl py-1 hidden group-hover/item:block z-50">
+                           {group.items.map(item => (
+                             <button
+                               key={item.key}
+                               onClick={() => addComponent(item)}
+                               className="w-full px-4 py-2 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                             >
+                               <span>{item.label}</span>
+                             </button>
+                           ))}
+                         </div>
+                       </div>
+                     ))}
                    </div>
                 </div>
              </div>
@@ -462,6 +590,17 @@ export default function FlowBuilder({ onBack, flowData, onSave, initialScreens }
                               )}
                            </div>
                          );
+                      case 'Date':
+                         return (
+                           <div key={idx} className="space-y-1">
+                             {cmp.label && <div className="text-sm text-slate-600 font-medium">{cmp.label}</div>}
+                             <input
+                               type="date"
+                               className="w-full h-10 px-3 border border-slate-300 rounded-md bg-white text-slate-900 text-sm"
+                               readOnly
+                             />
+                           </div>
+                         );
                       case 'Checkbox':
                          return (
                            <div key={idx}>
@@ -474,6 +613,20 @@ export default function FlowBuilder({ onBack, flowData, onSave, initialScreens }
                               ))}
                            </div>
                          );
+                      case 'Dropdown':
+                         return (
+                           <div key={idx} className="space-y-1">
+                             {cmp.label && <div className="text-sm text-slate-600 font-medium mb-2">{cmp.label}</div>}
+                             <select
+                               className="w-full h-10 px-3 border border-slate-300 rounded-md bg-white text-slate-900 text-sm"
+                               disabled
+                             >
+                               {(cmp.options || ['Option 1', 'Option 2']).map((opt, i) => (
+                                 <option key={i}>{opt}</option>
+                               ))}
+                             </select>
+                           </div>
+                         );
                       case 'Radio':
                          return (
                            <div key={idx}>
@@ -484,6 +637,15 @@ export default function FlowBuilder({ onBack, flowData, onSave, initialScreens }
                                     <div className="w-5 h-5 border border-slate-300 rounded-full"></div>
                                  </label>
                               ))}
+                           </div>
+                         );
+                      case 'Image':
+                         return (
+                           <div
+                             key={idx}
+                             className="w-full h-32 border border-dashed border-slate-300 rounded-lg flex items-center justify-center text-[11px] text-slate-400 bg-slate-50"
+                           >
+                             Image
                            </div>
                          );
                       default:
