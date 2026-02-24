@@ -1,8 +1,7 @@
-import React, { useState } from 'react';
-import { ArrowLeft, Smartphone } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Smartphone, X } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
-import { Card } from './ui/Card';
 import FlowBuilder from './FlowBuilder';
 import { createWhatsappFlow } from '../api';
 
@@ -23,38 +22,144 @@ const TEMPLATES = [
   { id: 'support', label: 'Customer support', description: 'Help customers resolve issues' },
 ];
 
-const TEMPLATE_PREVIEWS = {
+const TEMPLATE_FLOWS = {
   default: {
-    title: 'This is a sample form',
-    type: 'default',
+    screens: [
+      {
+        id: 'screen_1',
+        title: 'This is a sample form',
+        layout: [
+          { type: 'Text', text: 'This is a sample lead-gen form!', className: 'font-bold text-lg mb-4 text-slate-900' },
+          { type: 'Input', label: 'Your Name', placeholder: 'Enter your name' },
+          { type: 'Input', label: 'Appointment Time', placeholder: 'Select time' },
+          { type: 'Text', text: 'Select any time between 9 am to 6 pm.', className: 'text-xs text-slate-500 mb-4' },
+          { type: 'Label', text: 'Interested Services', className: 'font-medium mb-2 text-slate-900' },
+          { type: 'Checkbox', label: 'Service 1' },
+          { type: 'Checkbox', label: 'Service 2' },
+          { type: 'Checkbox', label: 'Service 3' },
+          { type: 'Checkbox', label: 'Send reminders for appointment?', className: 'mt-4' },
+        ],
+        button: 'Continue'
+      }
+    ]
   },
   purchase: {
-    title: 'Join Now',
-    type: 'purchase',
-  },
-  feedback: {
-    title: 'This is a sample form',
-    type: 'feedback',
+    screens: [
+      {
+        id: 'screen_1',
+        title: 'Join Now',
+        layout: [
+          { type: 'Text', text: 'Get early access to our Mega Sales Day deals. Register now!', className: 'font-bold text-lg mb-4 text-slate-900' },
+          { type: 'Input', label: 'Name' },
+          { type: 'Input', label: 'Email' },
+          { type: 'Checkbox', label: 'I agree to the terms. Read more', className: 'mt-2' },
+          { type: 'Checkbox', label: '(optional) Keep me up to date about offers and promotions' },
+        ],
+        button: 'Continue'
+      }
+    ]
   },
   survey: {
-    title: 'Question 1 of 3',
-    type: 'survey',
+    screens: [
+      {
+        id: 'screen_1',
+        title: 'Question 1 of 3',
+        layout: [
+          { type: 'Text', text: "You've found the perfect deal, what do you do next?", className: 'font-bold text-lg mb-4 text-slate-900' },
+          { type: 'Label', text: 'Choose all that apply:', className: 'text-sm text-slate-600 mb-2' },
+          { type: 'Checkbox', label: 'Buy it right away' },
+          { type: 'Checkbox', label: 'Check reviews before buying' },
+          { type: 'Checkbox', label: 'Share it with friends + family' },
+          { type: 'Checkbox', label: 'Buy multiple, while its cheap' },
+          { type: 'Checkbox', label: 'None of the above' },
+        ],
+        button: 'Continue'
+      },
+      {
+        id: 'screen_2',
+        title: 'Question 2 of 3',
+        layout: [
+            { type: 'Text', text: "How often do you shop online?", className: 'font-bold text-lg mb-4 text-slate-900' },
+            { type: 'Radio', label: 'Weekly' },
+            { type: 'Radio', label: 'Monthly' },
+            { type: 'Radio', label: 'Rarely' },
+        ],
+        button: 'Continue'
+      },
+      {
+         id: 'screen_3',
+         title: 'Question 3 of 3',
+         layout: [
+             { type: 'Text', text: "Thank you for your time!", className: 'font-bold text-lg mb-4 text-slate-900' },
+             { type: 'Text', text: "We appreciate your feedback.", className: 'text-sm text-slate-600' }
+         ],
+         button: 'Submit'
+      }
+    ]
   },
   support: {
-    title: 'Get help',
-    type: 'support',
+      screens: [
+          {
+              id: 'screen_1',
+              title: 'Get help',
+              layout: [
+                  { type: 'Input', label: 'Name' },
+                  { type: 'Input', label: 'Order number' },
+                  { type: 'Label', text: 'Choose a topic', className: 'font-medium mt-4 mb-2 text-slate-900' },
+                  { type: 'Radio', label: 'Orders and payments' },
+                  { type: 'Radio', label: 'Maintenance' },
+                  { type: 'Radio', label: 'Delivery' },
+                  { type: 'Radio', label: 'Returns' },
+                  { type: 'Radio', label: 'Other' },
+                  { type: 'Input', label: 'Description of issue (Optional)', multiline: true, className: 'mt-4' }
+              ],
+              button: 'Done'
+          }
+      ]
   },
+  feedback: {
+      screens: [
+          {
+              id: 'screen_1',
+              title: 'Feedback 1 of 2',
+              layout: [
+                  { type: 'Text', text: 'Would you recommend us to a friend?', className: 'font-bold text-lg mb-4 text-slate-900' },
+                  { type: 'Label', text: 'Choose one', className: 'text-sm text-slate-600 mb-2' },
+                  { type: 'Radio', label: 'Yes' },
+                  { type: 'Radio', label: 'No' },
+                  { type: 'Label', text: 'How could we do better?', className: 'font-bold mt-6 mb-2 text-slate-900' },
+                  { type: 'Input', placeholder: 'Leave a comment (Optional)', multiline: true, rows: 4 }
+              ],
+              button: 'Continue'
+          },
+           {
+              id: 'screen_2',
+              title: 'Feedback 2 of 2',
+              layout: [
+                  { type: 'Text', text: 'Thank you for your feedback!', className: 'font-bold text-lg mb-4 text-slate-900' }
+              ],
+              button: 'Submit'
+          }
+      ]
+  }
 };
 
 export default function FlowsCreate({ onCancel, onSave }) {
   const [step, setStep] = useState(1);
   const [isSaving, setIsSaving] = useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [currentScreenIndex, setCurrentScreenIndex] = useState(0);
   const [formData, setFormData] = useState({
     name: '',
     categories: [],
     template: 'default'
   });
+
+  // Reset preview state when template changes
+  useEffect(() => {
+    setIsPreviewOpen(false);
+    setCurrentScreenIndex(0);
+  }, [formData.template]);
 
   const handleNext = () => {
     if (!formData.name) {
@@ -96,138 +201,65 @@ export default function FlowsCreate({ onCancel, onSave }) {
     );
   }
 
-  const previewMeta = TEMPLATE_PREVIEWS[formData.template] || TEMPLATE_PREVIEWS.default;
+  const currentFlow = TEMPLATE_FLOWS[formData.template] || TEMPLATE_FLOWS.default;
+  const currentScreen = currentFlow.screens[currentScreenIndex];
+  const totalScreens = currentFlow.screens.length;
 
-  const renderPreviewContent = () => {
-    const type = previewMeta.type;
-    if (type === 'purchase') {
-      return (
-        <div className="p-3 text-[11px] text-slate-900 space-y-3">
-          <div className="text-[12px] font-semibold leading-snug">
-            Get early access to our Mega Sales Day deals. Register now!
-          </div>
-          <div className="space-y-2 mt-2">
-            <div className="space-y-1">
-              <div className="text-[10px] text-slate-600">Name</div>
-              <div className="h-7 rounded border border-slate-200 bg-slate-50" />
-            </div>
-            <div className="space-y-1">
-              <div className="text-[10px] text-slate-600">Email</div>
-              <div className="h-7 rounded border border-slate-200 bg-slate-50" />
-            </div>
-          </div>
-          <div className="space-y-1 mt-1">
-            <label className="flex items-start gap-2 text-[10px] text-slate-700">
-              <input type="checkbox" className="mt-0.5 w-3 h-3 border-slate-300" />
-              <span>
-                I agree to the terms. <span className="text-green-700">Read now</span>
-              </span>
-            </label>
-            <label className="flex items-start gap-2 text-[10px] text-slate-700">
-              <input type="checkbox" className="mt-0.5 w-3 h-3 border-slate-300" />
-              <span>[Optional] Keep me up to date about offers and promotions</span>
-            </label>
-          </div>
-          <button className="w-full mt-3 h-7 rounded-full bg-green-600 text-white text-[11px] font-medium">
-            Continue
-          </button>
-        </div>
-      );
+  const handlePreviewAction = () => {
+    if (currentScreenIndex < totalScreens - 1) {
+      setCurrentScreenIndex(currentScreenIndex + 1);
+    } else {
+      setIsPreviewOpen(false);
+      setTimeout(() => setCurrentScreenIndex(0), 300); // Reset after closing animation
     }
-    if (type === 'survey') {
-      return (
-        <div className="p-3 text-[11px] text-slate-900 space-y-3">
-          <div className="text-[10px] text-slate-500">Question 1 of 3</div>
-          <div className="text-[12px] font-semibold leading-snug">
-            You’ve found the perfect deal, what do you do next?
+  };
+
+  const renderComponent = (cmp, idx) => {
+    switch (cmp.type) {
+      case 'Text':
+        return <div key={idx} className={cmp.className}>{cmp.text}</div>;
+      case 'Input':
+        return (
+          <div key={idx} className={`space-y-1 mb-3 ${cmp.className || ''}`}>
+            {cmp.label && <div className="text-sm text-slate-600 font-medium">{cmp.label}</div>}
+            {cmp.multiline ? (
+               <textarea 
+                 className="w-full p-2 border border-slate-300 rounded-md text-sm bg-white focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none resize-none"
+                 rows={cmp.rows || 3}
+                 placeholder={cmp.placeholder}
+               />
+            ) : (
+              <input 
+                type="text"
+                className="w-full h-10 px-3 border border-slate-300 rounded-md bg-white text-slate-900 text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none"
+                placeholder={cmp.placeholder || ''}
+              />
+            )}
           </div>
-          <div className="text-[10px] text-slate-600 mt-1">Choose all that apply:</div>
-          <div className="mt-2 space-y-1">
-            {[
-              'Buy it right away',
-              'Check reviews before buying',
-              'Share it with friends + family',
-              'Buy multiple, while it’s cheap',
-              'None of the above',
-            ].map(option => (
-              <label key={option} className="flex items-center gap-2 text-[10px] text-slate-800">
-                <input type="checkbox" className="w-3 h-3 border-slate-300" />
-                <span>{option}</span>
-              </label>
-            ))}
-          </div>
-          <button className="w-full mt-3 h-7 rounded-full bg-green-600 text-white text-[11px] font-medium">
-            Continue
-          </button>
-        </div>
-      );
+        );
+      case 'Checkbox':
+        return (
+          <label key={idx} className={`flex items-start gap-3 mb-2 cursor-pointer ${cmp.className || ''}`}>
+            <input type="checkbox" className="w-5 h-5 border-slate-300 rounded text-green-600 focus:ring-green-500 mt-0.5" />
+            <span className="text-sm text-slate-700">{cmp.label}</span>
+          </label>
+        );
+      case 'Radio':
+        return (
+          <label key={idx} className={`flex items-center gap-3 mb-2 cursor-pointer ${cmp.className || ''}`}>
+            <input 
+              type="radio" 
+              name={`screen_${currentScreenIndex}`} 
+              className="w-5 h-5 border-slate-300 text-green-600 focus:ring-green-500" 
+            />
+            <span className="text-sm text-slate-700">{cmp.label}</span>
+          </label>
+        );
+      case 'Label':
+        return <div key={idx} className={cmp.className}>{cmp.text}</div>;
+      default:
+        return null;
     }
-    if (type === 'support') {
-      return (
-        <div className="p-3 text-[11px] text-slate-900 space-y-3">
-          <div className="text-[12px] font-semibold leading-snug mb-1">Get help</div>
-          <div className="space-y-2">
-            <div className="space-y-1">
-              <div className="text-[10px] text-slate-600">Name</div>
-              <div className="h-7 rounded border border-slate-200 bg-slate-50" />
-            </div>
-            <div className="space-y-1">
-              <div className="text-[10px] text-slate-600">Order number</div>
-              <div className="h-7 rounded border border-slate-200 bg-slate-50" />
-            </div>
-          </div>
-          <div className="mt-2 space-y-1">
-            <div className="text-[10px] text-slate-600 mb-1">Choose a topic</div>
-            {['Orders and payments', 'Maintenance', 'Delivery', 'Returns', 'Other'].map(topic => (
-              <label key={topic} className="flex items-center justify-between text-[10px] text-slate-800">
-                <span>{topic}</span>
-                <span className="w-2 h-2 rounded-full border border-slate-300" />
-              </label>
-            ))}
-          </div>
-          <div className="mt-2 space-y-1">
-            <div className="text-[10px] text-slate-600">Description of issue (Optional)</div>
-            <div className="h-14 rounded border border-slate-200 bg-slate-50" />
-          </div>
-          <button className="w-full mt-3 h-7 rounded-full bg-green-600 text-white text-[11px] font-medium">
-            Done
-          </button>
-        </div>
-      );
-    }
-    return (
-      <div className="p-3 text-[11px] text-slate-900 space-y-3">
-        <div className="text-[12px] font-semibold leading-snug">
-          This is a sample lead-gen form!
-        </div>
-        <div className="space-y-2 mt-2">
-          <div className="space-y-1">
-            <div className="text-[10px] text-slate-600">Your Name</div>
-            <div className="h-7 rounded border border-slate-200 bg-slate-50" />
-          </div>
-          <div className="space-y-1">
-            <div className="text-[10px] text-slate-600">Appointment Time</div>
-            <div className="h-7 rounded border border-slate-200 bg-slate-50" />
-          </div>
-        </div>
-        <div className="mt-2 space-y-1">
-          <div className="text-[10px] text-slate-600">Interested Services</div>
-          {['Service 1', 'Service 2', 'Service 3'].map(service => (
-            <label key={service} className="flex items-center gap-2 text-[10px] text-slate-800">
-              <input type="checkbox" className="w-3 h-3 border-slate-300" />
-              <span>{service}</span>
-            </label>
-          ))}
-        </div>
-        <label className="mt-1 flex items-center gap-2 text-[10px] text-slate-800">
-          <input type="checkbox" className="w-3 h-3 border-slate-300" />
-          <span>Send reminders for appointment?</span>
-        </label>
-        <button className="w-full mt-3 h-7 rounded-full bg-green-600 text-white text-[11px] font-medium">
-          Continue
-        </button>
-      </div>
-    );
   };
 
   return (
@@ -319,40 +351,91 @@ export default function FlowsCreate({ onCancel, onSave }) {
         </div>
 
         {/* Right Preview Area */}
-        <div className="w-[400px] bg-slate-50 p-8 flex flex-col">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="font-medium text-slate-700">Preview</h3>
-            <select
-              className="text-xs border-none bg-transparent font-medium text-slate-600 focus:ring-0 cursor-pointer"
-              defaultValue={previewMeta.title}
-            >
-              <option>{previewMeta.title}</option>
-            </select>
-          </div>
+        <div className="w-[450px] bg-slate-50 p-8 flex flex-col items-center justify-center">
+          <div className="mb-4 text-sm font-medium text-slate-500">Preview</div>
+          
+          {/* Phone Mockup */}
+          <div className="w-[320px] h-[640px] bg-white rounded-[3rem] border-8 border-slate-800 shadow-2xl relative overflow-hidden flex flex-col">
+            {/* Status Bar */}
+            <div className="h-6 bg-slate-800 w-full absolute top-0 z-10 flex justify-center">
+                <div className="h-4 w-32 bg-black rounded-b-xl"></div>
+            </div>
 
-          <div className="flex-1 flex items-center justify-center">
-            <div className="w-[300px] h-[600px] bg-white rounded-[2.5rem] border-8 border-slate-200 shadow-xl relative overflow-hidden flex flex-col">
-              <div className="h-14 bg-white border-b border-slate-100 flex items-center px-4 pt-4">
-                <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-green-600">
-                  <Smartphone className="w-4 h-4" />
+            {/* App Header (WhatsApp Style) */}
+            <div className="mt-6 bg-[#075E54] text-white px-4 py-3 flex items-center gap-3 shadow-md z-0">
+                <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+                    <Smartphone className="w-4 h-4 text-white" />
                 </div>
-                <div className="ml-3 h-2 w-24 bg-slate-200 rounded-full" />
-              </div>
-              <div className="flex-1 bg-[#efeae2] p-4 flex flex-col justify-center items-center relative">
-                <div className="bg-white rounded-lg shadow-sm max-w-[80%] w-full mb-4">
-                  {isPreviewOpen ? (
-                    renderPreviewContent()
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setIsPreviewOpen(true)}
-                      className="w-full px-3 py-2 text-xs font-medium text-green-700 bg-green-50 hover:bg-green-100 rounded-md"
+                <div className="flex-1">
+                    <div className="text-sm font-semibold">Business Name</div>
+                    <div className="text-[10px] opacity-80">Official Business Account</div>
+                </div>
+            </div>
+
+            {/* Chat Area */}
+            <div className="flex-1 bg-[#EFEAE2] p-4 relative overflow-hidden">
+                {/* Chat Background Pattern (CSS Pattern could go here, keeping simple for now) */}
+                
+                {/* Business Message Bubble */}
+                <div className="bg-white rounded-lg p-2 shadow-sm max-w-[85%] mb-4 relative">
+                    <div className="h-2 w-32 bg-slate-100 rounded mb-2"></div>
+                    <div className="h-2 w-24 bg-slate-100 rounded mb-3"></div>
+                    
+                    {/* CTA Button */}
+                    <button 
+                        onClick={() => setIsPreviewOpen(true)}
+                        className="w-full py-2 px-4 flex items-center justify-center gap-2 text-blue-500 font-medium text-sm border-t border-slate-100 mt-1 hover:bg-slate-50 transition-colors"
                     >
-                      Open preview
+                        <Smartphone className="w-4 h-4" />
+                        Preview Flow
                     </button>
-                  )}
+                    
+                    {/* Time */}
+                    <div className="text-[9px] text-slate-400 text-right mt-1">10:30 AM</div>
                 </div>
-              </div>
+
+                {/* Flow Modal Overlay */}
+                {isPreviewOpen && (
+                    <div className="absolute inset-0 bg-black/30 z-20 flex items-end animate-in fade-in duration-200">
+                        <div className="w-full bg-white rounded-t-2xl h-[90%] flex flex-col shadow-2xl animate-in slide-in-from-bottom duration-300">
+                            {/* Modal Header */}
+                            <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+                                <button onClick={() => setIsPreviewOpen(false)} className="text-slate-500 hover:text-slate-800">
+                                    <X className="w-5 h-5" />
+                                </button>
+                                <div className="font-semibold text-slate-800 text-sm">{currentScreen.title}</div>
+                                <div className="w-5"></div> {/* Spacer for alignment */}
+                            </div>
+
+                            {/* Progress Bar */}
+                            <div className="flex gap-1 px-4 py-2">
+                                {Array.from({ length: totalScreens }).map((_, idx) => (
+                                    <div 
+                                        key={idx}
+                                        className={`h-1 flex-1 rounded-full ${
+                                            idx <= currentScreenIndex ? 'bg-green-600' : 'bg-slate-200'
+                                        }`}
+                                    />
+                                ))}
+                            </div>
+
+                            {/* Screen Content */}
+                            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                                {currentScreen.layout.map((cmp, idx) => renderComponent(cmp, idx))}
+                            </div>
+
+                            {/* Footer Button */}
+                            <div className="p-4 border-t border-slate-100">
+                                <button 
+                                    onClick={handlePreviewAction}
+                                    className="w-full py-2.5 bg-green-600 hover:bg-green-700 text-white font-medium rounded-full text-sm transition-colors shadow-sm"
+                                >
+                                    {currentScreen.button}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
           </div>
         </div>
