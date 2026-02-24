@@ -296,11 +296,27 @@ export default function FlowsCreate({ onCancel, onSave }) {
         } else {
            // Single checkbox (e.g. Terms) - mapped to Checkbox type as requested
            // If that fails, fallback to CheckboxGroup with single option
+           
+           // Clean field name for terms/privacy
+           let singleName = base.name;
+           if (component.label && (component.label.toLowerCase().includes('term') || component.label.toLowerCase().includes('privacy'))) {
+              singleName = 'terms';
+           } else if (component.label && (component.label.toLowerCase().includes('promo') || component.label.toLowerCase().includes('offer'))) {
+              singleName = 'promotions';
+           }
+
+           // Check if it's a "Read more" link case and sanitize
+           let labelText = component.label || component.text || 'Yes';
+           if (labelText.includes('Read more')) {
+              labelText = labelText.replace('Read more', 'and privacy policy');
+           }
+
            return {
              type: 'Checkbox',
-             ...base,
-             label: component.label || component.text || 'Yes',
-             required: component.required || false
+             name: singleName,
+             visible: true,
+             label: labelText,
+             required: component.required !== undefined ? component.required : true // Default to true for single checkboxes (usually consents)
            };
         }
 
