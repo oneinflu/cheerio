@@ -6,10 +6,11 @@ import {
   Trash2, 
   ChevronRight,
   Type,
-  Image as ImageIcon,
+  Image as LucideImage,
   MessageCircle,
   CheckSquare,
-  Calendar
+  Calendar,
+  X
 } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
@@ -30,7 +31,7 @@ const COMPONENT_GROUPS = [
   {
     key: 'media',
     label: 'Media',
-    icon: ImageIcon,
+    icon: LucideImage,
     items: [
       { key: 'image', type: 'Image', variant: 'image', label: 'Image' }
     ]
@@ -760,25 +761,25 @@ export default function FlowBuilder({ onBack, flowData, onSave, initialScreens }
                       case 'Image':
                         return (
                           <div key={idx} className="relative w-full">
-                            {c.src ? (
+                            {cmp.src ? (
                               <div className="relative w-full h-40 bg-slate-100 rounded-lg overflow-hidden border border-slate-200 group/image">
                                 <img 
-                                  src={c.src} 
+                                  src={cmp.src} 
                                   alt="Flow media" 
-                                  className={`w-full h-full object-${c['scale-type'] || 'cover'}`}
+                                  className={`w-full h-full object-${cmp['scale-type'] || 'cover'}`}
                                 />
                                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/image:opacity-100 transition-opacity flex items-center justify-center gap-2">
                                   <label className="cursor-pointer bg-white text-slate-800 px-3 py-1.5 rounded-full text-xs font-medium hover:bg-slate-50 flex items-center gap-1 shadow-sm">
-                                    <ImageIcon className="w-3 h-3" /> Replace
+                                    <LucideImage className="w-3 h-3" /> Replace
                                     <input 
                                       type="file" 
                                       className="hidden" 
                                       accept="image/*"
-                                      onChange={(e) => handleImageUpload(e, c.id)}
+                                      onChange={(e) => handleImageUpload(e, cmp.id)}
                                     />
                                   </label>
                                   <button 
-                                    onClick={(e) => { e.stopPropagation(); updateComponent(c.id, { src: null }); }}
+                                    onClick={(e) => { e.stopPropagation(); updateComponent(cmp.id, { src: null }); }}
                                     className="bg-white text-red-600 px-3 py-1.5 rounded-full text-xs font-medium hover:bg-red-50 shadow-sm flex items-center gap-1"
                                   >
                                     <Trash2 className="w-3 h-3" /> Remove
@@ -786,22 +787,22 @@ export default function FlowBuilder({ onBack, flowData, onSave, initialScreens }
                                 </div>
                               </div>
                             ) : (
-                              <label className={`w-full h-32 border-2 border-dashed rounded-lg flex flex-col items-center justify-center cursor-pointer transition-all ${c.uploading ? 'bg-slate-50 border-slate-300' : 'bg-slate-50 border-slate-300 hover:border-green-400 hover:bg-green-50'}`}>
-                                {c.uploading ? (
+                              <label className={`w-full h-32 border-2 border-dashed rounded-lg flex flex-col items-center justify-center cursor-pointer transition-all ${cmp.uploading ? 'bg-slate-50 border-slate-300' : 'bg-slate-50 border-slate-300 hover:border-green-400 hover:bg-green-50'}`}>
+                                {cmp.uploading ? (
                                   <div className="flex flex-col items-center gap-2">
                                     <div className="w-5 h-5 border-2 border-green-500 border-t-transparent rounded-full animate-spin"></div>
                                     <span className="text-xs text-slate-500">Uploading...</span>
                                   </div>
                                 ) : (
                                   <>
-                                    <ImageIcon className="w-6 h-6 text-slate-400 mb-2" />
+                                    <LucideImage className="w-6 h-6 text-slate-400 mb-2" />
                                     <span className="text-xs text-slate-500 font-medium">Click to upload image</span>
                                     <span className="text-[10px] text-slate-400 mt-1">JPG, PNG up to 5MB</span>
                                     <input 
                                       type="file" 
                                       className="hidden" 
                                       accept="image/*"
-                                      onChange={(e) => handleImageUpload(e, c.id)}
+                                      onChange={(e) => handleImageUpload(e, cmp.id)}
                                     />
                                   </>
                                 )}
@@ -828,10 +829,4 @@ export default function FlowBuilder({ onBack, flowData, onSave, initialScreens }
   );
 }
 
-function X({ className }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-    </svg>
-  );
-}
+
