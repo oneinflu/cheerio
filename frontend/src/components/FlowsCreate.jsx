@@ -192,10 +192,17 @@ export default function FlowsCreate({ onCancel, onSave }) {
   };
 
   if (step === 2) {
+    const selectedTemplate = TEMPLATE_FLOWS[formData.template] || TEMPLATE_FLOWS.default;
+    const initialScreens = selectedTemplate.screens.map(s => ({
+        ...s,
+        content: s.layout.map((c, i) => ({ ...c, id: `c_${i}_${Date.now()}` }))
+    }));
+
     return (
       <FlowBuilder 
         onBack={() => setStep(1)}
         flowData={formData}
+        initialScreens={initialScreens}
         onSave={handleSaveFlow}
       />
     );
