@@ -199,9 +199,14 @@ export default function FlowsCreate({ onCancel, onSave }) {
   };
 
   const mapToMetaComponent = (component) => {
+    // Generate a clean name for the form field
+    const fieldName = component.id 
+      ? component.id.replace(/[^a-zA-Z0-9_]/g, '_') 
+      : `field_${Math.random().toString(36).substr(2, 9)}`;
+
     const base = {
       visible: true,
-      name: component.id || `cmp_${Math.random().toString(36).substr(2, 9)}`,
+      name: fieldName,
     };
 
     switch (component.type) {
@@ -234,7 +239,7 @@ export default function FlowsCreate({ onCancel, onSave }) {
           ...base,
           label: component.label || 'Input',
           required: component.required || false,
-          'input-type': component.inputType || 'text',
+          'input-type': component.inputType || 'text', // text, number, email, phone, etc.
           multiline: component.type === 'TextArea' || component.multiline || false,
           'helper-text': component.placeholder || ''
         };
@@ -247,9 +252,9 @@ export default function FlowsCreate({ onCancel, onSave }) {
              ...base,
              label: component.label || 'Select options',
              required: component.required || false,
-             options: component.options.map(opt => ({
+             'data-source': component.options.map(opt => ({
                id: opt.replace(/\s+/g, '_').toLowerCase(),
-               text: opt
+               title: opt
              }))
            };
         } else {
@@ -259,10 +264,10 @@ export default function FlowsCreate({ onCancel, onSave }) {
              ...base,
              label: component.label || '', // The label often sits above
              required: component.required || false,
-             options: [
+             'data-source': [
                {
                  id: 'checked',
-                 text: component.text || component.label || 'Yes'
+                 title: component.text || component.label || 'Yes'
                }
              ]
            };
@@ -274,9 +279,9 @@ export default function FlowsCreate({ onCancel, onSave }) {
           ...base,
           label: component.label || 'Select one',
           required: component.required || false,
-          options: (component.options || []).map(opt => ({
+          'data-source': (component.options || []).map(opt => ({
             id: opt.replace(/\s+/g, '_').toLowerCase(),
-            text: opt
+            title: opt
           }))
         };
 
@@ -286,9 +291,9 @@ export default function FlowsCreate({ onCancel, onSave }) {
           ...base,
           label: component.label || 'Select',
           required: component.required || false,
-          options: (component.options || []).map(opt => ({
+          'data-source': (component.options || []).map(opt => ({
              id: opt.replace(/\s+/g, '_').toLowerCase(),
-             text: opt
+             title: opt
           }))
         };
 
@@ -320,21 +325,18 @@ export default function FlowsCreate({ onCancel, onSave }) {
       const nextScreen = isLastScreen ? null : screens[index + 1];
       
       // Filter and map components
-      const children = (screen.content || [])
+      const formChildren = (screen.content || [])
         .map(mapToMetaComponent)
         .filter(Boolean);
 
-      // Add Footer
-      children.push({
+      // Add Footer inside the Form
+      formChildren.push({
         type: 'Footer',
         label: screen.button || (isLastScreen ? 'Submit' : 'Continue'),
         'on-click-action': isLastScreen
           ? {
               name: 'complete',
-              payload: {
-                screen_id: screen.id,
-                values: '${form}' // Collects all form values
-              }
+              payload: '${form}' // Collects all form values
             }
           : {
               name: 'navigate',
@@ -352,13 +354,19 @@ export default function FlowsCreate({ onCancel, onSave }) {
         data: {},
         layout: {
           type: 'SingleColumnLayout',
-          children
+          children: [
+            {
+              type: 'Form',
+              name: 'form',
+              children: formChildren
+            }
+          ]
         }
       };
     });
 
     return {
-      version: '3.0',
+      version: '5.0',
       screens: transformedScreens
     };
   };
