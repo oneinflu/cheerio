@@ -179,8 +179,29 @@ export default function FlowBuilder({ onBack, flowData, onSave, initialScreens }
     setActiveScreenId(newId);
   };
 
-  const updateScreenTitle = (title) => {
-    setScreens(screens.map(s => s.id === activeScreenId ? { ...s, title } : s));
+  const deleteScreen = (screenId, e) => {
+    e.stopPropagation();
+    if (screens.length <= 1) {
+      alert("You cannot delete the only screen.");
+      return;
+    }
+    
+    if (confirm("Are you sure you want to delete this screen?")) {
+      const newScreens = screens.filter(s => s.id !== screenId);
+      setScreens(newScreens);
+      
+      // If we deleted the active screen, switch to the first one
+      if (activeScreenId === screenId) {
+        setActiveScreenId(newScreens[0].id);
+      }
+    }
+  };
+
+  const updateScreenTitle = (screenId, newTitle) => {
+    const newScreens = screens.map(s => 
+      s.id === screenId ? { ...s, title: newTitle } : s
+    );
+    setScreens(newScreens);
   };
 
   const addComponent = (config) => {
@@ -474,7 +495,7 @@ export default function FlowBuilder({ onBack, flowData, onSave, initialScreens }
                   onDragEnd={handleScreenDragEnd}
                   onDragOver={(e) => e.preventDefault()}
                   onClick={() => setActiveScreenId(screen.id)}
-                  className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
+                  className={`group flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
                      activeScreenId === screen.id 
                        ? 'bg-white border-green-500 shadow-sm ring-1 ring-green-500' 
                        : 'bg-white border-slate-200 hover:border-slate-300'
@@ -484,6 +505,17 @@ export default function FlowBuilder({ onBack, flowData, onSave, initialScreens }
                     <GripVertical className="w-4 h-4" />
                   </div>
                   <span className="text-sm font-medium text-slate-700 flex-1 truncate">{screen.title}</span>
+                  
+                  {screens.length > 1 && (
+                    <button 
+                      onClick={(e) => deleteScreen(screen.id, e)}
+                      className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-red-500 transition-all"
+                      title="Delete screen"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+
                   <span className="text-[10px] text-slate-400 font-mono bg-slate-100 px-1.5 py-0.5 rounded">
                      {screen.id.toUpperCase()}
                   </span>
