@@ -6,6 +6,7 @@ const axios = require('axios');
 const FormData = require('form-data');
 const db = require('../../db');
 const auth = require('../middlewares/auth');
+const flowCrypto = require('../utils/flowCrypto');
 
 const BASE_URL = 'https://graph.facebook.com/v21.0';
 
@@ -169,6 +170,29 @@ async function metaUpdateFlow(flowId, { name, categories, flowJson, endpointUri 
 // ─────────────────────────────────────────────
 // ROUTES
 // ─────────────────────────────────────────────
+
+// GET KEYS
+router.get('/whatsapp/flows/keys', auth.requireRole('admin', 'supervisor'), async (req, res, next) => {
+  try {
+    const result = await db.query('SELECT public_key, created_at FROM whatsapp_flow_settings ORDER BY created_at DESC LIMIT 1');
+    if (result.rowCount === 0) return res.json({ publicKey: null });
+    res.json(result.rows[0]);
+  } catch (err) { next(err); }
+});
+
+// GENERATE KEYS
+router.post('/whatsapp/flows/keys', auth.requireRole('admin', 'supervisor'), async (req, res, next) => {
+  try {
+    const { publicKey, privateKey } = flowCrypto.generateKeyPair();
+    
+    await db.query(
+      `INSERT INTO whatsapp_flow_settings (public_key, private_key) VALUES ($1, $2)`,
+      [publicKey, privateKey]
+    );
+
+    res.json({ publicKey });
+  } catch (err) { next(err); }
+});
 
 // SYNC
 router.post('/whatsapp/flows/sync', auth.requireRole('admin', 'supervisor'), async (req, res, next) => {

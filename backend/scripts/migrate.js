@@ -194,6 +194,24 @@ async function runMigrations() {
             console.log('[migrate] whatsapp_flows status column already exists.');
           }
         }
+
+        const flowSettingsRes = await client.query(`
+          SELECT EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE  table_schema = 'public'
+            AND    table_name   = 'whatsapp_flow_settings'
+          );
+        `);
+
+        if (!flowSettingsRes.rows[0].exists) {
+          console.log('[migrate] Adding whatsapp_flow_settings table...');
+          await client.query('BEGIN');
+          await runSQLFile(client, path.join(__dirname, '..', 'db', 'migrations', '0011_create_flow_settings.sql'));
+          await client.query('COMMIT');
+          console.log('[migrate] Applied whatsapp_flow_settings migration.');
+        } else {
+          console.log('[migrate] whatsapp_flow_settings table already exists.');
+        }
         
         return;
       }
