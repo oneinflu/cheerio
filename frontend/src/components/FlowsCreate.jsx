@@ -14,12 +14,20 @@ const CATEGORIES = [
   'OTHER'
 ];
 
-const TEMPLATES = [
+const TEMPLATES_WITHOUT_ENDPOINT = [
   { id: 'default', label: 'Default', description: 'Start from scratch' },
   { id: 'purchase', label: 'Collect purchase interest', description: 'Get details about what customers want to buy' },
   { id: 'feedback', label: 'Get feedback', description: 'Ask customers for their opinion' },
   { id: 'survey', label: 'Send a survey', description: 'Conduct a simple survey' },
   { id: 'support', label: 'Customer support', description: 'Help customers resolve issues' },
+];
+
+const TEMPLATES_WITH_ENDPOINT = [
+  { id: 'loan_leads', label: 'Get leads for a pre-approved loan / credit card', description: 'Endpoint template available' },
+  { id: 'insurance', label: 'Provide insurance quote', description: 'Endpoint template available' },
+  { id: 'personalized_offer', label: 'Capture interest for a personalized offer', description: 'Endpoint template available' },
+  { id: 'account_signup', label: 'Account Sign in / Sign up', description: 'Endpoint template available' },
+  { id: 'appointment', label: 'Appointment booking', description: 'Endpoint template available' },
 ];
 
 const TEMPLATE_FLOWS = {
@@ -137,11 +145,17 @@ const TEMPLATE_FLOWS = {
   }
 };
 
+// Map new endpoint templates to default structure for now
+['loan_leads', 'insurance', 'personalized_offer', 'account_signup', 'appointment'].forEach(id => {
+  TEMPLATE_FLOWS[id] = TEMPLATE_FLOWS.default;
+});
+
 export default function FlowsCreate({ onCancel, onSave }) {
   const [step, setStep] = useState(() => {
     const saved = localStorage.getItem('whatsapp_flows_create_step');
     return saved ? parseInt(saved, 10) : 1;
   });
+  const [activeTab, setActiveTab] = useState('WITHOUT_ENDPOINT');
   const [isSaving, setIsSaving] = useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [currentScreenIndex, setCurrentScreenIndex] = useState(0);
@@ -465,9 +479,6 @@ export default function FlowsCreate({ onCancel, onSave }) {
         publish: status === 'PUBLISHED',
         flow_json: flowJson
       };
-      
-      console.log('Creating flow with payload:', JSON.stringify(payload, null, 2));
-      
       await createWhatsappFlow(payload);
       clearStorage();
       onSave();
@@ -619,8 +630,25 @@ export default function FlowsCreate({ onCancel, onSave }) {
             {/* Templates */}
             <div className="space-y-4">
               <label className="text-sm font-medium text-slate-700">Templates</label>
+              
+              {/* Template Tabs */}
+              <div className="flex gap-4 border-b border-slate-200 mb-4">
+                 <button 
+                   className={`pb-2 text-sm font-medium transition-colors ${activeTab === 'WITHOUT_ENDPOINT' ? 'text-green-600 border-b-2 border-green-600' : 'text-slate-500 hover:text-slate-700'}`}
+                   onClick={() => setActiveTab('WITHOUT_ENDPOINT')}
+                 >
+                   Without Endpoint
+                 </button>
+                 <button 
+                   className={`pb-2 text-sm font-medium transition-colors ${activeTab === 'WITH_ENDPOINT' ? 'text-green-600 border-b-2 border-green-600' : 'text-slate-500 hover:text-slate-700'}`}
+                   onClick={() => setActiveTab('WITH_ENDPOINT')}
+                 >
+                   With Endpoint
+                 </button>
+              </div>
+
               <div className="space-y-3">
-                {TEMPLATES.map(tmpl => (
+                {(activeTab === 'WITHOUT_ENDPOINT' ? TEMPLATES_WITHOUT_ENDPOINT : TEMPLATES_WITH_ENDPOINT).map(tmpl => (
                   <label 
                     key={tmpl.id} 
                     className={`flex items-start gap-3 p-4 border rounded-lg cursor-pointer transition-all ${
