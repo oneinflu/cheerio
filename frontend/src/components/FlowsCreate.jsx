@@ -243,8 +243,16 @@ export default function FlowsCreate({ onCancel, onSave }) {
           style: style,
         };
 
-      case 'Input':
       case 'TextArea':
+        return {
+          type: 'TextArea',
+          ...base,
+          label: component.label || 'Details',
+          required: component.required || false,
+          'max-length': component.maxLength || 300
+        };
+
+      case 'Input':
         // STRICT RULE: Allowed input-types: text, email, phone, number, password
         let inputType = 'text';
         const labelLower = (component.label || '').toLowerCase();
@@ -258,11 +266,11 @@ export default function FlowsCreate({ onCancel, onSave }) {
         } else if (labelLower.includes('number')) {
            inputType = 'number';
         } else if (labelLower.includes('password')) {
-           inputType = 'password';
+           inputType = 'text'; // Password type not supported in WhatsApp Flows
         }
         
         // Ensure inputType is valid
-        if (!['text', 'email', 'phone', 'number', 'password'].includes(inputType)) {
+        if (!['text', 'email', 'phone', 'number'].includes(inputType)) {
            inputType = 'text';
         }
 
@@ -312,7 +320,7 @@ export default function FlowsCreate({ onCancel, onSave }) {
            }
 
            return {
-             type: 'Checkbox',
+             type: 'OptIn',
              name: singleName,
              visible: true,
              label: labelText,
@@ -442,7 +450,13 @@ export default function FlowsCreate({ onCancel, onSave }) {
       onSave();
     } catch (err) {
       console.error(err);
-      alert('Failed to save flow: ' + (err.message || 'Unknown error'));
+      let errorMsg = err.message || 'Unknown error';
+      if (err.details && err.details.validation_errors) {
+         errorMsg += '\n\nValidation Errors:\n' + err.details.validation_errors.map(e => 
+            `- ${e.error || 'Error'}: ${e.message} (Line ${e.line_start})`
+         ).join('\n');
+      }
+      alert('Failed to save flow: ' + errorMsg);
     } finally {
       setIsSaving(false);
     }
