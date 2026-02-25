@@ -585,6 +585,20 @@ async function getFlows(wabaId, limit = 100) {
   return getJSON(url);
 }
 
+/**
+ * Send an interactive message (buttons, list, flow, etc.).
+ */
+async function sendInteractiveMessage(phoneNumberId, toWaId, interactive) {
+  const url = `${GRAPH_BASE}/${phoneNumberId}/messages`;
+  const payload = {
+    messaging_product: 'whatsapp',
+    to: toWaId,
+    type: 'interactive',
+    interactive: interactive,
+  };
+  return postJSON(url, payload);
+}
+
 module.exports = {
   sendText,
   sendMedia,
@@ -601,4 +615,5 @@ module.exports = {
   updateFlowMetadata,
   updateFlowJson,
   getFlows,
+  sendInteractiveMessage,
 };

@@ -7,7 +7,7 @@ const FormData = require('form-data');
 const db = require('../../db');
 const auth = require('../middlewares/auth');
 
-const BASE_URL = 'https://graph.facebook.com/v20.0';
+const BASE_URL = 'https://graph.facebook.com/v21.0';
 
 // ─────────────────────────────────────────────
 // Helpers

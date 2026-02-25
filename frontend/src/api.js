@@ -183,6 +183,16 @@ export async function sendTemplate(conversationId, name, languageCode, component
   return res.json();
 }
 
+export async function sendInteractive(conversationId, interactive) {
+  const headers = getAuthHeaders();
+  const res = await fetch(`/api/whatsapp/interactive`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ conversationId, interactive }),
+  });
+  return res.json();
+}
+
 export async function uploadMedia(conversationId, file) {
   const headers = getAuthHeaders(null); // No Content-Type for FormData
   const formData = new FormData();

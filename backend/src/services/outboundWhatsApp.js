@@ -435,6 +435,78 @@ async function sendTemplate(conversationId, name, languageCode, components) {
   }
 }
 
+async function sendInteractive(conversationId, interactive) {
+  const clientConn = await db.getClient();
+  try {
+    await clientConn.query('BEGIN');
+    const details = await getConversationDetails(clientConn, conversationId);
+    const isBlocked =
+      details.contactProfile &&
+      details.contactProfile.blocked === true;
+    if (isBlocked) {
+      const err = new Error('This number is blocked. Unblock to send messages.');
+      err.status = 400;
+      err.expose = true;
+      throw err;
+    }
+    
+    await enforce24hWindow(clientConn, conversationId, false);
+
+    // Validate/Update Flow Message Version
+    if (interactive.type === 'flow' && interactive.action && interactive.action.parameters) {
+       interactive.action.parameters.flow_message_version = '3';
+    }
+
+    const messageId = await insertOutboundMessage(
+      clientConn,
+      details.conversationId,
+      details.channelId,
+      'interactive',
+      interactive.body?.text || 'Interactive Message',
+      { type: 'interactive', interactive }
+    );
+    
+    emitMessage(details.conversationId, messageId, 'interactive', interactive.body?.text || 'Interactive Message', { type: 'interactive', interactive });
+    emitStatus(details.conversationId, messageId, 'sending');
+
+    let resp;
+    try {
+      resp = await client.sendInteractiveMessage(details.phoneNumberId, details.toWaId, interactive);
+    } catch (apiErr) {
+      console.error('[sendInteractive] Meta API failed:', apiErr.response?.data || apiErr.message);
+      await finalizeOutboundMessage(clientConn, messageId, details.conversationId, null, false);
+      await clientConn.query('COMMIT');
+      emitStatus(details.conversationId, messageId, 'failed');
+      throw new Error(apiErr.response?.data?.error?.message || apiErr.message || 'Failed to send interactive message');
+    }
+
+    const externalId =
+      resp.data && Array.isArray(resp.data.messages) && resp.data.messages[0]
+        ? resp.data.messages[0].id
+        : null;
+
+    await clientConn.query(
+      `
+      INSERT INTO audit_logs (id, actor_user_id, action, entity_type, entity_id, metadata, created_at)
+      VALUES (gen_random_uuid(), NULL, 'message.send.interactive', 'conversation', $1, $2::jsonb, NOW())
+      `,
+      [details.conversationId, JSON.stringify({ messageId, externalMessageId: externalId, interactive })]
+    );
+
+    await finalizeOutboundMessage(clientConn, messageId, details.conversationId, externalId, true);
+    await clientConn.query('COMMIT');
+    emitStatus(details.conversationId, messageId, 'sent', { externalMessageId: externalId });
+    return { conversationId: details.conversationId, messageId, externalMessageId: externalId };
+  } catch (err) {
+    try {
+      await clientConn.query('ROLLBACK');
+    } catch (_) {}
+    throw err;
+  } finally {
+    clientConn.release();
+  }
+}
+
 async function sendTypingIndicator(conversationId, action) {
   const clientConn = await db.getClient();
   try {
@@ -537,6 +609,7 @@ module.exports = {
   sendText,
   sendMedia,
   sendTemplate,
+  sendInteractive,
   sendTypingIndicator,
   uploadMedia,
 };

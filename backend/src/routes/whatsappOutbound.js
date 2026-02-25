@@ -87,6 +87,26 @@ router.post('/template', auth.requireRole('admin','agent','supervisor'), async (
 });
 
 /**
+ * POST /api/whatsapp/interactive
+ * Body: { conversationId: UUID, interactive: object }
+ */
+router.post('/interactive', auth.requireRole('admin','agent','supervisor'), async (req, res, next) => {
+  try {
+    const { conversationId, interactive } = req.body || {};
+    if (!conversationId || !interactive) {
+      const err = new Error('conversationId and interactive object are required');
+      err.status = 400;
+      err.expose = true;
+      throw err;
+    }
+    const result = await service.sendInteractive(conversationId, interactive);
+    res.status(200).json(result);
+  } catch (err) {
+    return next(err);
+  }
+});
+
+/**
  * POST /api/whatsapp/upload
  * Form-Data: conversationId, file
  * Uploads media to WhatsApp and returns the media ID.
