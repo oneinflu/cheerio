@@ -26,7 +26,7 @@ const TEMPLATE_FLOWS = {
   default: {
     screens: [
       {
-        id: 'screen_1',
+        id: 'screen_one',
         title: 'This is a sample form',
         layout: [
           { type: 'Text', text: 'This is a sample lead-gen form!', className: 'font-bold text-lg mb-4 text-slate-900' },
@@ -46,14 +46,14 @@ const TEMPLATE_FLOWS = {
   purchase: {
     screens: [
       {
-        id: 'screen_1',
+        id: 'screen_one',
         title: 'Join Now',
         layout: [
           { type: 'Text', text: 'Get early access to our Mega Sales Day deals. Register now!', className: 'font-bold text-lg mb-4 text-slate-900' },
           { type: 'Input', label: 'Name' },
           { type: 'Input', label: 'Email' },
           { type: 'Checkbox', label: 'I agree to the terms. Read more', className: 'mt-2' },
-          { type: 'Checkbox', label: '(optional) Keep me up to date about offers and promotions' },
+          { type: 'Checkbox', label: 'Keep me up to date about offers and promotions' },
         ],
         button: 'Continue'
       }
@@ -62,7 +62,7 @@ const TEMPLATE_FLOWS = {
   survey: {
     screens: [
       {
-        id: 'screen_1',
+        id: 'screen_one',
         title: 'Question 1 of 3',
         layout: [
           { type: 'Text', text: "You've found the perfect deal, what do you do next?", className: 'font-bold text-lg mb-4 text-slate-900' },
@@ -76,18 +76,16 @@ const TEMPLATE_FLOWS = {
         button: 'Continue'
       },
       {
-        id: 'screen_2',
+        id: 'screen_two',
         title: 'Question 2 of 3',
         layout: [
             { type: 'Text', text: "How often do you shop online?", className: 'font-bold text-lg mb-4 text-slate-900' },
-            { type: 'Radio', label: 'Weekly' },
-            { type: 'Radio', label: 'Monthly' },
-            { type: 'Radio', label: 'Rarely' },
+            { type: 'Radio', label: 'Frequency', options: ['Weekly', 'Monthly', 'Rarely'] },
         ],
         button: 'Continue'
       },
       {
-         id: 'screen_3',
+         id: 'screen_three',
          title: 'Question 3 of 3',
          layout: [
              { type: 'Text', text: "Thank you for your time!", className: 'font-bold text-lg mb-4 text-slate-900' },
@@ -100,17 +98,13 @@ const TEMPLATE_FLOWS = {
   support: {
       screens: [
           {
-              id: 'screen_1',
+              id: 'screen_one',
               title: 'Get help',
               layout: [
                   { type: 'Input', placeholder: 'Name', className: 'mb-4' },
                   { type: 'Input', placeholder: 'Order number', className: 'mb-4' },
                   { type: 'Label', text: 'Choose a topic', className: 'font-medium text-slate-900 mb-3' },
-                  { type: 'Radio', label: 'Orders and payments' },
-                  { type: 'Radio', label: 'Maintenance' },
-                  { type: 'Radio', label: 'Delivery' },
-                  { type: 'Radio', label: 'Returns' },
-                  { type: 'Radio', label: 'Other' },
+                  { type: 'Radio', label: 'Topic', options: ['Orders and payments', 'Maintenance', 'Delivery', 'Returns', 'Other'] },
                   { type: 'Input', placeholder: 'Description of issue (Optional)', multiline: true, rows: 4, className: 'mt-6' }
               ],
               button: 'Done'
@@ -120,20 +114,19 @@ const TEMPLATE_FLOWS = {
   feedback: {
       screens: [
           {
-              id: 'screen_1',
+              id: 'screen_one',
               title: 'Feedback 1 of 2',
               layout: [
                   { type: 'Text', text: 'Would you recommend us to a friend?', className: 'font-bold text-lg mb-4 text-slate-900' },
                   { type: 'Label', text: 'Choose one', className: 'text-sm text-slate-600 mb-2' },
-                  { type: 'Radio', label: 'Yes' },
-                  { type: 'Radio', label: 'No' },
+                  { type: 'Radio', label: 'Recommend', options: ['Yes', 'No'] },
                   { type: 'Label', text: 'How could we do better?', className: 'font-bold mt-6 mb-2 text-slate-900' },
                   { type: 'Input', placeholder: 'Leave a comment (Optional)', multiline: true, rows: 4 }
               ],
               button: 'Continue'
           },
            {
-              id: 'screen_2',
+              id: 'screen_two',
               title: 'Feedback 2 of 2',
               layout: [
                   { type: 'Text', text: 'Thank you for your feedback!', className: 'font-bold text-lg mb-4 text-slate-900' }
@@ -372,9 +365,8 @@ export default function FlowsCreate({ onCancel, onSave }) {
       case 'Label':
          return {
             type: 'Text',
-            text: component.text || '',
-            'font-size': 'body',
-            'font-weight': 'bold',
+            text: `*${component.text || ''}*`, // Bold using markdown
+            style: 'body',
             visible: true
          };
 
@@ -384,9 +376,15 @@ export default function FlowsCreate({ onCancel, onSave }) {
   };
 
   const transformToMetaFlow = (screens) => {
+    // Helper to generate safe IDs (no numbers)
+    const getSafeScreenId = (idx) => {
+       const letters = 'abcdefghijklmnopqrstuvwxyz';
+       return `screen_${letters[idx % 26]}${Math.floor(idx / 26) || ''}`;
+    };
+
     const transformedScreens = screens.map((screen, index) => {
       const isLastScreen = index === screens.length - 1;
-      const nextScreen = isLastScreen ? null : screens[index + 1];
+      const nextScreenId = isLastScreen ? null : getSafeScreenId(index + 1);
       
       // Filter and map components
       const formChildren = (screen.content || [])
@@ -400,19 +398,21 @@ export default function FlowsCreate({ onCancel, onSave }) {
         'on-click-action': isLastScreen
           ? {
               name: 'complete',
-              payload: '${form}' // Collects all form values
+              payload: {
+                screen_values: '${form}' // Must be an object
+              }
             }
           : {
               name: 'navigate',
               next: {
                 type: 'screen',
-                name: nextScreen ? nextScreen.id : ''
+                name: nextScreenId
               }
             }
       });
 
       return {
-        id: screen.id,
+        id: getSafeScreenId(index),
         title: screen.title || 'Untitled Screen',
         terminal: isLastScreen,
         layout: {
