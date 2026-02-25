@@ -429,8 +429,8 @@ export default function FlowsCreate({ onCancel, onSave }) {
     });
 
     return {
-      version: '3.0',
-      data_api_version: '3.0',
+      version: '7.3',
+      data_api_version: '4.0',
       screens: transformedScreens
     };
   };
