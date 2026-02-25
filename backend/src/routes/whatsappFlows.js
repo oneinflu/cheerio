@@ -221,7 +221,7 @@ router.post('/whatsapp/flows', auth.requireRole('admin', 'supervisor'), async (r
     try {
       const created = await metaCreateFlow({
         name, categories, flowJson: flow_json,
-        publish: publish === true,
+        publish: String(publish) === 'true',
         cloneFlowId: clone_flow_id,
         endpointUri,
       });
@@ -267,7 +267,7 @@ router.put('/whatsapp/flows/:id', auth.requireRole('admin', 'supervisor'), async
       if (!remoteFlowId) {
         const created = await metaCreateFlow({
           name: nextName, categories: nextCategories, flowJson: nextFlowJson,
-          publish: publish === true, endpointUri,
+          publish: String(publish) === 'true', endpointUri,
         });
         remoteFlowId = created.id;
         if (created.published) remoteStatus = 'PUBLISHED';
@@ -277,7 +277,7 @@ router.put('/whatsapp/flows/:id', auth.requireRole('admin', 'supervisor'), async
           flowJson: flow_json !== undefined ? nextFlowJson : undefined,
           endpointUri,
         });
-        if (publish === true) {
+        if (String(publish) === 'true') {
           await metaPublishFlow(remoteFlowId);
           remoteStatus = 'PUBLISHED';
         }

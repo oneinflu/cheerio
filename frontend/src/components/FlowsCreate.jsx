@@ -465,6 +465,9 @@ export default function FlowsCreate({ onCancel, onSave }) {
         publish: status === 'PUBLISHED',
         flow_json: flowJson
       };
+      
+      console.log('Creating flow with payload:', JSON.stringify(payload, null, 2));
+      
       await createWhatsappFlow(payload);
       clearStorage();
       onSave();
