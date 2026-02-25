@@ -434,9 +434,22 @@ export default function FlowsCreate({ onCancel, onSave }) {
       };
     });
 
+    // Generate routing_model
+    const routingModel = {};
+    transformedScreens.forEach((screen, index) => {
+       const isLastScreen = index === transformedScreens.length - 1;
+       if (!isLastScreen) {
+          const nextScreenId = getSafeScreenId(index + 1);
+          routingModel[screen.id] = [nextScreenId];
+       } else {
+          routingModel[screen.id] = [];
+       }
+    });
+
     return {
       version: '7.3',
       data_api_version: '4.0',
+      routing_model: routingModel,
       screens: transformedScreens
     };
   };
