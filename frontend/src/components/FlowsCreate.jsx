@@ -222,18 +222,25 @@ export default function FlowsCreate({ onCancel, onSave }) {
       case 'Text':
         // STRICT RULE: Allowed styles are 'body', 'caption', 'heading'
         // DO NOT use font-size, font-weight
-        let style = 'body';
+        // Updated to use TextHeading and TextBody for v3.0+
         
         if (component.variant === 'largeHeading' || (component.className && component.className.includes('text-lg')) || component.className?.includes('font-bold')) {
-          style = 'heading';
+           return {
+             type: 'TextHeading',
+             text: component.text || '',
+           };
         } else if (component.variant === 'caption' || (component.className && component.className.includes('text-xs'))) {
-          style = 'caption';
+           // Caption maps to TextCaption in some versions, or TextBody with smaller style?
+           // For now, mapping everything else to TextBody as requested
+           return {
+             type: 'TextBody',
+             text: component.text || '',
+           };
         }
 
         return {
-          type: 'Text',
+          type: 'TextBody',
           text: component.text || '',
-          style: style,
         };
 
       case 'TextArea':
@@ -317,7 +324,7 @@ export default function FlowsCreate({ onCancel, onSave }) {
              name: singleName,
              visible: true,
              label: labelText,
-             required: component.required !== undefined ? component.required : true // Default to true for single checkboxes (usually consents)
+             required: component.required !== undefined ? component.required : false // Default to false for single checkboxes (avoid blocking UX)
            };
         }
 
@@ -364,9 +371,8 @@ export default function FlowsCreate({ onCancel, onSave }) {
         
       case 'Label':
          return {
-            type: 'Text',
+            type: 'TextBody',
             text: `*${component.text || ''}*`, // Bold using markdown
-            style: 'body',
             visible: true
          };
 
