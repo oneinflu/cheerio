@@ -21,6 +21,7 @@ import { LayoutDashboard, MessageSquare, Users, Settings, LogOut, Search, Bell, 
 import { Button } from './components/ui/Button';
 import { Badge } from './components/ui/Badge';
 import { Card, CardHeader, CardTitle, CardContent } from './components/ui/Card';
+import { Toaster } from './components/ui/Toaster';
 
 export default function App() {
   const [storedUser, setStoredUser] = useState(() => {
@@ -871,6 +872,7 @@ export default function App() {
           </>
         )}
       </div>
+      <Toaster />
     </div>
   );
 }
