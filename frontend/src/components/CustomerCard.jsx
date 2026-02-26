@@ -3,9 +3,11 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from './ui/Card';
 import { Input } from './ui/Input';
 import { Button } from './ui/Button';
-import { User } from 'lucide-react';
+import { User, Copy, Check } from 'lucide-react';
+import { useToast } from './ui/use-toast';
 
 export default function CustomerCard({ conversationId }) {
+  const { toast } = useToast();
   const LANGUAGE_LABELS = {
     en: 'English',
     hi: 'Hindi',
@@ -18,6 +20,7 @@ export default function CustomerCard({ conversationId }) {
   };
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [formData, setFormData] = useState({
     contactId: '',
     name: '',
@@ -48,6 +51,17 @@ export default function CustomerCard({ conversationId }) {
       .catch(err => console.error(err))
       .finally(() => setFetching(false));
   }, [conversationId]);
+
+  const handleCopyNumber = () => {
+    if (!formData.number) return;
+    navigator.clipboard.writeText(formData.number);
+    setCopied(true);
+    toast({
+      description: "Phone number copied to clipboard",
+      duration: 2000,
+    });
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   const handleSubmit = async () => {
     setLoading(true);
@@ -95,11 +109,22 @@ export default function CustomerCard({ conversationId }) {
             </div>
             <div>
               <label className="text-xs font-medium text-slate-500">Number</label>
-              <Input 
-                value={formData.number} 
-                disabled
-                className="h-8 bg-slate-50 mt-1 text-slate-500"
-              />
+              <div className="flex gap-2 mt-1">
+                <Input 
+                  value={formData.number} 
+                  disabled
+                  className="h-8 bg-slate-50 text-slate-500 flex-1"
+                />
+                <Button 
+                  variant="outline" 
+                  size="icon" 
+                  className="h-8 w-8" 
+                  onClick={handleCopyNumber}
+                  title="Copy number"
+                >
+                  {copied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4 text-slate-500" />}
+                </Button>
+              </div>
             </div>
             <div>
               <label className="text-xs font-medium text-slate-500">Preferred Language</label>
