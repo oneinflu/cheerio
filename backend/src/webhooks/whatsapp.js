@@ -389,17 +389,19 @@ router.post('/', async (req, res, next) => {
             }
 
             // Lead Webhook Integration
-            // If first message AND it's a Quick Reply (Course selection), send to external API
-            const isQuickReply = (msg.type === 'interactive' || msg.type === 'button');
+            // Trigger for ANY first message (or if not yet assigned/lead created)
+            // User requested: "even if the course is not passed it gives the assignedTo id etc so fetch and assing the conversation to it"
+            
+            // We check if it's the first message OR if we haven't synced lead yet.
+            // Simplest trigger: isFirstMessage.
             
             console.log('[Lead Webhook] Check:', { 
               isFirstMessage, 
-              isQuickReply, 
               textBody: textBody || 'empty',
               senderWaId 
             });
 
-            if (isFirstMessage && isQuickReply && textBody) {
+            if (isFirstMessage) {
                try {
                  // Format mobile: remove '91' prefix if present
                  let mobile = senderWaId;
@@ -407,23 +409,17 @@ router.post('/', async (req, res, next) => {
                    mobile = mobile.slice(2);
                  }
 
-                 console.log(`[Lead Webhook] Sending lead: mobile=${mobile}, name=${profileName}, course=${textBody}`);
+                 // Extract course if available (e.g. from quick reply)
+                 const isQuickReply = (msg.type === 'interactive' || msg.type === 'button');
+                 const course = (isQuickReply && textBody) ? textBody : '';
 
-                 // Update local DB contact profile with course
-                 await db.query(
-                   `UPDATE contacts 
-                    SET profile = jsonb_set(COALESCE(profile, '{}'), '{course}', to_jsonb($1::text), true),
-                        updated_at = NOW()
-                    WHERE channel_id = $2 AND external_id = $3`,
-                   [textBody, channelId, senderWaId]
-                 );
-                 console.log(`[Lead Webhook] Updated local contact course to: ${textBody}`);
+                 console.log(`[Lead Webhook] Sending lead: mobile=${mobile}, name=${profileName}, course=${course}`);
 
                  // Fire and forget - do not await strictly or fail if this fails
                  axios.post('https://api.starforze.com/api/webhook/whatsapp-lead', {
                    mobile: mobile,
                    name: profileName || 'Unknown',
-                   course: textBody
+                   course: course // Can be empty string, API should handle it
                  }).then(async response => {
                     console.log(`[Lead Webhook] Success: ${response.status} ${response.statusText}`);
                     console.log('[Lead Webhook] Response Body:', JSON.stringify(response.data, null, 2));
