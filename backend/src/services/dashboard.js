@@ -74,33 +74,26 @@ async function getVolume(teamId) {
 }
 
 async function getAgents(teamId) {
-  // Return list of agents.
-  // If we don't have a users table with roles yet, we might mock this or query distinct assignees.
-  // Let's check if there is a users table.
-  // For now, return the mock list used in frontend to ensure consistency, 
-  // OR query the DB if we are sure.
-  // Let's try to query users if it exists, otherwise fallback.
-  
+  // Query users table for real agents
   try {
-    const res = await db.query(`SELECT id, name, role FROM users`);
+    const res = await db.query(
+      `SELECT id, name, role, email FROM users ORDER BY name ASC`
+    );
+    
     if (res.rows.length > 0) {
       return res.rows.map(u => ({
         id: u.id,
         name: u.name,
         role: u.role,
-        initials: u.name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2)
+        initials: (u.name || 'User').split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2)
       }));
     }
   } catch (err) {
-    console.warn('Users table not found or empty, using mock data');
+    console.error('Error fetching agents from DB:', err.message);
   }
 
-  // Fallback Mock Data
-  return [
-    { id: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', name: 'John Agent', role: 'admin', initials: 'JA' },
-    { id: 'a1eebc99-9c0b-4ef8-bb6d-6bb9bd380a12', name: 'Jane Supervisor', role: 'supervisor', initials: 'JS' },
-    { id: 'a2eebc99-9c0b-4ef8-bb6d-6bb9bd380a13', name: 'Mike Agent', role: 'agent', initials: 'MA' },
-  ];
+  // Fallback only if DB fails or is empty
+  return [];
 }
 
 module.exports = {
