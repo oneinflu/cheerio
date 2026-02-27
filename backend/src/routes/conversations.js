@@ -166,7 +166,11 @@ router.put('/:conversationId/contact', auth.requireRole('admin','agent','supervi
                  headers['Authorization'] = `Bearer ${process.env.STARFORZE_API_KEY}`;
              }
 
-             const resp = await axios.post(`https://api.starforze.com/api/leads/${effectiveLeadId}/course`, {
+             // The user reported "Cannot POST /api/leads/:id/course", implying 404 or method not allowed.
+             // Usually updates to a resource use PUT.
+             // Let's try PUT instead of POST for the course update endpoint.
+             
+             const resp = await axios.put(`https://api.starforze.com/api/leads/${effectiveLeadId}/course`, {
                courseName: course
              }, { headers });
              
