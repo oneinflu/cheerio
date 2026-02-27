@@ -23,11 +23,12 @@ async function syncUnassignedConversations(conversations) {
             // which often returns existing lead data, OR we use the lead_id if we have it.
             
             let assignedTo = null;
+            let leadId = conv.lead_id;
 
-            if (conv.lead_id) {
+            if (leadId) {
                  // If we have a lead ID, fetch specific lead
                  try {
-                     const res = await axios.get(`https://api.starforze.com/api/leads/${conv.lead_id}`);
+                     const res = await axios.get(`https://api.starforze.com/api/leads/${leadId}`);
                      if (res.data && res.data.data) {
                          assignedTo = res.data.data.assignedTo;
                      }
@@ -44,7 +45,25 @@ async function syncUnassignedConversations(conversations) {
                     course: '' // Just checking
                  });
                  if (res.data && res.data.data) {
-                     assignedTo = res.data.data.assignedTo;
+                     const leadData = res.data.data;
+                     assignedTo = leadData.assignedTo;
+                     
+                     // If we got a lead ID from the webhook response, update our records
+                     if (leadData.lead && leadData.lead._id) {
+                         const newLeadId = leadData.lead._id;
+                         if (newLeadId !== leadId) {
+                             console.log(`[InboxService] Updating lead_id for conversation ${conv.id} to ${newLeadId}`);
+                             // Update conversation
+                             await db.query('UPDATE conversations SET lead_id = $1 WHERE id = $2', [newLeadId, conv.id]);
+                             
+                             // Update contact profile
+                             await db.query(`
+                                UPDATE contacts 
+                                SET profile = jsonb_set(COALESCE(profile, '{}'), '{leadId}', to_jsonb($1::text), true)
+                                WHERE external_id LIKE $2
+                             `, [newLeadId, `%${mobile}%`]);
+                         }
+                     }
                  }
             }
 
