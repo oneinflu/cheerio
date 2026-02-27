@@ -1,0 +1,25 @@
+
+=============================================
+WHATSAPP TEMPLATE QA AUTOMATION REPORT
+=============================================
+Total Combinations Generated: 16
+Total Valid Combinations Tested: 16
+Approval Rate: 100%
+
+BY CATEGORY:
+---------------------------------------------
+MARKETING:      0 Approved / 0 Rejected
+UTILITY:        16 Approved / 0 Rejected
+AUTHENTICATION: 0 Approved / 0 Rejected
+
+COMMON REJECTION REASONS:
+---------------------------------------------
+
+
+SUGGESTIONS:
+---------------------------------------------
+1. Avoid promotional words in Utility templates.
+2. Ensure media headers have valid examples.
+3. Authentication templates must be strict (No footer, no media).
+
+See template_qa_results.csv for detailed logs.

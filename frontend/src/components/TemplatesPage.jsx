@@ -580,26 +580,40 @@ Are you sure you want to delete '${template.name}'?`;
     // 0. Handle Header Media (IMAGE / VIDEO / DOCUMENT)
     if (tmpl && ['IMAGE','VIDEO','DOCUMENT'].includes(tmpl.headerType)) {
       const mediaVal = (testHeaderMedia || '').trim();
-      if (mediaVal) {
-        const isUrl = /^https?:\/\//i.test(mediaVal);
-        const mediaObj = isUrl ? { link: mediaVal } : { id: mediaVal };
-        let paramType = 'image';
-        let mediaKey = 'image';
-        if (tmpl.headerType === 'VIDEO') {
-          paramType = 'video';
-          mediaKey = 'video';
-        } else if (tmpl.headerType === 'DOCUMENT') {
-          paramType = 'document';
-          mediaKey = 'document';
-        }
+      if (!mediaVal) {
+        throw new Error('Header media is required for this template. Upload a file or paste a URL/media ID.');
+      }
+      const isUrl = /^https?:\/\//i.test(mediaVal);
+      const mediaObj = isUrl ? { link: mediaVal } : { id: mediaVal };
+      let paramType = 'image';
+      let mediaKey = 'image';
+      if (tmpl.headerType === 'VIDEO') {
+        paramType = 'video';
+        mediaKey = 'video';
+      } else if (tmpl.headerType === 'DOCUMENT') {
+        paramType = 'document';
+        mediaKey = 'document';
+      }
+      components.push({
+        type: 'header',
+        parameters: [
+          {
+            type: paramType,
+            [mediaKey]: mediaObj
+          }
+        ]
+      });
+    } else if (tmpl && tmpl.headerType === 'TEXT') {
+      const regex = /{{([a-zA-Z0-9_]+)}}/g;
+      const matches = [...String(tmpl.headerText || '').matchAll(regex)];
+      if (matches.length > 0) {
+        const headerParams = matches.map((m) => ({
+          type: 'text',
+          text: testVariables[m[1]] || `[${m[1]}]`
+        }));
         components.push({
           type: 'header',
-          parameters: [
-            {
-              type: paramType,
-              [mediaKey]: mediaObj
-            }
-          ]
+          parameters: headerParams
         });
       }
     }
@@ -615,11 +629,6 @@ Are you sure you want to delete '${template.name}'?`;
                       type: 'text',
                       text: testVariables[m[1]] || `[${m[1]}]` 
                   };
-                  
-                  if (tmpl.parameterFormat === 'NAMED') {
-                      param.parameter_name = m[1];
-                  }
-                  
                   return param;
               });
               
@@ -630,7 +639,7 @@ Are you sure you want to delete '${template.name}'?`;
           }
       }
       
-      // 2. Handle Buttons (Copy Code)
+      // 2. Handle Buttons
       if (tmpl && tmpl.buttons) {
           tmpl.buttons.forEach((btn, idx) => {
               if (btn.type === 'COPY_CODE') {
@@ -666,6 +675,22 @@ Are you sure you want to delete '${template.name}'?`;
                           }
                       ]
                   });
+              } else if (btn.type === 'URL') {
+                  const url = String(btn.url || '');
+                  const regex = /{{([a-zA-Z0-9_]+)}}/g;
+                  const matches = [...url.matchAll(regex)];
+                  if (matches.length > 0) {
+                      const params = matches.map((m) => ({
+                          type: 'text',
+                          text: testVariables[m[1]] || 'track'
+                      }));
+                      components.push({
+                          type: 'button',
+                          sub_type: 'url',
+                          index: idx,
+                          parameters: params
+                      });
+                  }
               }
           });
       }
@@ -723,16 +748,28 @@ Are you sure you want to delete '${template.name}'?`;
                       const val = e.target.value;
                       setTestSelectedTemplate(val);
                       const t = templates.find(temp => temp.name === val);
-                      if (t && t.bodyText) {
-                           const regex = /{{([a-zA-Z0-9_]+)}}/g;
-                           const matches = [...t.bodyText.matchAll(regex)];
-                           const vars = {};
-                           matches.forEach(m => vars[m[1]] = t.examples[m[1]] || '');
-                           setTestVariables(vars);
-                       } else {
-                          setTestVariables({});
+                      if (t) {
+                        const regex = /{{([a-zA-Z0-9_]+)}}/g;
+                        const vars = {};
+                        if (t.headerText) {
+                          const hMatches = [...t.headerText.matchAll(regex)];
+                          hMatches.forEach((m) => {
+                            if (!Object.prototype.hasOwnProperty.call(vars, m[1])) vars[m[1]] = '';
+                          });
+                        }
+                        if (t.bodyText) {
+                          const bMatches = [...t.bodyText.matchAll(regex)];
+                          bMatches.forEach((m) => {
+                            vars[m[1]] = (t.examples && Object.prototype.hasOwnProperty.call(t.examples, m[1]))
+                              ? t.examples[m[1]]
+                              : (vars[m[1]] || '');
+                          });
+                        }
+                        setTestVariables(vars);
+                      } else {
+                        setTestVariables({});
                       }
-                      setTestHeaderMedia(t && t.headerHandle ? t.headerHandle : '');
+                      setTestHeaderMedia('');
                   }}
                 >
                   <option value="">Select a template...</option>
@@ -764,7 +801,7 @@ Are you sure you want to delete '${template.name}'?`;
                       : tmpl.headerType === 'VIDEO'
                       ? 'Video header (URL or media ID)'
                       : 'Document header (URL or media ID)';
-                  const effectiveMedia = (testHeaderMedia || tmpl.headerHandle || '').trim();
+                  const effectiveMedia = (testHeaderMedia || '').trim();
                   const isUrl = /^https?:\/\//i.test(effectiveMedia);
                   const accept =
                     tmpl.headerType === 'IMAGE'
@@ -787,7 +824,7 @@ Are you sure you want to delete '${template.name}'?`;
                           {isUploadingTestHeader ? 'Uploading...' : 'Upload file'}
                         </Button>
                         <Input
-                          placeholder="Defaults to template media. Paste URL or media ID to override."
+                          placeholder="Paste URL or media ID, or use Upload."
                           value={testHeaderMedia}
                           onChange={e => setTestHeaderMedia(e.target.value)}
                           disabled={isUploadingTestHeader}
@@ -805,7 +842,7 @@ Are you sure you want to delete '${template.name}'?`;
                           try {
                             const uploadResp = await uploadTemplateTestMedia(file);
                             if (!uploadResp || (!uploadResp.id && !uploadResp.url)) {
-                              throw new Error('Upload successful but no media URL returned');
+                              throw new Error('Upload successful but no media ID/URL returned');
                             }
                             const mediaIdOrUrl = uploadResp.id || uploadResp.url;
                             setTestHeaderMedia(mediaIdOrUrl);
@@ -820,7 +857,7 @@ Are you sure you want to delete '${template.name}'?`;
                         }}
                       />
                       <p className="text-xs text-slate-500">
-                        If left empty, we use this template&apos;s default header media. You can override with a link or media ID.
+                        Required for media header templates.
                       </p>
                       {effectiveMedia && (
                         <div className="mt-1">

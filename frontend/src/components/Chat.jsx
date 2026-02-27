@@ -438,6 +438,26 @@ export default function Chat({ socket, conversationId, messages, onRefresh, isLo
     if (!template) return;
     setSelectedTemplateForSend(template);
     const vars = {};
+    if (template.headerText) {
+      const regex = /{{([a-zA-Z0-9_]+)}}/g;
+      const matches = [...template.headerText.matchAll(regex)];
+      matches.forEach((m) => {
+        const key = m[1];
+        if (Object.prototype.hasOwnProperty.call(vars, key)) return;
+        const lower = key.toLowerCase();
+        let val = '';
+        if (lower === 'name' && contactInfo.name) {
+          val = contactInfo.name;
+        } else if ((lower === 'phone' || lower === 'number' || lower === 'mobile') && contactInfo.number) {
+          val = contactInfo.number;
+        } else if (lower.includes('course') && contactInfo.course) {
+          val = contactInfo.course;
+        } else if (template.examples && Object.prototype.hasOwnProperty.call(template.examples, key)) {
+          val = template.examples[key];
+        }
+        vars[key] = val;
+      });
+    }
     if (template.bodyText) {
       const regex = /{{([a-zA-Z0-9_]+)}}/g;
       const matches = [...template.bodyText.matchAll(regex)];
@@ -477,26 +497,40 @@ export default function Chat({ socket, conversationId, messages, onRefresh, isLo
 
       if (tmpl && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(tmpl.headerType)) {
         const mediaVal = (templateHeaderMedia || '').trim();
-        if (mediaVal) {
-          const isUrl = /^https?:\/\//i.test(mediaVal);
-          const mediaObj = isUrl ? { link: mediaVal } : { id: mediaVal };
-          let paramType = 'image';
-          let mediaKey = 'image';
-          if (tmpl.headerType === 'VIDEO') {
-            paramType = 'video';
-            mediaKey = 'video';
-          } else if (tmpl.headerType === 'DOCUMENT') {
-            paramType = 'document';
-            mediaKey = 'document';
-          }
+        if (!mediaVal) {
+          throw new Error('Header media is required for this template. Upload a file or paste a URL/media ID.');
+        }
+        const isUrl = /^https?:\/\//i.test(mediaVal);
+        const mediaObj = isUrl ? { link: mediaVal } : { id: mediaVal };
+        let paramType = 'image';
+        let mediaKey = 'image';
+        if (tmpl.headerType === 'VIDEO') {
+          paramType = 'video';
+          mediaKey = 'video';
+        } else if (tmpl.headerType === 'DOCUMENT') {
+          paramType = 'document';
+          mediaKey = 'document';
+        }
+        components.push({
+          type: 'header',
+          parameters: [
+            {
+              type: paramType,
+              [mediaKey]: mediaObj
+            }
+          ]
+        });
+      } else if (tmpl && tmpl.headerType === 'TEXT') {
+        const regex = /{{([a-zA-Z0-9_]+)}}/g;
+        const matches = [...String(tmpl.headerText || '').matchAll(regex)];
+        if (matches.length > 0) {
+          const headerParams = matches.map((m) => ({
+            type: 'text',
+            text: templateVariables[m[1]] || `[${m[1]}]`
+          }));
           components.push({
             type: 'header',
-            parameters: [
-              {
-                type: paramType,
-                [mediaKey]: mediaObj
-              }
-            ]
+            parameters: headerParams
           });
         }
       }
@@ -511,9 +545,6 @@ export default function Chat({ socket, conversationId, messages, onRefresh, isLo
               type: 'text',
               text: templateVariables[key] || `[${key}]`
             };
-            if (tmpl.parameterFormat === 'NAMED') {
-              param.parameter_name = key;
-            }
             return param;
           });
           components.push({
@@ -551,6 +582,22 @@ export default function Chat({ socket, conversationId, messages, onRefresh, isLo
                 }
               ]
             });
+          } else if (btn.type === 'URL') {
+            const url = String(btn.url || '');
+            const regex = /{{([a-zA-Z0-9_]+)}}/g;
+            const matches = [...url.matchAll(regex)];
+            if (matches.length > 0) {
+              const params = matches.map((m) => ({
+                type: 'text',
+                text: templateVariables[m[1]] || 'track'
+              }));
+              components.push({
+                type: 'button',
+                sub_type: 'url',
+                index: idx,
+                parameters: params
+              });
+            }
           }
         });
       }
@@ -1007,7 +1054,7 @@ export default function Chat({ socket, conversationId, messages, onRefresh, isLo
                   : currentTemplate.headerType === 'VIDEO'
                   ? 'Video header (URL or media ID)'
                   : 'Document header (URL or media ID)';
-              const effectiveMedia = (templateHeaderMedia || currentTemplate.headerHandle || '').trim();
+              const effectiveMedia = (templateHeaderMedia || '').trim();
               const isUrl = /^https?:\/\//i.test(effectiveMedia);
               const accept =
                 currentTemplate.headerType === 'IMAGE'
@@ -1030,7 +1077,7 @@ export default function Chat({ socket, conversationId, messages, onRefresh, isLo
                       {isUploadingHeader ? 'Uploading...' : 'Upload file'}
                     </Button>
                     <Input
-                      placeholder="Defaults to template media. Paste URL or media ID to override."
+                      placeholder="Paste URL or media ID, or use Upload."
                       value={templateHeaderMedia}
                       onChange={(e) => setTemplateHeaderMedia(e.target.value)}
                       disabled={isUploadingHeader}
@@ -1051,7 +1098,7 @@ export default function Chat({ socket, conversationId, messages, onRefresh, isLo
                           throw new Error(uploadResp.message || 'Failed to upload header media');
                         }
                         if (!uploadResp.id) {
-                          throw new Error('Upload successful but no media URL returned');
+                          throw new Error('Upload successful but no media ID returned');
                         }
                         setTemplateHeaderMedia(uploadResp.id);
                       } catch (err) {
