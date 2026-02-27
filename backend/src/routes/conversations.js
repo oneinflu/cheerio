@@ -152,9 +152,24 @@ router.put('/:conversationId/contact', auth.requireRole('admin','agent','supervi
        if (effectiveLeadId) {
            console.log(`[ContactUpdate] Syncing course '${course}' to Starforze Lead ${effectiveLeadId}...`);
            try {
+             // Retrieve token if available (using a global or fetched token)
+             // Since we don't have the user's external token stored, we might need a system token or API key.
+             // The error "Authentication required" suggests we need a Bearer token.
+             // We can check if 'req.headers.authorization' is passed from frontend (which has the user's token).
+             
+             const headers = {};
+             // Pass through the user's token from the frontend request if present
+             if (req.headers.authorization) {
+                 headers['Authorization'] = req.headers.authorization;
+             } else if (process.env.STARFORZE_API_KEY) {
+                 // Fallback to system key if available
+                 headers['Authorization'] = `Bearer ${process.env.STARFORZE_API_KEY}`;
+             }
+
              const resp = await axios.post(`https://api.starforze.com/api/leads/${effectiveLeadId}/course`, {
                courseName: course
-             });
+             }, { headers });
+             
              console.log(`[ContactUpdate] Sync success. Response status: ${resp.status}`);
              
              // Update lead_id in conversation if it was missing and now we used one
