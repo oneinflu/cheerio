@@ -63,7 +63,31 @@ router.put('/:conversationId/contact', auth.requireRole('admin','agent','supervi
       return res.status(404).json({ error: 'Conversation not found' });
     }
     const contactId = cRes.rows[0].contact_id;
-    const leadId = cRes.rows[0].lead_id;
+    let leadId = cRes.rows[0].lead_id;
+
+    console.log(`[ContactUpdate] Updating contact ${contactId} (LeadID: ${leadId}) - Name: ${name}, Course: ${course}`);
+
+    // If leadId is missing, try to find it or create one?
+    // User says "pass the leadId and courseName na why not passing".
+    // If we don't have leadId, we can't call PUT /leads/:id/course.
+    // However, if we don't have leadId, maybe we should try to fetch it via webhook logic?
+    // Or maybe it's null in DB?
+    
+    // Fetch contact details to get mobile number if needed for fallback lookup
+    if (!leadId) {
+         const ctRes = await db.query('SELECT external_id, display_name FROM contacts WHERE id = $1', [contactId]);
+         if (ctRes.rows.length > 0) {
+             let mobile = ctRes.rows[0].external_id;
+             if (mobile.startsWith('91') && mobile.length > 10) mobile = mobile.slice(2);
+             
+             // Try to get lead via webhook mechanism or just proceed to update local DB
+             console.warn(`[ContactUpdate] Warning: No lead_id linked to conversation ${conversationId}. External sync might fail.`);
+             
+             // Attempt to get leadId by creating/updating lead via webhook endpoint if possible?
+             // Or check if we can search lead by mobile?
+             // For now, we'll log it. If user insists on sync, we need leadId.
+         }
+    }
 
     await db.query(
       `UPDATE contacts 
@@ -73,42 +97,55 @@ router.put('/:conversationId/contact', auth.requireRole('admin','agent','supervi
       [name, course, contactId]
     );
 
-    if (leadId && course) {
-      try {
-        const resp = await axios.post(`https://api.starforze.com/api/leads/${leadId}/course`, {
-          courseName: course
-        });
+    if (course) {
+      // Even if leadId is null, we might want to try syncing if we can find the lead.
+      // But assuming we have leadId if it was created via webhook.
+      
+      if (leadId) {
+          console.log(`[ContactUpdate] Syncing course '${course}' to Starforze Lead ${leadId}...`);
+          try {
+            const resp = await axios.post(`https://api.starforze.com/api/leads/${leadId}/course`, {
+              courseName: course
+            });
+            console.log(`[ContactUpdate] Sync success. Response status: ${resp.status}`);
 
-        const leadData = resp.data && resp.data.data ? resp.data.data : null;
-        const assignedTo = leadData && leadData.assignedTo ? leadData.assignedTo : null;
-        const io = require('../realtime/io').getIO();
+            const leadData = resp.data && resp.data.data ? resp.data.data : null;
+            const assignedTo = leadData && leadData.assignedTo ? leadData.assignedTo : null;
+            const io = require('../realtime/io').getIO();
 
-        if (assignedTo && (assignedTo._id || assignedTo.id || assignedTo.email)) {
-          const userId = assignedTo._id || assignedTo.id;
-          const teamId = leadData.teamId || null;
+            if (assignedTo && (assignedTo._id || assignedTo.id || assignedTo.email)) {
+              const userId = assignedTo._id || assignedTo.id;
+              const teamId = leadData.teamId || null;
 
-          if (userId) {
-            const checkRes = await db.query(
-              'SELECT 1 FROM conversation_assignments WHERE conversation_id = $1 AND released_at IS NULL',
-              [conversationId]
-            );
+              if (userId) {
+                const checkRes = await db.query(
+                  'SELECT 1 FROM conversation_assignments WHERE conversation_id = $1 AND released_at IS NULL',
+                  [conversationId]
+                );
 
-            if (checkRes.rowCount === 0) {
-              await db.query(
-                `INSERT INTO conversation_assignments (id, conversation_id, team_id, assignee_user_id, claimed_at)
-                 VALUES (gen_random_uuid(), $1, $2, $3, NOW())`,
-                [conversationId, teamId, userId]
-              );
+                if (checkRes.rowCount === 0) {
+                  await db.query(
+                    `INSERT INTO conversation_assignments (id, conversation_id, team_id, assignee_user_id, claimed_at)
+                     VALUES (gen_random_uuid(), $1, $2, $3, NOW())`,
+                    [conversationId, teamId, userId]
+                  );
+                  console.log(`[ContactUpdate] Auto-assigned conversation to ${userId}`);
 
-              if (io) {
-                io.to(`conversation:${conversationId}`).emit('assignment:claimed', { conversationId, userId });
-                io.emit('assignment:claimed', { conversationId, userId });
+                  if (io) {
+                    io.to(`conversation:${conversationId}`).emit('assignment:claimed', { conversationId, userId });
+                    io.emit('assignment:claimed', { conversationId, userId });
+                  }
+                }
               }
             }
+          } catch (e) {
+            console.error('[ContactUpdate] Failed to sync course/assignment with Starforze:', e.message);
+            if (e.response) {
+                console.error('[ContactUpdate] Response data:', e.response.data);
+            }
           }
-        }
-      } catch (e) {
-        console.error('[ContactUpdate] Failed to sync course/assignment with Starforze:', e.message);
+      } else {
+          console.warn('[ContactUpdate] Skipping external sync: lead_id is missing.');
       }
     }
 
