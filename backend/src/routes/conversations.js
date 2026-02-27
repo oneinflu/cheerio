@@ -169,8 +169,13 @@ router.put('/:conversationId/contact', auth.requireRole('admin','agent','supervi
              // The user reported "Cannot POST /api/leads/:id/course", implying 404 or method not allowed.
              // Usually updates to a resource use PUT.
              // Let's try PUT instead of POST for the course update endpoint.
+             // Reverting to POST as user says "Cannot PUT /api/leads/.../course" which means PUT is also wrong.
+             // Maybe the endpoint is wrong?
+             // Let's try PUT /api/leads/:id instead of /course suffix, passing course in body.
+             // Common REST pattern: PUT /resource/:id { field: value }
              
-             const resp = await axios.put(`https://api.starforze.com/api/leads/${effectiveLeadId}/course`, {
+             console.log(`[ContactUpdate] Trying PATCH /api/leads/${effectiveLeadId} with courseName...`);
+             const resp = await axios.patch(`https://api.starforze.com/api/leads/${effectiveLeadId}`, {
                courseName: course
              }, { headers });
              
