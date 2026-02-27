@@ -151,12 +151,13 @@ export default function CustomerCard({ conversationId }) {
                 onChange={e => setFormData({...formData, course: e.target.value})}
               >
                 <option value="">Select Course</option>
-               
-                <option value="CPA US">CPA US</option>
-             
-                <option value="CMA US">CMA US</option>
+                <option value="CPA">CPA</option>
+                <option value="CMA USA">CMA USA</option>
                 <option value="ACCA">ACCA</option>
                 <option value="EA">EA</option>
+                <option value="CFA">CFA</option>
+                <option value="FRM">FRM</option>
+                <option value="F&A">F&A</option>
               </select>
             </div>
             <Button size="sm" className="w-full mt-2" onClick={handleSubmit} disabled={loading}>

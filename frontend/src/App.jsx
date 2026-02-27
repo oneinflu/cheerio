@@ -543,51 +543,53 @@ export default function App() {
             <MessageSquare size={20} />
           </Button>
             {['admin', 'super_admin'].includes((currentUser.role || '').toLowerCase()) && (
-            <Button
-              variant={activePage === 'team-members' ? 'secondary' : 'ghost'}
-              size="icon"
-              className="w-10 h-10 rounded-lg"
-              onClick={() => setActivePage('team-members')}
-              title="Team Members"
-            >
-              <Shield size={20} />
-            </Button>
-          )}
-         
-          <Button
-            variant={activePage === 'templates' ? 'secondary' : 'ghost'}
-            size="icon"
-            className="w-10 h-10 rounded-lg"
-            onClick={() => setActivePage('templates')}
-          >
-            <FileText size={20} />
-          </Button>
-          <Button
-            variant={activePage === 'flows' ? 'secondary' : 'ghost'}
-            size="icon"
-            className="w-10 h-10 rounded-lg"
-            onClick={() => setActivePage('flows')}
-            title="Flows"
-          >
-            <GitBranch size={20} />
-          </Button>
-          <Button
-            variant={activePage === 'workflows' ? 'secondary' : 'ghost'}
-            size="icon"
-            className="w-10 h-10 rounded-lg"
-            onClick={() => setActivePage('workflows')}
-          >
-            <Workflow size={20} />
-          </Button>
+            <>
+              <Button
+                variant={activePage === 'team-members' ? 'secondary' : 'ghost'}
+                size="icon"
+                className="w-10 h-10 rounded-lg"
+                onClick={() => setActivePage('team-members')}
+                title="Team Members"
+              >
+                <Shield size={20} />
+              </Button>
+            
+              <Button
+                variant={activePage === 'templates' ? 'secondary' : 'ghost'}
+                size="icon"
+                className="w-10 h-10 rounded-lg"
+                onClick={() => setActivePage('templates')}
+              >
+                <FileText size={20} />
+              </Button>
+              <Button
+                variant={activePage === 'flows' ? 'secondary' : 'ghost'}
+                size="icon"
+                className="w-10 h-10 rounded-lg"
+                onClick={() => setActivePage('flows')}
+                title="Flows"
+              >
+                <GitBranch size={20} />
+              </Button>
+              <Button
+                variant={activePage === 'workflows' ? 'secondary' : 'ghost'}
+                size="icon"
+                className="w-10 h-10 rounded-lg"
+                onClick={() => setActivePage('workflows')}
+              >
+                <Workflow size={20} />
+              </Button>
 
-          <Button
-            variant={activePage === 'rules' ? 'secondary' : 'ghost'}
-            size="icon"
-            className="w-10 h-10 rounded-lg"
-            onClick={() => setActivePage('rules')}
-          >
-            <Zap size={20} />
-          </Button>
+              <Button
+                variant={activePage === 'rules' ? 'secondary' : 'ghost'}
+                size="icon"
+                className="w-10 h-10 rounded-lg"
+                onClick={() => setActivePage('rules')}
+              >
+                <Zap size={20} />
+              </Button>
+            </>
+          )}
 
         
         </nav>
