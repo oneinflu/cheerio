@@ -103,10 +103,41 @@ router.put('/:conversationId/contact', auth.requireRole('admin','agent','supervi
          const ctRes = await db.query('SELECT external_id, display_name FROM contacts WHERE id = $1', [contactId]);
          if (ctRes.rows.length > 0) {
              let mobile = ctRes.rows[0].external_id;
+             let displayName = ctRes.rows[0].display_name;
              if (mobile.startsWith('91') && mobile.length > 10) mobile = mobile.slice(2);
              
-             console.warn(`[ContactUpdate] Warning: No lead_id linked to conversation ${conversationId}. External sync might fail.`);
+             console.log(`[ContactUpdate] lead_id missing. Attempting to fetch via webhook for mobile: ${mobile}`);
+             
+             try {
+                 // Call the webhook endpoint to get/create lead
+                 const res = await axios.post('https://api.starforze.com/api/webhook/whatsapp-lead', {
+                    mobile: mobile,
+                    name: displayName || 'Unknown',
+                    course: '' // Just fetching
+                 });
+                 
+                 if (res.data && res.data.data && res.data.data.lead && res.data.data.lead._id) {
+                     effectiveLeadId = res.data.data.lead._id;
+                     console.log(`[ContactUpdate] Successfully fetched lead_id: ${effectiveLeadId}`);
+                     
+                     // Persist the fetched leadId immediately
+                     await db.query('UPDATE conversations SET lead_id = $1 WHERE id = $2', [effectiveLeadId, conversationId]);
+                     await db.query(`
+                        UPDATE contacts 
+                        SET profile = jsonb_set(COALESCE(profile, '{}'), '{leadId}', to_jsonb($1::text), true)
+                        WHERE id = $2
+                     `, [effectiveLeadId, contactId]);
+                 } else {
+                     console.warn(`[ContactUpdate] Webhook response did not contain lead._id`);
+                 }
+             } catch (fetchErr) {
+                 console.error(`[ContactUpdate] Failed to fetch lead via webhook:`, fetchErr.message);
+             }
          }
+    }
+
+    if (!effectiveLeadId) {
+        console.warn(`[ContactUpdate] Warning: No lead_id found even after fallback fetch. External sync will fail.`);
     }
 
     await db.query(
