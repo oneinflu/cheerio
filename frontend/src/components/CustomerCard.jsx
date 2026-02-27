@@ -66,9 +66,15 @@ export default function CustomerCard({ conversationId }) {
   const handleSubmit = async () => {
     setLoading(true);
     try {
+      const token = localStorage.getItem('accessToken');
+      const headers = { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+      };
+      
       const res = await fetch(`/api/conversations/${conversationId}/contact`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           name: formData.name,
           course: formData.course
