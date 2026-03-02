@@ -26,15 +26,28 @@ router.get('/', (req, res) => {
   const token = req.query['hub.verify_token'];
   const challenge = req.query['hub.challenge'];
 
-  console.log('[Instagram Webhook] Verification request:', { mode, token, challenge });
+  // Debug logging to help troubleshoot verification failures
+  console.log('[Instagram Webhook] Verification request received.');
+  console.log(`[Instagram Webhook] Mode: ${mode}`);
+  console.log(`[Instagram Webhook] Token received: ${token}`);
+  console.log(`[Instagram Webhook] Token expected: ${VERIFY_TOKEN}`);
+  
+  if (!VERIFY_TOKEN) {
+    console.error('[Instagram Webhook] Error: VERIFY_TOKEN is not set in environment variables.');
+  }
 
   if (mode === 'subscribe' && token === VERIFY_TOKEN) {
-    console.log('[Instagram Webhook] Verification successful.');
+    console.log('[Instagram Webhook] Verification successful. Returning challenge.');
     // Echo the challenge string exactly to confirm subscription.
     return res.status(200).send(challenge);
   }
-  console.warn('[Instagram Webhook] Verification failed. Token mismatch or invalid mode.');
-  return res.status(403).json({ error: 'Forbidden' });
+  
+  if (mode === 'subscribe' && token !== VERIFY_TOKEN) {
+     console.warn('[Instagram Webhook] Verification failed: Token mismatch.');
+     console.warn(`[Instagram Webhook] Expected: "${VERIFY_TOKEN}", Received: "${token}"`);
+  }
+
+  return res.status(403).json({ error: 'Forbidden', detail: 'Verify token mismatch' });
 });
 
 /**

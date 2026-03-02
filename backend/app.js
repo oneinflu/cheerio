@@ -30,6 +30,7 @@ const dashboardRouter = require('./src/routes/dashboard');
 const workflowsRouter = require('./src/routes/workflows');
 const rulesRouter = require('./src/routes/rules');
 const authRouter = require('./src/routes/auth');
+const instagramAuthRouter = require('./src/routes/instagramAuth');
 const teamRouter = require('./src/routes/team');
 const settingsRouter = require('./src/routes/settings');
 const whatsappFlowsRouter = require('./src/routes/whatsappFlows');
@@ -106,6 +107,7 @@ function createApp() {
   app.use('/webhooks/instagram', instagramWebhookRouter);
   app.use('/webhooks/flow', whatsappFlowEndpointRouter);
   app.use('/api/auth', authRouter); // Login
+  app.use('/api/auth', instagramAuthRouter); // Instagram Callback
   app.use('/api/team-users', teamRouter); // Team Users
   app.use('/api/whatsapp', whatsappOutboundRouter);
   app.use('/api/conversations', conversationsRouter);
