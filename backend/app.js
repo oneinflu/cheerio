@@ -17,6 +17,7 @@ const express = require('express');
 const path = require('path');
 const cors = require('cors'); // Added for widget support
 const whatsappWebhookRouter = require('./src/webhooks/whatsapp');
+const instagramWebhookRouter = require('./src/webhooks/instagram');
 const whatsappFlowEndpointRouter = require('./src/webhooks/flowEndpoint');
 const whatsappOutboundRouter = require('./src/routes/whatsappOutbound');
 const conversationsRouter = require('./src/routes/conversations');
@@ -102,6 +103,7 @@ function createApp() {
   // app.use('/api/conversations', conversationsRouter);
   // app.use('/api/messages', messagesRouter);
   app.use('/webhooks/whatsapp', whatsappWebhookRouter);
+  app.use('/webhooks/instagram', instagramWebhookRouter);
   app.use('/webhooks/flow', whatsappFlowEndpointRouter);
   app.use('/api/auth', authRouter); // Login
   app.use('/api/team-users', teamRouter); // Team Users
