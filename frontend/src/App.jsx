@@ -164,6 +164,7 @@ export default function App() {
     if (!currentUser) return;
     try {
       const res = await getInbox(currentUser.teamIds[0], 'all');
+      // console.log('[App] Inbox response:', res);
       const currentId = selectedIdRef.current;
       const nextConversations = (res.conversations || []).map(c => {
         const base = c.id === currentId ? { ...c, unreadCount: 0 } : c;
@@ -171,7 +172,11 @@ export default function App() {
       });
       setConversations(nextConversations);
       
-      if (!currentId && nextConversations.length > 0) {
+      // If we are on Instagram page, maybe we shouldn't auto-select the first conversation if it's not Instagram?
+      // Or let the sub-pages handle selection logic.
+      // For now, keep existing behavior but be aware.
+      
+      if (!currentId && nextConversations.length > 0 && activePage !== 'instagram') {
         setSelectedConversation(nextConversations[0].id);
       }
     } catch (err) {
@@ -654,7 +659,19 @@ export default function App() {
 
         {activePage === 'rules' && <RulesPage />}
         
-        {activePage === 'instagram' && <InstagramPage />}
+        {activePage === 'instagram' && (
+          <InstagramPage 
+            conversations={conversations} // Pass all conversations, page filters them
+            selectedId={selectedId}
+            onSelect={setSelectedConversation}
+            onPin={handlePin}
+            onResolve={handleResolve}
+            onDelete={handleDeleteConversation}
+            currentUser={currentUser}
+            onRefresh={() => loadInbox()}
+            socket={socket}
+          />
+        )}
 
         {activePage === 'team-members' && <TeamMembersPage />}
 
