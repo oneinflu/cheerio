@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Modal } from './ui/Modal';
-import { ListChecks, Clock, Instagram, ExternalLink, CheckCircle, AlertCircle } from 'lucide-react';
+import { ListChecks, Clock } from 'lucide-react';
 import { getLeadStages, createLeadStage, updateLeadStage, deleteLeadStage, getWorkingHours, saveWorkingHours } from '../api';
 
 export default function SettingsPage({ currentUser }) {
@@ -19,12 +19,6 @@ export default function SettingsPage({ currentUser }) {
   const [loadingStages, setLoadingStages] = useState(false);
   const [stagesError, setStagesError] = useState(null);
   const [savingStageId, setSavingStageId] = useState(null);
-
-  // Instagram States
-  const [isInstaConnected, setIsInstaConnected] = useState(false);
-  const [instaAccountName, setInstaAccountName] = useState(null);
-  const [loadingInsta, setLoadingInsta] = useState(false);
-  const instagramAuthUrl = "https://www.instagram.com/oauth/authorize?force_reauth=true&client_id=1115102437313127&redirect_uri=https://inbox.xolox.io/api/auth/instagram/callback&response_type=code&scope=instagram_business_basic%2Cinstagram_business_manage_messages%2Cinstagram_business_manage_comments%2Cinstagram_business_content_publish%2Cinstagram_business_manage_insights";
 
   const [timezone, setTimezone] = useState('Asia/Kolkata');
   const [workingHours, setWorkingHours] = useState({
@@ -53,11 +47,10 @@ export default function SettingsPage({ currentUser }) {
 
   useEffect(() => {
     if (!teamId) return;
-    
-    // Fetch Lead Stages
-    setLoadingStages(true);
-    getLeadStages(teamId)
-      .then(res => {
+    const load = async () => {
+      try {
+        setLoadingStages(true);
+        const res = await getLeadStages(teamId);
         if (res && Array.isArray(res.stages)) {
           setLeadStages(res.stages);
           setStagesError(null);
@@ -65,14 +58,21 @@ export default function SettingsPage({ currentUser }) {
           setLeadStages([]);
           setStagesError('Failed to load lead stages');
         }
-      })
-      .catch(err => setStagesError('Failed to load lead stages'))
-      .finally(() => setLoadingStages(false));
+      } catch (err) {
+        setStagesError('Failed to load lead stages');
+      } finally {
+        setLoadingStages(false);
+      }
+    };
+    load();
+  }, [teamId]);
 
-    // Fetch Working Hours
-    setLoadingHours(true);
-    getWorkingHours(teamId)
-      .then(res => {
+  useEffect(() => {
+    if (!teamId) return;
+    const load = async () => {
+      try {
+        setLoadingHours(true);
+        const res = await getWorkingHours(teamId);
         if (res && res.hours) {
           setTimezone(res.timezone || 'Asia/Kolkata');
           setWorkingHours({
@@ -89,54 +89,14 @@ export default function SettingsPage({ currentUser }) {
         } else {
           setHoursError('Failed to load working hours');
         }
-      })
-      .catch(err => setHoursError('Failed to load working hours'))
-      .finally(() => setLoadingHours(false));
-
-    // Check Instagram Status
-    checkInstagramStatus();
-
+      } catch (err) {
+        setHoursError('Failed to load working hours');
+      } finally {
+        setLoadingHours(false);
+      }
+    };
+    load();
   }, [teamId]);
-
-  const checkInstagramStatus = async () => {
-    try {
-      setLoadingInsta(true);
-      const res = await fetch('/api/auth/instagram/status', {
-         headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` }
-      });
-      const data = await res.json();
-      setIsInstaConnected(data.connected);
-      if (data.connected && data.channel) {
-          setInstaAccountName(data.channel.name);
-      } else {
-          setInstaAccountName(null);
-      }
-    } catch (err) {
-      console.error('Failed to check instagram status', err);
-    } finally {
-      setLoadingInsta(false);
-    }
-  };
-
-  const handleDisconnectInstagram = async () => {
-    if(!confirm('Are you sure you want to disconnect Instagram? You will stop receiving messages.')) return;
-    try {
-      setLoadingInsta(true);
-      const res = await fetch('/api/auth/instagram', {
-         method: 'DELETE',
-         headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` }
-      });
-      if(res.ok) {
-        setIsInstaConnected(false);
-        setInstaAccountName(null);
-      }
-    } catch(err) {
-      console.error(err);
-      alert('Failed to disconnect');
-    } finally {
-      setLoadingInsta(false);
-    }
-  };
 
   const handleAddStage = async () => {
     if (!teamId) return;
@@ -226,55 +186,6 @@ export default function SettingsPage({ currentUser }) {
       </div>
 
       <div className="p-8 grid grid-cols-1 xl:grid-cols-2 gap-6">
-        <div className="xl:col-span-2">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Instagram className="h-4 w-4 text-pink-600" />
-                Instagram Integration
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-sm font-medium text-slate-900">Connect Business Account</h3>
-                  <p className="text-xs text-slate-500 mt-1">Link your Instagram Business account to manage DMs and comments.</p>
-                </div>
-                <div>
-                   {loadingInsta ? (
-                     <Button disabled variant="outline" size="sm">Checking...</Button>
-                   ) : isInstaConnected ? (
-                     <div className="flex items-center gap-3">
-                        <div className="text-sm font-medium text-slate-700 bg-slate-100 px-3 py-1.5 rounded-full flex items-center gap-2">
-                            <Instagram size={14} className="text-pink-600" />
-                            {instaAccountName || 'Connected Account'}
-                        </div>
-                        <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200" onClick={handleDisconnectInstagram}>
-                            Disconnect
-                        </Button>
-                     </div>
-                   ) : (
-                     <Button 
-                       size="sm"
-                       className="bg-[#E1306C] hover:bg-[#C13584] text-white border-0"
-                       onClick={() => window.location.href = instagramAuthUrl}
-                     >
-                       <ExternalLink className="w-3 h-3 mr-2" />
-                       Connect
-                     </Button>
-                   )}
-                </div>
-              </div>
-              {isInstaConnected && (
-                 <div className="p-3 bg-green-50 border border-green-100 rounded-md flex items-center gap-2 text-xs text-green-700">
-                    <CheckCircle className="w-4 h-4" />
-                    <span>Your Instagram account <strong>{instaAccountName}</strong> is connected and active.</span>
-                 </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">

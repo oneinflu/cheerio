@@ -115,43 +115,4 @@ router.get('/instagram/callback', async (req, res) => {
   }
 });
 
-/**
- * DELETE /api/auth/instagram
- * Disconnects the Instagram channel.
- */
-router.delete('/instagram', async (req, res) => {
-  try {
-    // In a real app, you might want to revoke the token from Meta as well.
-    // For now, we just deactivate/delete the channel from our DB.
-    
-    // We assume there's only one instagram channel per workspace for now, or we delete all.
-    // Or we could pass an ID if we supported multiple.
-    
-    await db.query("DELETE FROM channels WHERE type = 'instagram'");
-    
-    res.json({ success: true, message: 'Instagram disconnected successfully' });
-  } catch (err) {
-    console.error('[Instagram Auth] Disconnect Failed:', err.message);
-    res.status(500).json({ error: 'Failed to disconnect Instagram' });
-  }
-});
-
-/**
- * GET /api/auth/instagram/status
- * Checks if Instagram is connected.
- */
-router.get('/instagram/status', async (req, res) => {
-  try {
-    const result = await db.query("SELECT id, name, active, created_at FROM channels WHERE type = 'instagram' LIMIT 1");
-    if (result.rows.length > 0) {
-      res.json({ connected: true, channel: result.rows[0] });
-    } else {
-      res.json({ connected: false });
-    }
-  } catch (err) {
-    console.error('[Instagram Auth] Status Check Failed:', err.message);
-    res.status(500).json({ error: 'Failed to check status' });
-  }
-});
-
 module.exports = router;
