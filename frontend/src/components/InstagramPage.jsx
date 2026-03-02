@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from './ui/Card';
 import { Button } from './ui/Button';
-import { Instagram, CheckCircle, ExternalLink, Loader2 } from 'lucide-react';
+import { Instagram, CheckCircle, ExternalLink, Loader2, LogOut } from 'lucide-react';
 
 export default function InstagramPage() {
   const instagramAuthUrl = "https://www.instagram.com/oauth/authorize?force_reauth=true&client_id=1115102437313127&redirect_uri=https://inbox.xolox.io/api/auth/instagram/callback&response_type=code&scope=instagram_business_basic%2Cinstagram_business_manage_messages%2Cinstagram_business_manage_comments%2Cinstagram_business_content_publish%2Cinstagram_business_manage_insights";
@@ -9,6 +9,7 @@ export default function InstagramPage() {
   const [isConnected, setIsConnected] = useState(false);
   const [loading, setLoading] = useState(true);
   const [channelInfo, setChannelInfo] = useState(null);
+  const [disconnecting, setDisconnecting] = useState(false);
 
   useEffect(() => {
     // Check URL first for immediate feedback after redirect
@@ -27,6 +28,31 @@ export default function InstagramPage() {
       .catch(err => console.error('Failed to check status:', err))
       .finally(() => setLoading(false));
   }, []);
+
+  const handleDisconnect = async () => {
+    if (!window.confirm('Are you sure you want to disconnect? This will stop incoming messages.')) return;
+    
+    setDisconnecting(true);
+    try {
+      const res = await fetch('/api/auth/instagram/disconnect', { method: 'POST' });
+      if (res.ok) {
+        setIsConnected(false);
+        setChannelInfo(null);
+        // Clear query param if present
+        if (window.history.pushState) {
+            const newurl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+            window.history.pushState({path:newurl},'',newurl);
+        }
+      } else {
+        alert('Failed to disconnect. Please try again.');
+      }
+    } catch (err) {
+      console.error('Disconnect failed:', err);
+      alert('Network error while disconnecting.');
+    } finally {
+      setDisconnecting(false);
+    }
+  };
 
   return (
     <div className="flex-1 bg-slate-50 p-8 overflow-y-auto">
@@ -86,10 +112,21 @@ export default function InstagramPage() {
                     Loading...
                   </Button>
                 ) : isConnected ? (
-                     <Button disabled variant="outline" className="border-green-200 bg-green-50 text-green-700">
+                   <div className="flex items-center gap-2">
+                     <Button disabled variant="outline" className="border-green-200 bg-green-50 text-green-700 cursor-default">
                          <CheckCircle className="w-4 h-4 mr-2" />
                          Connected
                      </Button>
+                     <Button 
+                       variant="destructive" 
+                       size="sm"
+                       onClick={handleDisconnect}
+                       disabled={disconnecting}
+                       title="Disconnect Account"
+                     >
+                       {disconnecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogOut className="w-4 h-4" />}
+                     </Button>
+                   </div>
                 ) : (
                     <Button 
                     onClick={() => window.location.href = instagramAuthUrl}
