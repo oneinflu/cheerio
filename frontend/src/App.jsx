@@ -15,9 +15,10 @@ import RulesPage from './components/RulesPage.jsx';
 import TeamMembersPage from './components/TeamMembersPage.jsx';
 import LoginPage from './components/LoginPage.jsx';
 import GuestChat from './components/GuestChat.jsx';
+import InstagramPage from './components/InstagramPage.jsx';
 import { connectSocket } from './socket.js';
 import { getInbox, getMessages, claimConversation, reassignConversation, forceReassignConversation, releaseConversation, markAsRead, resolveConversation, deleteConversation, blockConversation, unblockConversation, pinConversation, updateWorkflow, getTeamUser, getTeamUsers, reassignExternalLead } from './api.js';
-import { LayoutDashboard, MessageSquare, Users, Settings, LogOut, Search, Bell, FileText, Workflow, Shield, ChevronsUpDown, Check, Zap, GitBranch } from 'lucide-react';
+import { LayoutDashboard, MessageSquare, Users, Settings, LogOut, Search, Bell, FileText, Workflow, Shield, ChevronsUpDown, Check, Zap, GitBranch, Instagram } from 'lucide-react';
 import { Button } from './components/ui/Button';
 import { Badge } from './components/ui/Badge';
 import { Card, CardHeader, CardTitle, CardContent } from './components/ui/Card';
@@ -588,6 +589,15 @@ export default function App() {
               >
                 <Zap size={20} />
               </Button>
+              <Button
+                variant={activePage === 'instagram' ? 'secondary' : 'ghost'}
+                size="icon"
+                className="w-10 h-10 rounded-lg"
+                onClick={() => setActivePage('instagram')}
+                title="Instagram Integration"
+              >
+                <Instagram size={20} />
+              </Button>
             </>
           )}
 
@@ -643,6 +653,8 @@ export default function App() {
         )}
 
         {activePage === 'rules' && <RulesPage />}
+        
+        {activePage === 'instagram' && <InstagramPage />}
 
         {activePage === 'team-members' && <TeamMembersPage />}
 
