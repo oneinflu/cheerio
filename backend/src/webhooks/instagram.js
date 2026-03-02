@@ -274,15 +274,17 @@ async function handleEchoMessage(event, entryId) {
     try {
         // 1. Identify Channel
         // For echo, the SENDER is our channel (the business).
+        // Try looking up by senderId first
         let channelRes = await db.query('SELECT id, config FROM channels WHERE type = $1 AND external_id = $2', ['instagram', senderId]);
         
         // Fallback to Entry ID if senderId doesn't match known channel
         if (channelRes.rows.length === 0) {
+             console.log(`[Instagram Webhook] Channel not found for sender ${senderId}. Checking entry ID ${entryId}...`);
              channelRes = await db.query('SELECT id, config FROM channels WHERE type = $1 AND external_id = $2', ['instagram', entryId]);
         }
 
         if (channelRes.rows.length === 0) {
-            console.warn(`[Instagram Webhook] Channel not found for sender ${senderId} (Echo). Message ignored.`);
+            console.warn(`[Instagram Webhook] Channel not found for sender ${senderId} OR entry ${entryId} (Echo). Message ignored.`);
             return;
         }
         const channelId = channelRes.rows[0].id;
