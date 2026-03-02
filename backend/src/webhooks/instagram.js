@@ -101,8 +101,13 @@ router.post('/', (req, res) => {
       messagingEvents.forEach(event => {
         console.log('[Instagram Webhook] Messaging Event:', JSON.stringify(event, null, 2));
         
-        if (event.message && !event.message.is_echo) {
-           handleIncomingMessage(event, entry.id);
+        if (event.message) {
+           if (event.message.is_echo) {
+               console.log('[Instagram Webhook] Handling echo message (outbound from Instagram App)');
+               handleEchoMessage(event, entry.id);
+           } else {
+               handleIncomingMessage(event, entry.id);
+           }
         }
       });
 
@@ -245,6 +250,107 @@ async function handleIncomingMessage(event, entryId) {
 
     } catch (err) {
         console.error('[Instagram Webhook] Error processing message:', err);
+    }
+}
+
+/**
+ * Handle Echo Message (Outbound sent from Instagram App/Business Suite)
+ * We treat this as an outbound message to keep our conversation history in sync.
+ */
+async function handleEchoMessage(event, entryId) {
+    const db = require('../../db');
+    const { getIO } = require('../realtime/io');
+
+    // In echo, sender is the page/business account, recipient is the customer.
+    // However, sometimes sender.id in echo matches the Page ID.
+    const senderId = event.sender.id; 
+    const recipientId = event.recipient.id;
+    const messageId = event.message.mid;
+    const textBody = event.message.text || '';
+    const timestamp = event.timestamp;
+
+    console.log(`[Instagram Webhook] Processing ECHO from ${senderId} to ${recipientId} (Entry: ${entryId})`);
+
+    try {
+        // 1. Identify Channel
+        // For echo, the SENDER is our channel (the business).
+        let channelRes = await db.query('SELECT id, config FROM channels WHERE type = $1 AND external_id = $2', ['instagram', senderId]);
+        
+        // Fallback to Entry ID if senderId doesn't match known channel
+        if (channelRes.rows.length === 0) {
+             channelRes = await db.query('SELECT id, config FROM channels WHERE type = $1 AND external_id = $2', ['instagram', entryId]);
+        }
+
+        if (channelRes.rows.length === 0) {
+            console.warn(`[Instagram Webhook] Channel not found for sender ${senderId} (Echo). Message ignored.`);
+            return;
+        }
+        const channelId = channelRes.rows[0].id;
+
+        // 2. Identify Contact (The recipient)
+        let displayName = `Instagram User ${recipientId}`;
+        const contactRes = await db.query(`
+            INSERT INTO contacts (channel_id, external_id, display_name, created_at, updated_at)
+            VALUES ($1, $2, $3, NOW(), NOW())
+            ON CONFLICT (channel_id, external_id) DO UPDATE SET updated_at = NOW()
+            RETURNING id
+        `, [channelId, recipientId, displayName]);
+        const contactId = contactRes.rows[0].id;
+
+        // 3. Find/Create Conversation
+        let convRes = await db.query(`
+            SELECT id FROM conversations 
+            WHERE channel_id = $1 AND contact_id = $2 AND status != 'closed'
+            ORDER BY created_at DESC LIMIT 1
+        `, [channelId, contactId]);
+
+        let conversationId;
+        if (convRes.rows.length > 0) {
+            conversationId = convRes.rows[0].id;
+            await db.query('UPDATE conversations SET last_message_at = NOW(), updated_at = NOW() WHERE id = $1', [conversationId]);
+        } else {
+            const newConv = await db.query(`
+                INSERT INTO conversations (channel_id, contact_id, status, last_message_at)
+                VALUES ($1, $2, 'open', NOW())
+                RETURNING id
+            `, [channelId, contactId]);
+            conversationId = newConv.rows[0].id;
+        }
+
+        // 4. Insert Outbound Message
+        let tsSeconds = timestamp;
+        if (timestamp > 9999999999) tsSeconds = timestamp / 1000;
+
+        const msgRes = await db.query(`
+            INSERT INTO messages (
+                conversation_id, channel_id, direction, content_type, 
+                external_message_id, text_body, delivery_status, raw_payload, created_at
+            )
+            VALUES ($1, $2, 'outbound', 'text', $3, $4, 'sent', $5, to_timestamp($6))
+            ON CONFLICT (channel_id, external_message_id) DO NOTHING
+            RETURNING id
+        `, [conversationId, channelId, messageId, textBody, event, tsSeconds]);
+
+        if (msgRes.rowCount > 0) {
+            console.log(`[Instagram Webhook] Echo message ${messageId} stored.`);
+            const io = getIO();
+            if (io) {
+                const payload = {
+                    conversationId,
+                    messageId: msgRes.rows[0].id,
+                    contentType: 'text',
+                    textBody,
+                    direction: 'outbound',
+                    attachments: [],
+                    rawPayload: event
+                };
+                io.to(`conversation:${conversationId}`).emit('message:new', payload);
+                io.emit('message:new', payload);
+            }
+        }
+
+    } catch (err) {
+        console.error('[Instagram Webhook] Error processing echo message:', err);
     }
 }
 

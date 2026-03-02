@@ -115,4 +115,32 @@ router.get('/instagram/callback', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/auth/instagram/status
+ * Checks if there is an active Instagram channel connected.
+ */
+router.get('/instagram/status', async (req, res) => {
+  try {
+    const result = await db.query(`
+      SELECT id, name, external_id, created_at 
+      FROM channels 
+      WHERE type = 'instagram' AND active = true 
+      ORDER BY created_at DESC 
+      LIMIT 1
+    `);
+    
+    if (result.rows.length > 0) {
+      res.json({ 
+        connected: true, 
+        channel: result.rows[0] 
+      });
+    } else {
+      res.json({ connected: false });
+    }
+  } catch (err) {
+    console.error('[Instagram Auth] Status Check Error:', err);
+    res.status(500).json({ error: 'Failed to check status' });
+  }
+});
+
 module.exports = router;

@@ -1,13 +1,32 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from './ui/Card';
 import { Button } from './ui/Button';
-import { Instagram, CheckCircle, ExternalLink } from 'lucide-react';
+import { Instagram, CheckCircle, ExternalLink, Loader2 } from 'lucide-react';
 
 export default function InstagramPage() {
   const instagramAuthUrl = "https://www.instagram.com/oauth/authorize?force_reauth=true&client_id=1115102437313127&redirect_uri=https://inbox.xolox.io/api/auth/instagram/callback&response_type=code&scope=instagram_business_basic%2Cinstagram_business_manage_messages%2Cinstagram_business_manage_comments%2Cinstagram_business_content_publish%2Cinstagram_business_manage_insights";
   
-  // Check for connected query param
-  const isConnected = new URLSearchParams(window.location.search).get('connected') === 'true';
+  const [isConnected, setIsConnected] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [channelInfo, setChannelInfo] = useState(null);
+
+  useEffect(() => {
+    // Check URL first for immediate feedback after redirect
+    const urlConnected = new URLSearchParams(window.location.search).get('connected') === 'true';
+    if (urlConnected) setIsConnected(true);
+
+    // Fetch actual status from backend
+    fetch('/api/auth/instagram/status')
+      .then(res => res.json())
+      .then(data => {
+        if (data.connected) {
+          setIsConnected(true);
+          setChannelInfo(data.channel);
+        }
+      })
+      .catch(err => console.error('Failed to check status:', err))
+      .finally(() => setLoading(false));
+  }, []);
 
   return (
     <div className="flex-1 bg-slate-50 p-8 overflow-y-auto">
@@ -52,11 +71,21 @@ export default function InstagramPage() {
                   <div>
                     <div className="font-medium text-slate-900">Instagram Business</div>
                     <div className="text-xs text-slate-500">
-                        {isConnected ? <span className="text-green-600 font-medium">Connected</span> : 'Not Connected'}
+                        {loading ? 'Checking status...' : 
+                         isConnected ? (
+                           <span className="text-green-600 font-medium">
+                             Connected {channelInfo ? `as ${channelInfo.name}` : ''}
+                           </span>
+                         ) : 'Not Connected'}
                     </div>
                   </div>
                 </div>
-                {isConnected ? (
+                {loading ? (
+                  <Button disabled variant="outline" className="border-slate-200 bg-slate-50">
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Loading...
+                  </Button>
+                ) : isConnected ? (
                      <Button disabled variant="outline" className="border-green-200 bg-green-50 text-green-700">
                          <CheckCircle className="w-4 h-4 mr-2" />
                          Connected
@@ -71,7 +100,7 @@ export default function InstagramPage() {
                     </Button>
                 )}
               </div>
-              {!isConnected && (
+              {!isConnected && !loading && (
                 <p className="text-xs text-slate-500 text-center">
                     You will be redirected to Facebook/Instagram to authorize the connection.
                 </p>
