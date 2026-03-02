@@ -22,6 +22,7 @@ export default function SettingsPage({ currentUser }) {
 
   // Instagram States
   const [isInstaConnected, setIsInstaConnected] = useState(false);
+  const [instaAccountName, setInstaAccountName] = useState(null);
   const [loadingInsta, setLoadingInsta] = useState(false);
   const instagramAuthUrl = "https://www.instagram.com/oauth/authorize?force_reauth=true&client_id=1115102437313127&redirect_uri=https://inbox.xolox.io/api/auth/instagram/callback&response_type=code&scope=instagram_business_basic%2Cinstagram_business_manage_messages%2Cinstagram_business_manage_comments%2Cinstagram_business_content_publish%2Cinstagram_business_manage_insights";
 
@@ -105,6 +106,11 @@ export default function SettingsPage({ currentUser }) {
       });
       const data = await res.json();
       setIsInstaConnected(data.connected);
+      if (data.connected && data.channel) {
+          setInstaAccountName(data.channel.name);
+      } else {
+          setInstaAccountName(null);
+      }
     } catch (err) {
       console.error('Failed to check instagram status', err);
     } finally {
@@ -122,6 +128,7 @@ export default function SettingsPage({ currentUser }) {
       });
       if(res.ok) {
         setIsInstaConnected(false);
+        setInstaAccountName(null);
       }
     } catch(err) {
       console.error(err);
@@ -237,9 +244,15 @@ export default function SettingsPage({ currentUser }) {
                    {loadingInsta ? (
                      <Button disabled variant="outline" size="sm">Checking...</Button>
                    ) : isInstaConnected ? (
-                     <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700 hover:bg-red-50" onClick={handleDisconnectInstagram}>
-                       Disconnect
-                     </Button>
+                     <div className="flex items-center gap-3">
+                        <div className="text-sm font-medium text-slate-700 bg-slate-100 px-3 py-1.5 rounded-full flex items-center gap-2">
+                            <Instagram size={14} className="text-pink-600" />
+                            {instaAccountName || 'Connected Account'}
+                        </div>
+                        <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200" onClick={handleDisconnectInstagram}>
+                            Disconnect
+                        </Button>
+                     </div>
                    ) : (
                      <Button 
                        size="sm"
@@ -255,7 +268,7 @@ export default function SettingsPage({ currentUser }) {
               {isInstaConnected && (
                  <div className="p-3 bg-green-50 border border-green-100 rounded-md flex items-center gap-2 text-xs text-green-700">
                     <CheckCircle className="w-4 h-4" />
-                    <span>Your Instagram account is connected and active.</span>
+                    <span>Your Instagram account <strong>{instaAccountName}</strong> is connected and active.</span>
                  </div>
               )}
             </CardContent>

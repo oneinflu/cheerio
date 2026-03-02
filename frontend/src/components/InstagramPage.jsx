@@ -17,6 +17,7 @@ export default function InstagramPage({ conversations = [], selectedId, onSelect
   const [filter, setFilter] = useState('all');
   
   const instaConversations = useMemo(() => {
+     if (!conversations) return [];
      return conversations.filter(c => c.channelType === 'instagram').filter(c => {
          if (filter === 'open') return c.status === 'open' || c.status === 'unassigned';
          if (filter === 'closed') return c.status === 'closed';
