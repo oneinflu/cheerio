@@ -81,34 +81,34 @@ router.post('/', (req, res) => {
   }
 
   // Handle "page" or "instagram" objects
+  // Note: Instagram Graph API webhooks usually come with object='instagram' or 'page' depending on setup.
+  // For Instagram Messaging, it's typically 'instagram' if subscribed via App Dashboard > Instagram,
+  // or 'page' if subscribed via App Dashboard > Webhooks > Page (and linked IG account).
+  
   if (body.object === 'instagram' || body.object === 'page') {
     const entries = Array.isArray(body.entry) ? body.entry : [];
     
     entries.forEach(entry => {
-      // Instagram Messaging events are usually in 'messaging' or 'changes' depending on subscription
+      // Instagram Messaging events are usually in 'messaging' array.
+      // Sometimes they might be in 'changes' if it's a field update.
       const messagingEvents = entry.messaging || [];
       const changes = entry.changes || [];
+      
+      // Log entry ID (this is usually the IG User ID or Page ID)
+      console.log(`[Instagram Webhook] Entry ID: ${entry.id}`);
 
       // Process Messaging Events (Direct Messages)
       messagingEvents.forEach(event => {
         console.log('[Instagram Webhook] Messaging Event:', JSON.stringify(event, null, 2));
         
-        // Example Event Structure:
-        // {
-        //   "sender": { "id": "12345678" },
-        //   "recipient": { "id": "87654321" },
-        //   "timestamp": 1600000000,
-        //   "message": { "mid": "m_...", "text": "Hello" }
-        // }
-
         if (event.message && !event.message.is_echo) {
-           handleIncomingMessage(event);
+           handleIncomingMessage(event, entry.id);
         }
       });
 
       // Process Changes (Comments, etc.)
       changes.forEach(change => {
-        console.log('[Instagram Webhook] Change Event:', change);
+        console.log('[Instagram Webhook] Change Event:', JSON.stringify(change, null, 2));
         // TODO: Implement comment handling if needed
       });
     });
@@ -116,6 +116,7 @@ router.post('/', (req, res) => {
     // Return 200 OK to acknowledge receipt
     res.status(200).send('EVENT_RECEIVED');
   } else {
+    console.warn(`[Instagram Webhook] Unknown object type: ${body.object}`);
     // Return 404 if not an instagram/page event
     res.sendStatus(404);
   }
@@ -124,7 +125,7 @@ router.post('/', (req, res) => {
 /**
  * Handle incoming Instagram message
  */
-async function handleIncomingMessage(event) {
+async function handleIncomingMessage(event, entryId) {
     const db = require('../../db');
     const { getIO } = require('../realtime/io');
 
@@ -132,41 +133,43 @@ async function handleIncomingMessage(event) {
     const recipientId = event.recipient.id;
     const messageId = event.message.mid;
     const textBody = event.message.text || '';
+    // Instagram attachments can be in 'attachments' array
     const attachments = event.message.attachments || [];
     const timestamp = event.timestamp;
 
-    console.log(`[Instagram Webhook] Processing message from ${senderId} to ${recipientId}`);
+    console.log(`[Instagram Webhook] Processing message from ${senderId} to ${recipientId} (Entry ID: ${entryId})`);
 
     try {
-        // 1. Ensure Channel Exists (The recipient should be our connected Instagram account)
-        // We stored the IG User ID in 'external_id' in channels table.
+        // 1. Ensure Channel Exists
+        // We look up by the recipientId (which should be our IG User ID).
+        // HOWEVER, sometimes recipientId in webhook != the ID we got during OAuth if it's a Page-scoped ID vs User-scoped ID.
+        // But usually for IG Business, recipient.id IS the IG Business Account ID.
+        
         let channelRes = await db.query('SELECT id, config FROM channels WHERE type = $1 AND external_id = $2', ['instagram', recipientId]);
         
+        // Fallback: Check if we have a channel with the Entry ID (sometimes events are routed via Page ID)
         if (channelRes.rows.length === 0) {
-            console.warn(`[Instagram Webhook] Channel for recipient ${recipientId} not found. Message ignored.`);
+             console.log(`[Instagram Webhook] Channel not found for recipient ${recipientId}. Checking entry ID ${entryId}...`);
+             channelRes = await db.query('SELECT id, config FROM channels WHERE type = $1 AND external_id = $2', ['instagram', entryId]);
+        }
+
+        if (channelRes.rows.length === 0) {
+            console.warn(`[Instagram Webhook] Channel for recipient ${recipientId} OR entry ${entryId} not found. Message ignored.`);
+            // Debug: List all instagram channels to see what we have
+            const allCh = await db.query('SELECT external_id, name FROM channels WHERE type = $1', ['instagram']);
+            console.log('[Instagram Webhook] Available Instagram Channels:', allCh.rows);
             return;
         }
         const channelId = channelRes.rows[0].id;
-        const channelConfig = channelRes.rows[0].config || {};
-
-        // 2. Upsert Contact (The sender)
-        // We need to fetch user profile using Graph API to get name/username
-        // We can use the page access token from channel config if available, or just store ID for now.
         
+        // ... rest of logic ...
+        
+        // 2. Upsert Contact (The sender)
         let displayName = `Instagram User ${senderId}`;
         
-        // Attempt to fetch profile if we have a token
-        /*
-        if (channelConfig.accessToken) {
-            try {
-                const profileRes = await require('axios').get(`https://graph.instagram.com/${senderId}`, {
-                    params: { fields: 'username,name', access_token: channelConfig.accessToken }
-                });
-                if (profileRes.data.username) displayName = profileRes.data.username;
-            } catch (e) { console.warn('Failed to fetch IG profile:', e.message); }
-        }
-        */
-
+        // Try to get a better name if we haven't already
+        // In a real app, we'd use the Page Access Token to query GET /<sender-id>?fields=name,username
+        
         const contactRes = await db.query(`
             INSERT INTO contacts (channel_id, external_id, display_name, created_at, updated_at)
             VALUES ($1, $2, $3, NOW(), NOW())
@@ -200,7 +203,14 @@ async function handleIncomingMessage(event) {
         }
 
         // 4. Insert Message
-        // Idempotency check handled by unique(channel_id, external_message_id) constraint
+        // Instagram timestamp is in milliseconds (usually). Let's check. 
+        // Example: 1772451868000. If it's > 20000000000, it's likely ms.
+        // Postgres to_timestamp takes seconds.
+        let tsSeconds = timestamp;
+        if (timestamp > 9999999999) {
+            tsSeconds = timestamp / 1000;
+        }
+
         const msgRes = await db.query(`
             INSERT INTO messages (
                 conversation_id, channel_id, direction, content_type, 
@@ -209,12 +219,10 @@ async function handleIncomingMessage(event) {
             VALUES ($1, $2, 'inbound', 'text', $3, $4, 'delivered', $5, to_timestamp($6))
             ON CONFLICT (channel_id, external_message_id) DO NOTHING
             RETURNING id
-        `, [conversationId, channelId, messageId, textBody, event, timestamp / 1000]); // Instagram timestamp is ms? No, usually seconds. Check docs. 
-        // Actually IG graph API timestamp is often unix timestamp in milliseconds or ISO string?
-        // Sample says 1600000000. That's seconds.
+        `, [conversationId, channelId, messageId, textBody, event, tsSeconds]);
 
         if (msgRes.rowCount > 0) {
-            console.log(`[Instagram Webhook] Message ${messageId} stored.`);
+            console.log(`[Instagram Webhook] Message ${messageId} stored. Conversation: ${conversationId}`);
             
             // Emit Realtime Event
             const io = getIO();
