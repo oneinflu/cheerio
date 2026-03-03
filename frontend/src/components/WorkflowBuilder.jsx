@@ -42,31 +42,31 @@ const TriggerNode = ({ data, selected }) => {
 
 const TemplateNode = ({ data, selected }) => {
   const buttons = data.buttons || [];
-  
+
   return (
     <NodeWrapper selected={selected} title="Send Template" icon={MessageSquare} colorClass="bg-green-600">
       <div className="text-xs text-slate-600 mb-2">Template: <b>{data.template || 'Select...'}</b></div>
-      
+
       {/* Template Content Preview */}
       {data.content && (
         <div className="w-[250px] text-[10px] text-slate-500 bg-slate-50 p-2 rounded mb-2 border border-slate-100 whitespace-pre-wrap break-words">
           {data.content}
         </div>
       )}
-      
+
       <Handle type="target" position={Position.Top} className="w-3 h-3 bg-slate-400" />
-      
+
       {/* If template has buttons, render a handle for each button */}
       {buttons.length > 0 ? (
         <div className="space-y-2 mt-2">
           {buttons.map((btnText, idx) => (
             <div key={idx} className="relative flex items-center justify-end">
               <span className="text-[10px] text-slate-500 mr-2 bg-slate-100 px-1 rounded">{btnText}</span>
-              <Handle 
-                type="source" 
-                position={Position.Right} 
+              <Handle
+                type="source"
+                position={Position.Right}
                 id={`button-${idx}`}
-                className="w-3 h-3 bg-blue-400 !right-[-6px]" 
+                className="w-3 h-3 bg-blue-400 !right-[-6px]"
                 style={{ top: '50%', transform: 'translateY(-50%)' }}
               />
             </div>
@@ -130,7 +130,7 @@ const ActionNode = ({ data, selected }) => {
   const isTag = data.actionType === 'add_tag' || data.actionType === 'remove_tag';
   const isVar = data.actionType === 'set_variable';
   const isWorkflow = data.actionType === 'start_workflow';
-  
+
   return (
     <NodeWrapper
       selected={selected}
@@ -142,21 +142,21 @@ const ActionNode = ({ data, selected }) => {
         {data.actionType === 'assign_agent'
           ? 'Assign Agent'
           : data.actionType === 'add_tag'
-          ? 'Add Tag'
-          : data.actionType === 'remove_tag'
-          ? 'Remove Tag'
-          : data.actionType === 'set_variable'
-          ? 'Set Variable'
-          : data.actionType === 'start_workflow'
-          ? 'Start Workflow'
-          : 'Action'}
+            ? 'Add Tag'
+            : data.actionType === 'remove_tag'
+              ? 'Remove Tag'
+              : data.actionType === 'set_variable'
+                ? 'Set Variable'
+                : data.actionType === 'start_workflow'
+                  ? 'Start Workflow'
+                  : 'Action'}
       </div>
       <div className="text-xs text-slate-500 truncate max-w-[180px]">
         {isVar
           ? `${data.variableName || 'Key'} = ${data.variableValue || 'Val'}`
           : isWorkflow
-          ? data.targetWorkflowName || 'Select workflow...'
-          : data.actionValue || 'Configure...'}
+            ? data.targetWorkflowName || 'Select workflow...'
+            : data.actionValue || 'Configure...'}
       </div>
       <Handle type="target" position={Position.Top} className="w-3 h-3 bg-slate-400" />
       <Handle type="source" position={Position.Bottom} className="w-3 h-3 bg-slate-400" />
@@ -242,7 +242,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
   const [draggingNodeId, setDraggingNodeId] = useState(null);
   const [expandedNodeId, setExpandedNodeId] = useState(null);
   const [branchTarget, setBranchTarget] = useState(null);
-  
+
   // Test/Run State
   const [isRunModalOpen, setIsRunModalOpen] = useState(false);
   const [runPhoneNumber, setRunPhoneNumber] = useState('');
@@ -671,7 +671,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
         if (node.id === selectedNode.id) {
           const newData = { ...node.data, [key]: value };
           // Optimistic update for selected node
-          setSelectedNode({ ...node, data: newData }); 
+          setSelectedNode({ ...node, data: newData });
           return { ...node, data: newData };
         }
         return node;
@@ -698,12 +698,12 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
       setSelectedNode((node) =>
         node
           ? {
-              ...node,
-              data: {
-                ...node.data,
-                ...changes,
-              },
-            }
+            ...node,
+            data: {
+              ...node.data,
+              ...changes,
+            },
+          }
           : node
       );
     }
@@ -719,7 +719,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
   const handleSave = () => {
     // Convert Graph to JSON format required
     // { workflow_id, trigger, nodes: [...] }
-    
+
     // Find trigger node
     const triggerNode = nodes.find(n => n.type === 'trigger');
     const triggerType = triggerNode?.data?.triggerType || 'new_lead';
@@ -731,7 +731,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
         position: node.position,
         data: node.data
       };
-      
+
       // Find connections
       if (node.type === 'condition') {
         const yesEdge = edges.find(e => e.source === node.id && e.sourceHandle === 'yes');
@@ -741,16 +741,16 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
       } else if (node.type === 'send_template' && node.data.buttons && node.data.buttons.length > 0) {
         nodeDef.routes = {};
         node.data.buttons.forEach((btn, idx) => {
-           const edge = edges.find(e => e.source === node.id && e.sourceHandle === `button-${idx}`);
-           if (edge) {
-              nodeDef.routes[btn] = edge.target;
-           }
+          const edge = edges.find(e => e.source === node.id && e.sourceHandle === `button-${idx}`);
+          if (edge) {
+            nodeDef.routes[btn] = edge.target;
+          }
         });
       } else {
         const edge = edges.find(e => e.source === node.id);
         if (edge) nodeDef.next = edge.target;
       }
-      
+
       return nodeDef;
     });
 
@@ -786,24 +786,24 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
     try {
       // Auto-save before running to ensure backend has latest version
       if (onSave) {
-          // We need to wait for save to complete if it was async, but onSave is likely just passing data up.
-          // Ideally we should call API to save here if not already saved.
-          // But `onSave` in App.jsx calls updateWorkflow.
-          // Let's assume user should save first or we trigger save.
-          // To be safe, we'll just proceed assuming the user saved or we are running the *persisted* version.
-          // Actually, if we just edited, the backend is stale.
-          // We should force a save.
-          const json = handleSave();
-          // Wait a bit for propagation if needed, or better, change onSave to be async and await it.
-          // But onSave in App.jsx is async.
-          // Let's await it if it returns a promise.
-          await onSave(json); 
+        // We need to wait for save to complete if it was async, but onSave is likely just passing data up.
+        // Ideally we should call API to save here if not already saved.
+        // But `onSave` in App.jsx calls updateWorkflow.
+        // Let's assume user should save first or we trigger save.
+        // To be safe, we'll just proceed assuming the user saved or we are running the *persisted* version.
+        // Actually, if we just edited, the backend is stale.
+        // We should force a save.
+        const json = handleSave();
+        // Wait a bit for propagation if needed, or better, change onSave to be async and await it.
+        // But onSave in App.jsx is async.
+        // Let's await it if it returns a promise.
+        await onSave(json);
       }
-      
+
       // Now run
       const res = await runWorkflow(initialWorkflow.id, runPhoneNumber);
       if (res.error) throw new Error(res.error);
-      
+
       alert('Workflow execution started! Check console for details.');
       console.log('Run logs:', res.log);
       setIsRunModalOpen(false);
@@ -1115,8 +1115,8 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 {isVoiceProcessing
                   ? 'Generating...'
                   : voiceGraph && voicePreview.length > 0
-                  ? 'Apply to workflow'
-                  : 'Generate steps'}
+                    ? 'Apply to workflow'
+                    : 'Generate steps'}
               </Button>
             </div>
           </div>
@@ -1126,24 +1126,24 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
       {isRunModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="bg-white rounded-lg shadow-xl w-[400px] overflow-hidden p-6 space-y-4">
-             <h3 className="font-semibold text-slate-900">Run Workflow</h3>
-             <div className="space-y-2">
-               <label className="text-sm font-medium text-slate-700">Test Phone Number</label>
-               <input 
-                 className="w-full border border-slate-300 rounded-md p-2 text-sm"
-                 placeholder="e.g. 15551234567"
-                 value={runPhoneNumber}
-                 onChange={(e) => setRunPhoneNumber(e.target.value)}
-               />
-               <p className="text-xs text-slate-500">Enter number with country code (no +)</p>
-             </div>
-             <div className="flex justify-end gap-2 pt-2">
-               <Button variant="ghost" onClick={() => setIsRunModalOpen(false)}>Cancel</Button>
-               <Button onClick={handleRun} disabled={isRunning}>
-                 {isRunning ? <Loader2 size={16} className="animate-spin mr-2" /> : <Play size={16} className="mr-2" />}
-                 {isRunning ? 'Running...' : 'Run Now'}
-               </Button>
-             </div>
+            <h3 className="font-semibold text-slate-900">Run Workflow</h3>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">Test Phone Number</label>
+              <input
+                className="w-full border border-slate-300 rounded-md p-2 text-sm"
+                placeholder="e.g. 15551234567"
+                value={runPhoneNumber}
+                onChange={(e) => setRunPhoneNumber(e.target.value)}
+              />
+              <p className="text-xs text-slate-500">Enter number with country code (no +)</p>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="ghost" onClick={() => setIsRunModalOpen(false)}>Cancel</Button>
+              <Button onClick={handleRun} disabled={isRunning}>
+                {isRunning ? <Loader2 size={16} className="animate-spin mr-2" /> : <Play size={16} className="mr-2" />}
+                {isRunning ? 'Running...' : 'Run Now'}
+              </Button>
+            </div>
           </div>
         </div>
       )}
@@ -1326,9 +1326,8 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                             setSelectedNode(node);
                             setExpandedNodeId((prev) => (prev === node.id ? null : node.id));
                           }}
-                          className={`rounded-md border px-3 py-2 text-sm bg-white ${
-                            selectedNode && selectedNode.id === node.id ? 'border-blue-500 bg-blue-50' : 'border-slate-200'
-                          }`}
+                          className={`rounded-md border px-3 py-2 text-sm bg-white ${selectedNode && selectedNode.id === node.id ? 'border-blue-500 bg-blue-50' : 'border-slate-200'
+                            }`}
                         >
                           <div className="flex items-center justify-between gap-3">
                             <div className="flex items-center gap-3">
@@ -1519,9 +1518,8 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                           onDrop={(event) => handleListItemDrop(event, node.id)}
                           onDragEnd={handleListItemDragEnd}
                           onClick={() => setSelectedNode(node)}
-                          className={`rounded-md border px-3 py-2 text-sm bg-white ${
-                            selectedNode && selectedNode.id === node.id ? 'border-blue-500 bg-blue-50' : 'border-slate-200'
-                          }`}
+                          className={`rounded-md border px-3 py-2 text-sm bg-white ${selectedNode && selectedNode.id === node.id ? 'border-blue-500 bg-blue-50' : 'border-slate-200'
+                            }`}
                         >
                           <div className="flex items-center gap-3 mb-2">
                             <span className="text-slate-400 cursor-move">⋮⋮</span>
@@ -1533,9 +1531,8 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                           <div className="grid grid-cols-2 text-[11px] text-slate-600 border rounded overflow-hidden">
                             <button
                               type="button"
-                              className={`py-1 text-center font-semibold ${
-                                isYesActive ? 'text-white bg-green-500' : 'text-green-600 bg-green-50'
-                              }`}
+                              className={`py-1 text-center font-semibold ${isYesActive ? 'text-white bg-green-500' : 'text-green-600 bg-green-50'
+                                }`}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setBranchTarget({ conditionId: node.id, side: 'yes' });
@@ -1545,9 +1542,8 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                             </button>
                             <button
                               type="button"
-                              className={`py-1 text-center font-semibold border-l border-slate-200 ${
-                                isNoActive ? 'text-white bg-red-500' : 'text-red-600 bg-red-50'
-                              }`}
+                              className={`py-1 text-center font-semibold border-l border-slate-200 ${isNoActive ? 'text-white bg-red-500' : 'text-red-600 bg-red-50'
+                                }`}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setBranchTarget({ conditionId: node.id, side: 'no' });
@@ -1628,9 +1624,8 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                         onDrop={(event) => handleListItemDrop(event, node.id)}
                         onDragEnd={handleListItemDragEnd}
                         onClick={() => setSelectedNode(node)}
-                        className={`flex items-center justify-between rounded-md border px-3 py-2 text-sm cursor-move bg-white ${
-                          selectedNode && selectedNode.id === node.id ? 'border-blue-500 bg-blue-50' : 'border-slate-200'
-                        }`}
+                        className={`flex items-center justify-between rounded-md border px-3 py-2 text-sm cursor-move bg-white ${selectedNode && selectedNode.id === node.id ? 'border-blue-500 bg-blue-50' : 'border-slate-200'
+                          }`}
                       >
                         <div className="flex flex-col">
                           <span className="text-[11px] uppercase tracking-wide text-slate-400">{node.type}</span>
@@ -1662,22 +1657,47 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
               <div className="text-xs text-slate-500 mt-1">ID: {selectedNode.id}</div>
               <div className="text-xs text-slate-500">Type: {selectedNode.type}</div>
             </div>
-            
+
             <div className="p-4 space-y-6">
               {/* Dynamic Config Forms based on Node Type */}
               {selectedNode.type === 'trigger' && (
-                 <div className="space-y-3">
-                   <label className="block text-sm font-medium text-slate-700">Trigger Event</label>
-                   <select 
+                <div className="space-y-3">
+                  <label className="block text-sm font-medium text-slate-700">Trigger Event</label>
+                  <select
                     className="w-full border border-slate-300 rounded-md p-2 text-sm"
                     value={selectedNode.data.triggerType || 'new_lead'}
                     onChange={(e) => updateNodeData('triggerType', e.target.value)}
-                   >
-                     <option value="new_lead">New Lead Created</option>
-                     <option value="first_message">User Sends First Message</option>
-                     <option value="tag_added">Tag Added</option>
-                   </select>
-                 </div>
+                  >
+                    <option value="new_lead">New Lead Created</option>
+                    <option value="first_message">User Sends First Message</option>
+                    <option value="tag_added">Tag Added</option>
+
+                    <optgroup label="Communication">
+                      <option value="incoming_whatsapp">Incoming WhatsApp</option>
+                      <option value="campaign_sent">Campaign Sent</option>
+                      <option value="messenger">Messenger</option>
+                      <option value="instagram">Instagram</option>
+                    </optgroup>
+
+                    <optgroup label="E-Commerce">
+                      <option value="shopify_events">Shopify Events</option>
+                      <option value="commerce_event">Commerce Event</option>
+                    </optgroup>
+
+                    <optgroup label="Marketing & CRM">
+                      <option value="facebook_lead">Facebook Lead</option>
+                      <option value="new_contact">New contact</option>
+                      <option value="new_form_response">New form response</option>
+                    </optgroup>
+
+                    <optgroup label="Integrations">
+                      <option value="kylas_event_create">Kylas Event Create</option>
+                      <option value="kylas_event_update">Kylas Event Update</option>
+                      <option value="pabbly_event">Pabbly Event</option>
+                      <option value="incoming_webhook">Incoming Webhook</option>
+                    </optgroup>
+                  </select>
+                </div>
               )}
 
               {selectedNode.type === 'send_template' && (
@@ -1686,7 +1706,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                     <label className="block text-sm font-medium text-slate-700">Select Template</label>
                     {loadingTemplates && <Loader2 size={12} className="animate-spin text-slate-400" />}
                   </div>
-                  <select 
+                  <select
                     className="w-full border border-slate-300 rounded-md p-2 text-sm"
                     value={selectedNode.data.template || ''}
                     onChange={(e) => {
@@ -1742,7 +1762,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                       <option disabled>No approved templates found</option>
                     )}
                   </select>
-                  
+
                   <div className="pt-2">
                     <label className="block text-sm font-medium text-slate-700 mb-2">Variables</label>
                     {(() => {
@@ -1791,13 +1811,13 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 <div className="space-y-3">
                   <label className="block text-sm font-medium text-slate-700">Wait Duration</label>
                   <div className="flex gap-2">
-                    <input 
-                      type="number" 
+                    <input
+                      type="number"
                       className="w-20 border border-slate-300 rounded-md p-2 text-sm"
                       value={selectedNode.data.duration || 0}
                       onChange={(e) => updateNodeData('duration', parseInt(e.target.value))}
                     />
-                    <select 
+                    <select
                       className="flex-1 border border-slate-300 rounded-md p-2 text-sm"
                       value={selectedNode.data.unit || 'minutes'}
                       onChange={(e) => updateNodeData('unit', e.target.value)}
@@ -1810,11 +1830,11 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                   </div>
                 </div>
               )}
-              
+
               {selectedNode.type === 'condition' && (
                 <div className="space-y-3">
                   <label className="block text-sm font-medium text-slate-700">Condition Type</label>
-                  <select 
+                  <select
                     className="w-full border border-slate-300 rounded-md p-2 text-sm"
                     value={selectedNode.data.conditionType || 'user_replied'}
                     onChange={(e) => updateNodeData('conditionType', e.target.value)}
@@ -1825,28 +1845,28 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                   </select>
 
                   {selectedNode.data.conditionType === 'has_tag' && (
-                     <input 
-                       placeholder="Tag Name" 
-                       className="w-full border border-slate-300 rounded-md p-2 text-sm"
-                       value={selectedNode.data.tagName || ''}
-                       onChange={(e) => updateNodeData('tagName', e.target.value)}
-                     />
+                    <input
+                      placeholder="Tag Name"
+                      className="w-full border border-slate-300 rounded-md p-2 text-sm"
+                      value={selectedNode.data.tagName || ''}
+                      onChange={(e) => updateNodeData('tagName', e.target.value)}
+                    />
                   )}
 
                   {selectedNode.data.conditionType === 'variable_match' && (
                     <div className="space-y-2">
-                       <input 
-                         placeholder="Variable Name" 
-                         className="w-full border border-slate-300 rounded-md p-2 text-sm"
-                         value={selectedNode.data.variableName || ''}
-                         onChange={(e) => updateNodeData('variableName', e.target.value)}
-                       />
-                       <input 
-                         placeholder="Value to Match" 
-                         className="w-full border border-slate-300 rounded-md p-2 text-sm"
-                         value={selectedNode.data.variableValue || ''}
-                         onChange={(e) => updateNodeData('variableValue', e.target.value)}
-                       />
+                      <input
+                        placeholder="Variable Name"
+                        className="w-full border border-slate-300 rounded-md p-2 text-sm"
+                        value={selectedNode.data.variableName || ''}
+                        onChange={(e) => updateNodeData('variableName', e.target.value)}
+                      />
+                      <input
+                        placeholder="Value to Match"
+                        className="w-full border border-slate-300 rounded-md p-2 text-sm"
+                        value={selectedNode.data.variableValue || ''}
+                        onChange={(e) => updateNodeData('variableValue', e.target.value)}
+                      />
                     </div>
                   )}
                 </div>
@@ -1855,7 +1875,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
               {selectedNode.type === 'send_message' && (
                 <div className="space-y-3">
                   <label className="block text-sm font-medium text-slate-700">Message Text</label>
-                  <textarea 
+                  <textarea
                     className="w-full border border-slate-300 rounded-md p-2 text-sm min-h-[100px]"
                     placeholder="Enter message text..."
                     value={selectedNode.data.message || ''}
@@ -1870,7 +1890,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
               {selectedNode.type === 'custom_code' && (
                 <div className="space-y-3">
                   <label className="block text-sm font-medium text-slate-700">JavaScript Code</label>
-                  <textarea 
+                  <textarea
                     className="w-full border border-slate-900 bg-slate-900 text-slate-50 rounded-md p-2 text-sm font-mono min-h-[200px]"
                     placeholder="// e.g. console.log('Processing request...')"
                     value={selectedNode.data.code || ''}
@@ -1885,7 +1905,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
               {selectedNode.type === 'action' && (
                 <div className="space-y-3">
                   <label className="block text-sm font-medium text-slate-700">Action</label>
-                  <select 
+                  <select
                     className="w-full border border-slate-300 rounded-md p-2 text-sm"
                     value={selectedNode.data.actionType || 'add_tag'}
                     onChange={(e) => {
@@ -1905,36 +1925,36 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                     <option value="set_variable">Set Variable</option>
                     <option value="start_workflow">Start Workflow</option>
                   </select>
-                  
+
                   {selectedNode.data.actionType === 'assign_agent' ? (
                     <div className="space-y-1">
                       <label className="text-xs text-slate-500">Agent Email or ID</label>
-                      <input 
-                         placeholder="agent@example.com" 
-                         className="w-full border border-slate-300 rounded-md p-2 text-sm"
-                         value={selectedNode.data.actionValue || ''}
-                         onChange={(e) => updateNodeData('actionValue', e.target.value)}
-                       />
+                      <input
+                        placeholder="agent@example.com"
+                        className="w-full border border-slate-300 rounded-md p-2 text-sm"
+                        value={selectedNode.data.actionValue || ''}
+                        onChange={(e) => updateNodeData('actionValue', e.target.value)}
+                      />
                     </div>
                   ) : selectedNode.data.actionType === 'set_variable' ? (
                     <div className="space-y-2">
                       <div className="space-y-1">
                         <label className="text-xs text-slate-500">Variable Name</label>
-                        <input 
-                           placeholder="e.g. user_type" 
-                           className="w-full border border-slate-300 rounded-md p-2 text-sm"
-                           value={selectedNode.data.variableName || ''}
-                           onChange={(e) => updateNodeData('variableName', e.target.value)}
-                         />
+                        <input
+                          placeholder="e.g. user_type"
+                          className="w-full border border-slate-300 rounded-md p-2 text-sm"
+                          value={selectedNode.data.variableName || ''}
+                          onChange={(e) => updateNodeData('variableName', e.target.value)}
+                        />
                       </div>
                       <div className="space-y-1">
                         <label className="text-xs text-slate-500">Value</label>
-                        <input 
-                           placeholder="e.g. premium" 
-                           className="w-full border border-slate-300 rounded-md p-2 text-sm"
-                           value={selectedNode.data.variableValue || ''}
-                           onChange={(e) => updateNodeData('variableValue', e.target.value)}
-                         />
+                        <input
+                          placeholder="e.g. premium"
+                          className="w-full border border-slate-300 rounded-md p-2 text-sm"
+                          value={selectedNode.data.variableValue || ''}
+                          onChange={(e) => updateNodeData('variableValue', e.target.value)}
+                        />
                       </div>
                     </div>
                   ) : selectedNode.data.actionType === 'start_workflow' ? (
@@ -1968,25 +1988,25 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                   ) : (
                     <div className="space-y-1">
                       <label className="text-xs text-slate-500">Tag Name</label>
-                      <input 
-                         placeholder="e.g. VIP" 
-                         className="w-full border border-slate-300 rounded-md p-2 text-sm"
-                         value={selectedNode.data.actionValue || ''}
-                         onChange={(e) => updateNodeData('actionValue', e.target.value)}
-                       />
+                      <input
+                        placeholder="e.g. VIP"
+                        className="w-full border border-slate-300 rounded-md p-2 text-sm"
+                        value={selectedNode.data.actionValue || ''}
+                        onChange={(e) => updateNodeData('actionValue', e.target.value)}
+                      />
                     </div>
                   )}
                 </div>
               )}
             </div>
-            
+
             <div className="mt-auto p-4 border-t border-slate-100">
-               <Button variant="outline" className="w-full text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => {
-                 setNodes((nds) => nds.filter((n) => n.id !== selectedNode.id));
-                 setSelectedNode(null);
-               }}>
-                 Delete Node
-               </Button>
+              <Button variant="outline" className="w-full text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => {
+                setNodes((nds) => nds.filter((n) => n.id !== selectedNode.id));
+                setSelectedNode(null);
+              }}>
+                Delete Node
+              </Button>
             </div>
           </div>
         )}
@@ -2003,9 +2023,8 @@ const DraggableBlock = ({ type, label, icon: Icon, color, onAdd, disabledDrag })
 
   return (
     <div
-      className={`flex items-center gap-3 p-3 bg-white border border-slate-200 rounded-lg ${
-        disabledDrag ? 'cursor-pointer' : 'cursor-grab'
-      } hover:border-blue-400 hover:shadow-sm transition-all`}
+      className={`flex items-center gap-3 p-3 bg-white border border-slate-200 rounded-lg ${disabledDrag ? 'cursor-pointer' : 'cursor-grab'
+        } hover:border-blue-400 hover:shadow-sm transition-all`}
       onDragStart={disabledDrag ? undefined : (event) => onDragStart(event, type)}
       draggable={!disabledDrag}
       onClick={() => {

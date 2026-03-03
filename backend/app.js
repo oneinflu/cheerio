@@ -64,7 +64,7 @@ function createApp() {
       }
     }
   }));
-  
+
   // Enable CORS for all routes (allows widget to be loaded from other domains)
   app.use(cors());
 
@@ -106,6 +106,9 @@ function createApp() {
   app.use('/webhooks/whatsapp', whatsappWebhookRouter);
   app.use('/webhooks/instagram', instagramWebhookRouter);
   app.use('/webhooks/flow', whatsappFlowEndpointRouter);
+  app.use('/webhooks/shopify', require('./src/webhooks/shopify/index'));
+  app.use('/webhooks/incoming', require('./src/webhooks/generic/incoming'));
+  app.use('/webhooks/kylas', require('./src/webhooks/generic/kylas'));
   app.use('/api/auth', authRouter); // Login
   app.use('/api/auth', instagramAuthRouter); // Instagram Callback
   app.use('/api/team-users', teamRouter); // Team Users
@@ -129,7 +132,7 @@ function createApp() {
   if (NODE_ENV === 'production') {
     const frontendDist = path.join(__dirname, '../frontend/dist');
     console.log(`[app] Serving static files from: ${frontendDist}`);
-    
+
     app.use(express.static(frontendDist));
 
     // Handle SPA routing: serve index.html for any unknown non-API routes
