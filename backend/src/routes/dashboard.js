@@ -10,12 +10,14 @@ router.get('/dashboard', async (req, res, next) => {
     const teamId = req.query.teamId;
 
     // Fetch premium aggregate data
-    const [stats, trendingVolume, agents, revenueImpact, channelInsights] = await Promise.all([
+    const [stats, trendingVolume, agents, revenueImpact, channelInsights, templates, workflows] = await Promise.all([
       dashboardService.getStats(teamId),
       dashboardService.getVolume(teamId),
       dashboardService.getAgents(teamId),
       dashboardService.getRevenueImpact(teamId),
-      dashboardService.getChannelInsights(teamId)
+      dashboardService.getChannelInsights(teamId),
+      dashboardService.getTemplateStats(teamId),
+      dashboardService.getWorkflowStats(teamId)
     ]);
 
     // Enhanced KPIs for premium display
@@ -32,7 +34,9 @@ router.get('/dashboard', async (req, res, next) => {
       agents,
       revenueImpact,
       channelInsights,
-      kpi
+      kpi,
+      templates,
+      workflows
     });
   } catch (err) {
     next(err);
