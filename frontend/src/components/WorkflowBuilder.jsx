@@ -130,6 +130,7 @@ const ActionNode = ({ data, selected }) => {
   const isTag = data.actionType === 'add_tag' || data.actionType === 'remove_tag';
   const isVar = data.actionType === 'set_variable';
   const isWorkflow = data.actionType === 'start_workflow';
+  const isStatus = data.actionType === 'update_chat_status';
 
   return (
     <NodeWrapper
@@ -142,21 +143,25 @@ const ActionNode = ({ data, selected }) => {
         {data.actionType === 'assign_agent'
           ? 'Assign Agent'
           : data.actionType === 'add_tag'
-            ? 'Add Tag'
+            ? 'Add to Label'
             : data.actionType === 'remove_tag'
-              ? 'Remove Tag'
+              ? 'Remove Label'
               : data.actionType === 'set_variable'
-                ? 'Set Variable'
+                ? 'Update Attribute'
                 : data.actionType === 'start_workflow'
                   ? 'Start Workflow'
-                  : 'Action'}
+                  : data.actionType === 'update_chat_status'
+                    ? 'Update Chat Status'
+                    : 'Action'}
       </div>
       <div className="text-xs text-slate-500 truncate max-w-[180px]">
         {isVar
           ? `${data.variableName || 'Key'} = ${data.variableValue || 'Val'}`
           : isWorkflow
             ? data.targetWorkflowName || 'Select workflow...'
-            : data.actionValue || 'Configure...'}
+            : isStatus
+              ? data.actionValue || 'open'
+              : data.actionValue || 'Configure...'}
       </div>
       <Handle type="target" position={Position.Top} className="w-3 h-3 bg-slate-400" />
       <Handle type="source" position={Position.Bottom} className="w-3 h-3 bg-slate-400" />
@@ -342,6 +347,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
       event.preventDefault();
 
       const type = event.dataTransfer.getData('application/reactflow');
+      const actionType = event.dataTransfer.getData('application/actiontype');
 
       // check if the dropped element is valid
       if (typeof type === 'undefined' || !type) {
@@ -359,6 +365,13 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
         position,
         data: { label: `${type} node` },
       };
+
+      if (type === 'action' && actionType) {
+        newNode.data.actionType = actionType;
+        if (actionType === 'update_chat_status') {
+          newNode.data.actionValue = 'open';
+        }
+      }
 
       setNodes((nds) => nds.concat(newNode));
     },
@@ -614,7 +627,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
   };
 
   const handleAddNodeFromPalette = useCallback(
-    (type) => {
+    (type, actionType) => {
       let createdNode = null;
       setNodes((nds) => {
         const yValues = nds.map((n) =>
@@ -627,6 +640,13 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
         };
 
         let data = { label: `${type} node` };
+
+        if (type === 'action' && actionType) {
+          data.actionType = actionType;
+          if (actionType === 'update_chat_status') {
+            data.actionValue = 'open';
+          }
+        }
 
         if (
           viewMode === 'list' &&
@@ -1248,9 +1268,37 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 />
                 <DraggableBlock
                   type="action"
-                  label="Action"
+                  actionType="assign_agent"
+                  label="Assign Agent"
+                  icon={UserCheck}
+                  color="bg-orange-500"
+                  onAdd={handleAddNodeFromPalette}
+                  disabledDrag={false}
+                />
+                <DraggableBlock
+                  type="action"
+                  actionType="add_tag"
+                  label="Add to Label"
+                  icon={Tag}
+                  color="bg-emerald-500"
+                  onAdd={handleAddNodeFromPalette}
+                  disabledDrag={false}
+                />
+                <DraggableBlock
+                  type="action"
+                  actionType="set_variable"
+                  label="Update Attribute"
                   icon={Plus}
-                  color="bg-indigo-600"
+                  color="bg-indigo-500"
+                  onAdd={handleAddNodeFromPalette}
+                  disabledDrag={false}
+                />
+                <DraggableBlock
+                  type="action"
+                  actionType="update_chat_status"
+                  label="Update Chat Status"
+                  icon={MessageCircle}
+                  color="bg-cyan-500"
                   onAdd={handleAddNodeFromPalette}
                   disabledDrag={false}
                 />
@@ -1919,11 +1967,12 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                       });
                     }}
                   >
-                    <option value="add_tag">Add Tag</option>
-                    <option value="remove_tag">Remove Tag</option>
+                    <option value="add_tag">Add to Label</option>
+                    <option value="remove_tag">Remove Label</option>
                     <option value="assign_agent">Assign Agent</option>
-                    <option value="set_variable">Set Variable</option>
+                    <option value="set_variable">Update Attribute</option>
                     <option value="start_workflow">Start Workflow</option>
+                    <option value="update_chat_status">Update Chat Status</option>
                   </select>
 
                   {selectedNode.data.actionType === 'assign_agent' ? (
@@ -1985,9 +2034,22 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                         <p className="text-[10px] text-slate-400">Loading workflows...</p>
                       )}
                     </div>
+                  ) : selectedNode.data.actionType === 'update_chat_status' ? (
+                    <div className="space-y-1">
+                      <label className="text-xs text-slate-500">New Status</label>
+                      <select
+                        className="w-full border border-slate-300 rounded-md p-2 text-sm"
+                        value={selectedNode.data.actionValue || 'open'}
+                        onChange={(e) => updateNodeData('actionValue', e.target.value)}
+                      >
+                        <option value="open">Open</option>
+                        <option value="closed">Closed</option>
+                        <option value="snoozed">Snoozed</option>
+                      </select>
+                    </div>
                   ) : (
                     <div className="space-y-1">
-                      <label className="text-xs text-slate-500">Tag Name</label>
+                      <label className="text-xs text-slate-500">Label Name</label>
                       <input
                         placeholder="e.g. VIP"
                         className="w-full border border-slate-300 rounded-md p-2 text-sm"
@@ -2015,9 +2077,12 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
   );
 }
 
-const DraggableBlock = ({ type, label, icon: Icon, color, onAdd, disabledDrag }) => {
-  const onDragStart = (event, nodeType) => {
+const DraggableBlock = ({ type, actionType, label, icon: Icon, color, onAdd, disabledDrag }) => {
+  const onDragStart = (event, nodeType, actType) => {
     event.dataTransfer.setData('application/reactflow', nodeType);
+    if (actType) {
+      event.dataTransfer.setData('application/actiontype', actType);
+    }
     event.dataTransfer.effectAllowed = 'move';
   };
 
@@ -2025,10 +2090,10 @@ const DraggableBlock = ({ type, label, icon: Icon, color, onAdd, disabledDrag })
     <div
       className={`flex items-center gap-3 p-3 bg-white border border-slate-200 rounded-lg ${disabledDrag ? 'cursor-pointer' : 'cursor-grab'
         } hover:border-blue-400 hover:shadow-sm transition-all`}
-      onDragStart={disabledDrag ? undefined : (event) => onDragStart(event, type)}
+      onDragStart={disabledDrag ? undefined : (event) => onDragStart(event, type, actionType)}
       draggable={!disabledDrag}
       onClick={() => {
-        if (onAdd) onAdd(type);
+        if (onAdd) onAdd(type, actionType);
       }}
     >
       <div className={`p-2 rounded-md ${color} text-white`}>
