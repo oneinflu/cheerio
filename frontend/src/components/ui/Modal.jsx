@@ -3,7 +3,7 @@ import { X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { Button } from './Button';
 
-export function Modal({ isOpen, onClose, title, children, className }) {
+export function Modal({ isOpen, onClose, title, children, className, zIndex = 'z-50' }) {
   useEffect(() => {
     const handleEsc = (e) => {
       if (e.key === 'Escape') onClose();
@@ -21,7 +21,7 @@ export function Modal({ isOpen, onClose, title, children, className }) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+    <div className={`fixed inset-0 ${zIndex} flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200`}>
       <div 
         className={cn(
           "relative w-full max-w-lg rounded-xl bg-white shadow-2xl animate-in zoom-in-95 duration-200",
