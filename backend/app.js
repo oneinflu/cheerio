@@ -29,6 +29,7 @@ const mediaRouter = require('./src/routes/media');
 const dashboardRouter = require('./src/routes/dashboard');
 const workflowsRouter = require('./src/routes/workflows');
 const rulesRouter = require('./src/routes/rules');
+const galleryRouter = require('./src/routes/gallery');
 const authRouter = require('./src/routes/auth');
 const instagramAuthRouter = require('./src/routes/instagramAuth');
 const teamRouter = require('./src/routes/team');
@@ -119,6 +120,7 @@ function createApp() {
   app.use('/api', messagesRouter);
   app.use('/api/templates', templatesRouter);
   app.use('/api/media', mediaRouter);
+  app.use('/api/gallery', galleryRouter);
   app.use('/api/workflows', workflowsRouter);
   app.use('/api', dashboardRouter);
   app.use('/api', rulesRouter);

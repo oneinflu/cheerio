@@ -16,6 +16,7 @@ import TeamMembersPage from './components/TeamMembersPage.jsx';
 import LoginPage from './components/LoginPage.jsx';
 import GuestChat from './components/GuestChat.jsx';
 import InstagramPage from './components/InstagramPage.jsx';
+import GalleryPage from './components/GalleryPage.jsx';
 import { connectSocket } from './socket.js';
 import { getInbox, getMessages, claimConversation, reassignConversation, forceReassignConversation, releaseConversation, markAsRead, resolveConversation, deleteConversation, blockConversation, unblockConversation, pinConversation, updateWorkflow, getTeamUser, getTeamUsers, reassignExternalLead } from './api.js';
 import { LayoutDashboard, MessageSquare, Users, Settings, LogOut, Search, Bell, FileText, Workflow, Shield, ChevronsUpDown, Check, Zap, GitBranch, Instagram } from 'lucide-react';
@@ -35,7 +36,7 @@ export default function App() {
   });
   const [isLoggedIn, setIsLoggedIn] = useState(!!storedUser);
   const [socket, setSocket] = useState(null);
-  const validPages = ['dashboard', 'inbox', 'team-members', 'templates', 'flows', 'workflows', 'rules', 'instagram', 'settings'];
+  const validPages = ['dashboard', 'inbox', 'team-members', 'templates', 'flows', 'workflows', 'rules', 'instagram', 'gallery', 'settings'];
 
   const [activePage, setActivePage] = useState(() => {
     const path = window.location.pathname.substring(1);
@@ -663,6 +664,19 @@ export default function App() {
                   Instagram
                 </span>
               </Button>
+              <Button
+                variant={activePage === 'gallery' ? 'secondary' : 'ghost'}
+                className="w-full flex items-center justify-start h-10 px-0 rounded-lg overflow-hidden shrink-0"
+                onClick={() => setActivePage('gallery')}
+                title="Gallery Media File Manager"
+              >
+                <div className="w-10 h-10 flex items-center justify-center shrink-0">
+                  <FileText size={20} />
+                </div>
+                <span className="ml-3 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100">
+                  File Manager
+                </span>
+              </Button>
             </>
           )}
 
@@ -742,6 +756,7 @@ export default function App() {
         {activePage === 'rules' && <RulesPage />}
 
         {activePage === 'instagram' && <InstagramPage />}
+        {activePage === 'gallery' && <GalleryPage />}
 
         {activePage === 'team-members' && <TeamMembersPage />}
 
