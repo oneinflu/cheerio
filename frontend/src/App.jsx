@@ -35,7 +35,16 @@ export default function App() {
   });
   const [isLoggedIn, setIsLoggedIn] = useState(!!storedUser);
   const [socket, setSocket] = useState(null);
-  const [activePage, setActivePage] = useState(() => localStorage.getItem('activePage') || 'inbox');
+  const validPages = ['dashboard', 'inbox', 'team-members', 'templates', 'flows', 'workflows', 'rules', 'instagram', 'settings'];
+
+  const [activePage, setActivePage] = useState(() => {
+    const path = window.location.pathname.substring(1);
+    if (path && validPages.includes(path)) {
+      return path;
+    }
+    return localStorage.getItem('activePage') || 'inbox';
+  });
+
   const [editingWorkflow, setEditingWorkflow] = useState(() => {
     try {
       const saved = localStorage.getItem('editingWorkflow');
@@ -47,7 +56,21 @@ export default function App() {
 
   useEffect(() => {
     localStorage.setItem('activePage', activePage);
+    window.history.pushState(null, '', `/${activePage === 'inbox' ? '' : activePage}`);
   }, [activePage]);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const path = window.location.pathname.substring(1);
+      if (path && validPages.includes(path)) {
+        setActivePage(path);
+      } else if (!path) {
+        setActivePage('inbox');
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   useEffect(() => {
     if (editingWorkflow) {
@@ -77,8 +100,8 @@ export default function App() {
 
   useEffect(() => {
     if (selectedId) {
-       const conv = conversations.find(c => c.id === selectedId);
-       setTargetAssigneeId(conv?.assigneeUserId || null);
+      const conv = conversations.find(c => c.id === selectedId);
+      setTargetAssigneeId(conv?.assigneeUserId || null);
     }
   }, [selectedId, conversations]);
 
@@ -87,11 +110,11 @@ export default function App() {
     getTeamUsers().then(res => {
       let data = [];
       if (res && res.data && Array.isArray(res.data.data)) {
-          data = res.data.data;
+        data = res.data.data;
       } else if (res && Array.isArray(res.data)) {
-          data = res.data;
+        data = res.data;
       } else if (Array.isArray(res)) {
-          data = res;
+        data = res;
       }
       setTeamMembers(data);
     }).catch(err => console.error("Failed to fetch team members", err));
@@ -109,7 +132,7 @@ export default function App() {
       } else {
         localStorage.removeItem('selectedConversationId');
       }
-    } catch (e) {}
+    } catch (e) { }
   };
 
   const currentUser = useMemo(() => {
@@ -170,7 +193,7 @@ export default function App() {
         return base;
       });
       setConversations(nextConversations);
-      
+
       if (!currentId && nextConversations.length > 0) {
         setSelectedConversation(nextConversations[0].id);
       }
@@ -213,10 +236,10 @@ export default function App() {
     try {
       const res = await getMessages(selectedId);
       setMessages(res.messages || []);
-      
+
       // Mark as read and update local state
       await markAsRead(selectedId);
-      setConversations(prev => prev.map(c => 
+      setConversations(prev => prev.map(c =>
         c.id === selectedId ? { ...c, unreadCount: 0 } : c
       ));
     } catch (err) {
@@ -313,9 +336,9 @@ export default function App() {
       );
 
       // Ensure we have a valid teamId
-      const teamId = (currentUser?.teamIds && currentUser.teamIds.length > 0) 
-          ? currentUser.teamIds[0] 
-          : 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380b22';
+      const teamId = (currentUser?.teamIds && currentUser.teamIds.length > 0)
+        ? currentUser.teamIds[0]
+        : 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380b22';
 
       if (assigneeUserId === currentUser.id) {
         await claimConversation(conversationId, teamId, currentUser.id);
@@ -350,21 +373,21 @@ export default function App() {
     if (!conversation) return;
 
     if (conversation.leadId) {
-       try {
-         const res = await reassignExternalLead(conversation.leadId, targetAssigneeId);
-         console.log('External reassign response:', res);
-         
-         // Check for success - assuming standard API response structure or just successful execution
-         if (res && res.success) {
-             await handleAssign(selectedId, targetAssigneeId);
-         }
-       } catch (err) {
-         console.error('Failed to reassign external lead:', err);
-         alert('Failed to reassign external lead');
-       }
+      try {
+        const res = await reassignExternalLead(conversation.leadId, targetAssigneeId);
+        console.log('External reassign response:', res);
+
+        // Check for success - assuming standard API response structure or just successful execution
+        if (res && res.success) {
+          await handleAssign(selectedId, targetAssigneeId);
+        }
+      } catch (err) {
+        console.error('Failed to reassign external lead:', err);
+        alert('Failed to reassign external lead');
+      }
     } else {
-       // Fallback for conversations without leadId
-       await handleAssign(selectedId, targetAssigneeId);
+      // Fallback for conversations without leadId
+      await handleAssign(selectedId, targetAssigneeId);
     }
   };
 
@@ -439,11 +462,11 @@ export default function App() {
         // We probably want to save this into the 'steps' or 'definition' column of the workflow
         // adjusting based on what the backend expects.
         // Assuming backend expects { ...workflowData }
-        
+
         // If the builder returns the full structure needed by backend:
         await updateWorkflow(editingWorkflow.id, {
-           ...editingWorkflow,
-           steps: workflowJson
+          ...editingWorkflow,
+          steps: workflowJson
         });
         // Do not close the builder automatically on save
         // setEditingWorkflow(null); 
@@ -461,7 +484,7 @@ export default function App() {
   const getUserName = (user) => {
     if (!user) return 'Unknown Agent';
     if (user.firstname || user.lastname) {
-        return `${user.firstname || ''} ${user.lastname || ''}`.trim();
+      return `${user.firstname || ''} ${user.lastname || ''}`.trim();
     }
     return user.name || user.username || 'Unknown Agent';
   };
@@ -479,21 +502,21 @@ export default function App() {
       setAssigneeName(localAgent.name);
       return;
     }
-    
+
     // Check if in teamMembers list already
     const member = teamMembers.find(m => m.id === userId || m._id === userId);
     if (member) {
-        setAssigneeName(getUserName(member));
-        return;
+      setAssigneeName(getUserName(member));
+      return;
     }
-    
+
     // Immediate fallback from targetAssigneeId if available (for instant feedback during assignment)
     if (targetAssigneeId === userId) {
-         const targetMember = teamMembers.find(m => m.id === targetAssigneeId || m._id === targetAssigneeId);
-         if (targetMember) {
-             setAssigneeName(getUserName(targetMember));
-             return;
-         }
+      const targetMember = teamMembers.find(m => m.id === targetAssigneeId || m._id === targetAssigneeId);
+      if (targetMember) {
+        setAssigneeName(getUserName(targetMember));
+        return;
+      }
     }
 
     // Fetch external
@@ -510,7 +533,7 @@ export default function App() {
         console.error('Failed to fetch assignee:', err);
         setAssigneeName('Unknown Agent');
       });
-      
+
     return () => { isMounted = false; };
   }, [selectedConversation?.assigneeUserId, isAssigned, agents, teamMembers]);
 
@@ -544,7 +567,7 @@ export default function App() {
               Dashboard
             </span>
           </Button>
-          
+
           <Button
             variant={activePage === 'inbox' ? 'secondary' : 'ghost'}
             className="w-full flex items-center justify-start h-10 px-0 rounded-lg overflow-hidden shrink-0"
@@ -558,7 +581,7 @@ export default function App() {
               Inbox
             </span>
           </Button>
-            {['admin', 'super_admin'].includes((currentUser.role || '').toLowerCase()) && (
+          {['admin', 'super_admin'].includes((currentUser.role || '').toLowerCase()) && (
             <>
               <Button
                 variant={activePage === 'team-members' ? 'secondary' : 'ghost'}
@@ -573,7 +596,7 @@ export default function App() {
                   Team Members
                 </span>
               </Button>
-            
+
               <Button
                 variant={activePage === 'templates' ? 'secondary' : 'ghost'}
                 className="w-full flex items-center justify-start h-10 px-0 rounded-lg overflow-hidden shrink-0"
@@ -643,7 +666,7 @@ export default function App() {
             </>
           )}
 
-        
+
         </nav>
         <div className="flex flex-col space-y-2 pb-4 w-full px-3 overflow-hidden">
           <Button
@@ -660,18 +683,18 @@ export default function App() {
             </span>
           </Button>
           <div className="w-full flex items-center justify-start h-10 px-0 shrink-0">
-             <div className="w-10 h-10 flex items-center justify-center shrink-0">
-               <div className="w-8 h-8 bg-slate-200 rounded-full flex items-center justify-center text-xs font-medium text-slate-700">
-                 {currentUser?.name?.substring(0, 2).toUpperCase() || 'JD'}
-               </div>
-             </div>
-             <span className="ml-3 text-sm font-medium text-slate-700 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100">
-               {currentUser?.name || 'Profile'}
-             </span>
+            <div className="w-10 h-10 flex items-center justify-center shrink-0">
+              <div className="w-8 h-8 bg-slate-200 rounded-full flex items-center justify-center text-xs font-medium text-slate-700">
+                {currentUser?.name?.substring(0, 2).toUpperCase() || 'JD'}
+              </div>
+            </div>
+            <span className="ml-3 text-sm font-medium text-slate-700 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100">
+              {currentUser?.name || 'Profile'}
+            </span>
           </div>
-          <Button 
-            variant="ghost" 
-            className="w-full flex items-center justify-start h-10 px-0 rounded-lg text-slate-400 hover:text-red-600 overflow-hidden shrink-0" 
+          <Button
+            variant="ghost"
+            className="w-full flex items-center justify-start h-10 px-0 rounded-lg text-slate-400 hover:text-red-600 overflow-hidden shrink-0"
             onClick={handleLogout}
             title="Log Out"
           >
@@ -703,11 +726,11 @@ export default function App() {
 
         {activePage === 'templates' && <TemplatesPage />}
         {activePage === 'flows' && <FlowsPage />}
-        
+
         {activePage === 'workflows' && (
           editingWorkflow ? (
-            <WorkflowBuilder 
-              initialWorkflow={editingWorkflow} 
+            <WorkflowBuilder
+              initialWorkflow={editingWorkflow}
               onBack={() => setEditingWorkflow(null)}
               onSave={handleWorkflowSave}
             />
@@ -717,7 +740,7 @@ export default function App() {
         )}
 
         {activePage === 'rules' && <RulesPage />}
-        
+
         {activePage === 'instagram' && <InstagramPage />}
 
         {activePage === 'team-members' && <TeamMembersPage />}
@@ -736,16 +759,16 @@ export default function App() {
                   </Button>
                 </div>
               </div>
-              <Inbox 
-                conversations={filteredConversations} 
-                selectedId={selectedId} 
-                onSelect={(id) => setSelectedConversation(id)} 
-                onPin={handlePin} 
-                onResolve={handleResolve} 
+              <Inbox
+                conversations={filteredConversations}
+                selectedId={selectedId}
+                onSelect={(id) => setSelectedConversation(id)}
+                onPin={handlePin}
+                onResolve={handleResolve}
                 onDelete={handleDeleteConversation}
-                currentUser={currentUser} 
-                filter={inboxFilter} 
-                setFilter={setInboxFilter} 
+                currentUser={currentUser}
+                filter={inboxFilter}
+                setFilter={setInboxFilter}
               />
             </div>
 
@@ -784,14 +807,14 @@ export default function App() {
                         <div className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-md border border-slate-200">
                           <span className="text-xs font-medium text-slate-500">Assigned to:</span>
                           <span className="text-sm font-semibold text-slate-900">
-                             {assigneeName || 'Unknown Agent'}
+                            {assigneeName || 'Unknown Agent'}
                           </span>
                         </div>
                       ) : (
-                         <div className="flex items-center gap-2">
-                            <Badge variant="outline">Unassigned</Badge>
-                            {/* Manual assignment disabled as per requirements */}
-                         </div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline">Unassigned</Badge>
+                          {/* Manual assignment disabled as per requirements */}
+                        </div>
                       )}
                     </div>
                   </div>
@@ -799,12 +822,12 @@ export default function App() {
               )}
 
               <div className="flex-1 overflow-hidden relative">
-                <Chat 
-                  socket={socket} 
-                  conversationId={selectedId} 
-                  messages={messages} 
+                <Chat
+                  socket={socket}
+                  conversationId={selectedId}
+                  messages={messages}
                   isLoading={isLoadingMessages}
-                  onRefresh={() => loadMessages(true)} 
+                  onRefresh={() => loadMessages(true)}
                 />
               </div>
             </main>
@@ -812,114 +835,114 @@ export default function App() {
             {selectedId && (
               <aside className="w-80 flex-none border-l border-slate-200 bg-slate-50 flex flex-col overflow-hidden">
                 <div className="p-4 pb-0 flex-none space-y-3">
-                    <Card className="shadow-sm border-slate-200">
-                      <CardHeader className="py-3 px-4 border-b border-slate-100 bg-slate-50/50">
-                        <div className="flex items-center gap-2">
-                          <Users className="w-4 h-4 text-slate-500" />
-                          <CardTitle className="text-sm font-semibold text-slate-900">Assignment</CardTitle>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="p-4 space-y-3">
-                        <div className="space-y-2">
-                            <label className="block text-xs font-medium text-slate-500">Reassign to</label>
-                            <div className="relative">
-                                <Button
-                                variant="outline"
-                                role="combobox"
-                                aria-expanded={isAssigneeOpen}
-                                className="w-full justify-between text-left font-normal px-3 py-2 h-auto"
-                                onClick={() => setIsAssigneeOpen(!isAssigneeOpen)}
-                                >
-                                <span className="truncate">
-                                    {targetAssigneeId
-                                    ? (targetAssigneeId === selectedConversation?.assigneeUserId 
-                                        ? (assigneeName || getUserName(teamMembers.find(u => (u.id || u._id) === targetAssigneeId)))
-                                        : getUserName(teamMembers.find(u => (u.id || u._id) === targetAssigneeId) || agents.find(a => a.id === targetAssigneeId)))
-                                    : "Unassigned"}
-                                </span>
-                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                </Button>
-                                
-                                {isAssigneeOpen && (
-                                <>
-                                    <div 
-                                        className="fixed inset-0 z-40 bg-transparent" 
-                                        onClick={() => setIsAssigneeOpen(false)}
+                  <Card className="shadow-sm border-slate-200">
+                    <CardHeader className="py-3 px-4 border-b border-slate-100 bg-slate-50/50">
+                      <div className="flex items-center gap-2">
+                        <Users className="w-4 h-4 text-slate-500" />
+                        <CardTitle className="text-sm font-semibold text-slate-900">Assignment</CardTitle>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="p-4 space-y-3">
+                      <div className="space-y-2">
+                        <label className="block text-xs font-medium text-slate-500">Reassign to</label>
+                        <div className="relative">
+                          <Button
+                            variant="outline"
+                            role="combobox"
+                            aria-expanded={isAssigneeOpen}
+                            className="w-full justify-between text-left font-normal px-3 py-2 h-auto"
+                            onClick={() => setIsAssigneeOpen(!isAssigneeOpen)}
+                          >
+                            <span className="truncate">
+                              {targetAssigneeId
+                                ? (targetAssigneeId === selectedConversation?.assigneeUserId
+                                  ? (assigneeName || getUserName(teamMembers.find(u => (u.id || u._id) === targetAssigneeId)))
+                                  : getUserName(teamMembers.find(u => (u.id || u._id) === targetAssigneeId) || agents.find(a => a.id === targetAssigneeId)))
+                                : "Unassigned"}
+                            </span>
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+
+                          {isAssigneeOpen && (
+                            <>
+                              <div
+                                className="fixed inset-0 z-40 bg-transparent"
+                                onClick={() => setIsAssigneeOpen(false)}
+                              />
+                              <div className="absolute z-50 mt-1 max-h-60 w-full overflow-hidden rounded-md border border-slate-200 bg-white text-slate-950 shadow-md">
+                                <div className="sticky top-0 z-10 bg-white p-2 border-b border-slate-100">
+                                  <div className="relative">
+                                    <Search className="absolute left-2 top-2.5 h-3 w-3 text-slate-500" />
+                                    <input
+                                      className="w-full rounded-md border border-slate-200 bg-transparent px-2 py-1.5 pl-7 text-xs placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                      placeholder="Search team..."
+                                      value={assigneeSearch}
+                                      onChange={(e) => setAssigneeSearch(e.target.value)}
+                                      autoFocus
                                     />
-                                    <div className="absolute z-50 mt-1 max-h-60 w-full overflow-hidden rounded-md border border-slate-200 bg-white text-slate-950 shadow-md">
-                                        <div className="sticky top-0 z-10 bg-white p-2 border-b border-slate-100">
-                                        <div className="relative">
-                                            <Search className="absolute left-2 top-2.5 h-3 w-3 text-slate-500" />
-                                            <input
-                                            className="w-full rounded-md border border-slate-200 bg-transparent px-2 py-1.5 pl-7 text-xs placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                            placeholder="Search team..."
-                                            value={assigneeSearch}
-                                            onChange={(e) => setAssigneeSearch(e.target.value)}
-                                            autoFocus
-                                            />
-                                        </div>
-                                        </div>
-                                        <div className="max-h-48 overflow-y-auto py-1">
+                                  </div>
+                                </div>
+                                <div className="max-h-48 overflow-y-auto py-1">
+                                  <div
+                                    className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-slate-100 data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
+                                    onClick={() => {
+                                      setTargetAssigneeId(null);
+                                      setIsAssigneeOpen(false);
+                                    }}
+                                  >
+                                    <span className="flex-1 truncate text-slate-500 italic">Unassigned</span>
+                                    {!targetAssigneeId && <Check className="ml-auto h-4 w-4" />}
+                                  </div>
+
+                                  {teamMembers
+                                    .filter(user =>
+                                      !assigneeSearch ||
+                                      (getUserName(user) || '').toLowerCase().includes(assigneeSearch.toLowerCase()) ||
+                                      (user.role || '').toLowerCase().includes(assigneeSearch.toLowerCase())
+                                    )
+                                    .map((user) => {
+                                      const userId = user.id || user._id;
+                                      return (
                                         <div
-                                            className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-slate-100 data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
-                                            onClick={() => {
-                                            setTargetAssigneeId(null);
+                                          key={userId}
+                                          className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-2 text-sm outline-none hover:bg-slate-50 border-b border-slate-50 last:border-0"
+                                          onClick={() => {
+                                            setTargetAssigneeId(userId);
                                             setIsAssigneeOpen(false);
-                                            }}
+                                          }}
                                         >
-                                            <span className="flex-1 truncate text-slate-500 italic">Unassigned</span>
-                                            {!targetAssigneeId && <Check className="ml-auto h-4 w-4" />}
+                                          <div className="flex flex-col">
+                                            <span className="font-medium truncate">{getUserName(user)}</span>
+                                            <span className="text-xs text-slate-500 capitalize">{user.role}</span>
+                                          </div>
+                                          {targetAssigneeId === userId && (
+                                            <Check className="ml-auto h-4 w-4 text-blue-600" />
+                                          )}
                                         </div>
-                                        
-                                        {teamMembers
-                                            .filter(user => 
-                                            !assigneeSearch || 
-                                            (getUserName(user) || '').toLowerCase().includes(assigneeSearch.toLowerCase()) ||
-                                            (user.role || '').toLowerCase().includes(assigneeSearch.toLowerCase())
-                                            )
-                                            .map((user) => {
-                                            const userId = user.id || user._id;
-                                            return (
-                                            <div
-                                            key={userId}
-                                            className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-2 text-sm outline-none hover:bg-slate-50 border-b border-slate-50 last:border-0"
-                                            onClick={() => {
-                                                setTargetAssigneeId(userId);
-                                                setIsAssigneeOpen(false);
-                                            }}
-                                            >
-                                            <div className="flex flex-col">
-                                                <span className="font-medium truncate">{getUserName(user)}</span>
-                                                <span className="text-xs text-slate-500 capitalize">{user.role}</span>
-                                            </div>
-                                            {targetAssigneeId === userId && (
-                                                <Check className="ml-auto h-4 w-4 text-blue-600" />
-                                            )}
-                                            </div>
-                                            )
-                                        })}
-                                        {teamMembers.length === 0 && (
-                                            <div className="px-2 py-4 text-center text-xs text-slate-500">
-                                                No team members found
-                                            </div>
-                                        )}
-                                        </div>
+                                      )
+                                    })}
+                                  {teamMembers.length === 0 && (
+                                    <div className="px-2 py-4 text-center text-xs text-slate-500">
+                                      No team members found
                                     </div>
-                                </>
-                                )}
-                            </div>
-                            <Button 
-                                className="w-full" 
-                                size="sm"
-                                onClick={handleExternalReassign}
-                            >
-                                Re Assign
-                            </Button>
+                                  )}
+                                </div>
+                              </div>
+                            </>
+                          )}
                         </div>
-                      </CardContent>
-                    </Card>
+                        <Button
+                          className="w-full"
+                          size="sm"
+                          onClick={handleExternalReassign}
+                        >
+                          Re Assign
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
                 </div>
-                
+
                 <div className="p-4 pb-2 flex-none">
                   <CustomerCard conversationId={selectedId} />
                 </div>
@@ -933,7 +956,7 @@ export default function App() {
               <div className="fixed bottom-4 right-4 z-50 w-96 bg-white border border-green-200 rounded-lg shadow-xl overflow-hidden animate-in fade-in slide-in-from-bottom-4">
                 <div className="bg-green-50 px-4 py-2 border-b border-green-100 flex justify-between items-center">
                   <h3 className="text-sm font-semibold text-green-800">New Lead Created</h3>
-                  <button 
+                  <button
                     onClick={() => setLeadDebugData(null)}
                     className="text-green-600 hover:text-green-800"
                   >
