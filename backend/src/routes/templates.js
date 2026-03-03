@@ -147,15 +147,34 @@ router.post('/upload-example', upload.single('file'), async (req, res, next) => 
     err.expose = true;
     return next(err);
   }
-  
+
   try {
     const resp = await whatsappClient.uploadMessageTemplateMedia(
-      WABA_ID, 
-      req.file.buffer, 
-      req.file.mimetype, 
+      WABA_ID,
+      req.file.buffer,
+      req.file.mimetype,
       req.file.originalname
     );
-    res.json(resp);
+
+    let cloudinaryUrl = null;
+    if (HAS_CLOUDINARY) {
+      try {
+        const base64 = req.file.buffer.toString('base64');
+        const dataUri = `data:${req.file.mimetype};base64,${base64}`;
+        const cloudResult = await cloudinaryLib.uploader.upload(dataUri, {
+          resource_type: 'auto',
+          folder: process.env.CLOUDINARY_FOLDER || 'whatsapp_media',
+          use_filename: true,
+          unique_filename: true,
+        });
+        cloudinaryUrl = cloudResult.secure_url;
+        console.log(`[templates] Concurrently uploaded template media to Cloudinary: ${cloudinaryUrl}`);
+      } catch (cloudErr) {
+        console.error('[templates] Failed to concurrently upload template media to Cloudinary:', cloudErr.message);
+      }
+    }
+
+    res.json({ ...resp, cloudinary_url: cloudinaryUrl });
   } catch (err) {
     const e = new Error(err.message || 'Template media upload failed');
     e.status = err.status || 500;
@@ -171,7 +190,7 @@ router.post('/upload-example', upload.single('file'), async (req, res, next) => 
  * This uses Cloudinary (if configured) and returns a payload similar to
  * the /api/whatsapp/upload endpoint: { id, url, kind, mime_type, original_filename }.
  */
-router.post('/upload-test-media', auth.requireRole('admin','agent','supervisor'), upload.single('file'), async (req, res, next) => {
+router.post('/upload-test-media', auth.requireRole('admin', 'agent', 'supervisor'), upload.single('file'), async (req, res, next) => {
   try {
     if (!HAS_CLOUDINARY) {
       const err = new Error('Cloudinary is not configured for media uploads');
@@ -216,10 +235,10 @@ router.post('/upload-test-media', auth.requireRole('admin','agent','supervisor')
       mimeType && mimeType.startsWith('image/')
         ? 'image'
         : mimeType && mimeType.startsWith('video/')
-        ? 'video'
-        : mimeType && mimeType.startsWith('audio/')
-        ? 'audio'
-        : 'document';
+          ? 'video'
+          : mimeType && mimeType.startsWith('audio/')
+            ? 'audio'
+            : 'document';
 
     res.status(200).json({
       id: cloudResult.secure_url,
@@ -250,7 +269,7 @@ router.post('/send-test', async (req, res, next) => {
   // If WABA ID is missing, we can't send via the standard flow easily,
   // but standard message sending usually relies on Phone Number ID, not WABA ID directly.
   // The 'sendTemplateMessage' function in whatsappClient should handle this.
-  
+
   try {
     const resp = await whatsappClient.sendTemplateMessage(
       to,
@@ -282,15 +301,15 @@ router.delete('/', async (req, res, next) => {
     err.status = 500;
     return next(err);
   }
-  
+
   const { name, hsm_id } = req.query;
-  
+
   if (!name) {
     const err = new Error('Template "name" is required');
     err.status = 400;
     return next(err);
   }
-  
+
   try {
     console.log(`[templates] Deleting template: ${name} (ID: ${hsm_id || 'ALL'})`);
     const resp = await whatsappClient.deleteTemplate(WABA_ID, name, hsm_id);
