@@ -1,7 +1,7 @@
 'use strict';
 const express = require('express');
 const router = express.Router();
-const { triggerWorkflowsForEvent } = require('../services/workflows');
+const { triggerWorkflowsForEvent } = require('../../services/workflows');
 
 // Helper to determine phone number from Shopify customer data
 function extractPhone(customer) {
