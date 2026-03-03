@@ -36,7 +36,7 @@ export function GallerySelectModal({ isOpen, onClose, onSelect, resourceType = '
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Select from Gallery">
+    <Modal isOpen={isOpen} onClose={onClose} title="Select from Gallery" zIndex="z-[100]">
       <div className="flex flex-col h-[65vh] min-h-[500px]">
         <div className="flex justify-between items-center mb-4">
           <div className="flex gap-2 bg-slate-100 p-1 rounded-lg border border-slate-200">
