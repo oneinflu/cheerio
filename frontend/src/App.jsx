@@ -521,103 +521,167 @@ export default function App() {
   return (
     <div className="flex h-screen w-full bg-slate-50 text-slate-950 font-sans">
       {/* Sidebar Navigation */}
-      <aside className="w-16 flex-none border-r border-slate-200 bg-white flex flex-col items-center py-4 space-y-4">
-        <div className="h-10 w-10 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-xl">
-          M
+      <aside className="group w-16 hover:w-64 transition-all duration-300 ease-in-out flex-none border-r border-slate-200 bg-white flex flex-col py-4 space-y-4 relative z-50">
+        <div className="flex items-center justify-start h-10 w-full px-3">
+          <div className="h-10 w-10 min-w-10 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-xl shrink-0">
+            M
+          </div>
+          <span className="ml-3 font-semibold text-xl whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100 flex-1 text-slate-900">
+            Menu
+          </span>
         </div>
-        <nav className="flex-1 flex flex-col items-center space-y-2 w-full px-2">
+        <nav className="flex-1 flex flex-col space-y-2 w-full px-3 overflow-hidden">
           <Button
             variant={activePage === 'dashboard' ? 'secondary' : 'ghost'}
-            size="icon"
-            className="w-10 h-10 rounded-lg"
+            className="w-full flex items-center justify-start h-10 px-0 rounded-lg overflow-hidden shrink-0"
             onClick={() => setActivePage('dashboard')}
+            title="Dashboard"
           >
-            <LayoutDashboard size={20} />
+            <div className="w-10 h-10 flex items-center justify-center shrink-0">
+              <LayoutDashboard size={20} />
+            </div>
+            <span className="ml-3 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100">
+              Dashboard
+            </span>
           </Button>
           
           <Button
             variant={activePage === 'inbox' ? 'secondary' : 'ghost'}
-            size="icon"
-            className="w-10 h-10 rounded-lg"
+            className="w-full flex items-center justify-start h-10 px-0 rounded-lg overflow-hidden shrink-0"
             onClick={() => setActivePage('inbox')}
+            title="Inbox"
           >
-            <MessageSquare size={20} />
+            <div className="w-10 h-10 flex items-center justify-center shrink-0">
+              <MessageSquare size={20} />
+            </div>
+            <span className="ml-3 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100">
+              Inbox
+            </span>
           </Button>
             {['admin', 'super_admin'].includes((currentUser.role || '').toLowerCase()) && (
             <>
               <Button
                 variant={activePage === 'team-members' ? 'secondary' : 'ghost'}
-                size="icon"
-                className="w-10 h-10 rounded-lg"
+                className="w-full flex items-center justify-start h-10 px-0 rounded-lg overflow-hidden shrink-0"
                 onClick={() => setActivePage('team-members')}
                 title="Team Members"
               >
-                <Shield size={20} />
+                <div className="w-10 h-10 flex items-center justify-center shrink-0">
+                  <Shield size={20} />
+                </div>
+                <span className="ml-3 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100">
+                  Team Members
+                </span>
               </Button>
             
               <Button
                 variant={activePage === 'templates' ? 'secondary' : 'ghost'}
-                size="icon"
-                className="w-10 h-10 rounded-lg"
+                className="w-full flex items-center justify-start h-10 px-0 rounded-lg overflow-hidden shrink-0"
                 onClick={() => setActivePage('templates')}
+                title="Templates"
               >
-                <FileText size={20} />
+                <div className="w-10 h-10 flex items-center justify-center shrink-0">
+                  <FileText size={20} />
+                </div>
+                <span className="ml-3 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100">
+                  Templates
+                </span>
               </Button>
               <Button
                 variant={activePage === 'flows' ? 'secondary' : 'ghost'}
-                size="icon"
-                className="w-10 h-10 rounded-lg"
+                className="w-full flex items-center justify-start h-10 px-0 rounded-lg overflow-hidden shrink-0"
                 onClick={() => setActivePage('flows')}
                 title="Flows"
               >
-                <GitBranch size={20} />
+                <div className="w-10 h-10 flex items-center justify-center shrink-0">
+                  <GitBranch size={20} />
+                </div>
+                <span className="ml-3 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100">
+                  Flows
+                </span>
               </Button>
               <Button
                 variant={activePage === 'workflows' ? 'secondary' : 'ghost'}
-                size="icon"
-                className="w-10 h-10 rounded-lg"
+                className="w-full flex items-center justify-start h-10 px-0 rounded-lg overflow-hidden shrink-0"
                 onClick={() => setActivePage('workflows')}
+                title="Workflows"
               >
-                <Workflow size={20} />
+                <div className="w-10 h-10 flex items-center justify-center shrink-0">
+                  <Workflow size={20} />
+                </div>
+                <span className="ml-3 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100">
+                  Workflows
+                </span>
               </Button>
 
               <Button
                 variant={activePage === 'rules' ? 'secondary' : 'ghost'}
-                size="icon"
-                className="w-10 h-10 rounded-lg"
+                className="w-full flex items-center justify-start h-10 px-0 rounded-lg overflow-hidden shrink-0"
                 onClick={() => setActivePage('rules')}
+                title="Rules"
               >
-                <Zap size={20} />
+                <div className="w-10 h-10 flex items-center justify-center shrink-0">
+                  <Zap size={20} />
+                </div>
+                <span className="ml-3 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100">
+                  Rules
+                </span>
               </Button>
               <Button
                 variant={activePage === 'instagram' ? 'secondary' : 'ghost'}
-                size="icon"
-                className="w-10 h-10 rounded-lg"
+                className="w-full flex items-center justify-start h-10 px-0 rounded-lg overflow-hidden shrink-0"
                 onClick={() => setActivePage('instagram')}
                 title="Instagram Integration"
               >
-                <Instagram size={20} />
+                <div className="w-10 h-10 flex items-center justify-center shrink-0">
+                  <Instagram size={20} />
+                </div>
+                <span className="ml-3 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100">
+                  Instagram
+                </span>
               </Button>
             </>
           )}
 
         
         </nav>
-        <div className="flex flex-col items-center space-y-2 pb-4 w-full px-2">
+        <div className="flex flex-col space-y-2 pb-4 w-full px-3 overflow-hidden">
           <Button
             variant={activePage === 'settings' ? 'secondary' : 'ghost'}
-            size="icon"
-            className="w-10 h-10 rounded-lg"
+            className="w-full flex items-center justify-start h-10 px-0 rounded-lg overflow-hidden shrink-0"
             onClick={() => setActivePage('settings')}
+            title="Settings"
           >
-            <Settings size={20} />
+            <div className="w-10 h-10 flex items-center justify-center shrink-0">
+              <Settings size={20} />
+            </div>
+            <span className="ml-3 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100">
+              Settings
+            </span>
           </Button>
-           <div className="w-8 h-8 bg-slate-200 rounded-full flex items-center justify-center text-xs font-medium">
-             JD
-           </div>
-           <Button variant="ghost" size="icon" className="w-10 h-10 rounded-lg text-slate-400 hover:text-red-600" onClick={handleLogout}>
-             <LogOut size={20} />
-           </Button>
+          <div className="w-full flex items-center justify-start h-10 px-0 shrink-0">
+             <div className="w-10 h-10 flex items-center justify-center shrink-0">
+               <div className="w-8 h-8 bg-slate-200 rounded-full flex items-center justify-center text-xs font-medium text-slate-700">
+                 {currentUser?.name?.substring(0, 2).toUpperCase() || 'JD'}
+               </div>
+             </div>
+             <span className="ml-3 text-sm font-medium text-slate-700 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100">
+               {currentUser?.name || 'Profile'}
+             </span>
+          </div>
+          <Button 
+            variant="ghost" 
+            className="w-full flex items-center justify-start h-10 px-0 rounded-lg text-slate-400 hover:text-red-600 overflow-hidden shrink-0" 
+            onClick={handleLogout}
+            title="Log Out"
+          >
+            <div className="w-10 h-10 flex items-center justify-center shrink-0">
+              <LogOut size={20} />
+            </div>
+            <span className="ml-3 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100">
+              Log Out
+            </span>
+          </Button>
         </div>
       </aside>
 
