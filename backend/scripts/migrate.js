@@ -267,7 +267,23 @@ async function runMigrations() {
           console.log('[migrate] webhook_events table already exists.');
         }
 
+        // 0014 – relax webhook_events.workflow_id to TEXT (was UUID+FK, caused silent drops)
+        const whCol = await client.query(`
+          SELECT data_type FROM information_schema.columns
+          WHERE table_name='webhook_events' AND column_name='workflow_id'
+        `);
+        if (whCol.rows[0]?.data_type === 'uuid') {
+          console.log('[migrate] Relaxing webhook_events.workflow_id to TEXT...');
+          await client.query('BEGIN');
+          await runSQLFile(client, path.join(__dirname, '..', 'db', 'migrations', '0014_fix_webhook_events.sql'));
+          await client.query('COMMIT');
+          console.log('[migrate] Applied 0014_fix_webhook_events migration.');
+        } else {
+          console.log('[migrate] webhook_events.workflow_id is already TEXT. OK.');
+        }
+
         return;
+
 
       }
     }

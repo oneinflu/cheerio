@@ -260,9 +260,12 @@ const IncomingWebhookNode = ({ data, selected }) => {
 // ─── Proper component so hooks are called at top level (fixes Rules of Hooks) ──
 function WebhookNodeConfig({ node, workflowId, updateNodeFields }) {
   const baseUrl = window.location.origin;
-  const webhookUrl = workflowId
+  // Validate it's a real UUID (not a name slug)
+  const isRealId = workflowId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(workflowId);
+  const webhookUrl = isRealId
     ? `${baseUrl}/webhooks/workflow/${workflowId}`
-    : '(save workflow first to get URL)';
+    : null;
+
 
   const [copied, setCopied] = useState(false);
   const [loadingEvents, setLoadingEvents] = useState(false);
@@ -320,16 +323,22 @@ function WebhookNodeConfig({ node, workflowId, updateNodeFields }) {
       {/* Webhook URL */}
       <div>
         <label className="block text-sm font-medium text-slate-700 mb-1.5">Webhook URL</label>
-        <div className="bg-slate-900 rounded-lg px-3 py-2.5 flex items-center gap-2">
-          <code className="text-cyan-300 text-[11px] flex-1 break-all leading-snug">{webhookUrl}</code>
-          <button type="button" onClick={copyUrl} disabled={!workflowId}
-            className="shrink-0 text-slate-400 hover:text-white transition-colors">
-            {copied ? <Check size={14} className="text-green-400" /> : <Copy size={14} />}
-          </button>
-        </div>
-        <p className="text-[10px] text-slate-400 mt-1">POST any JSON body to this URL. No auth needed.</p>
-        {!workflowId && (
-          <p className="text-[10px] text-amber-600 mt-1 font-medium">⚠ Save the workflow first to generate the URL.</p>
+        {isRealId ? (
+          <>
+            <div className="bg-slate-900 rounded-lg px-3 py-2.5 flex items-center gap-2">
+              <code className="text-cyan-300 text-[11px] flex-1 break-all leading-snug">{webhookUrl}</code>
+              <button type="button" onClick={copyUrl}
+                className="shrink-0 text-slate-400 hover:text-white transition-colors">
+                {copied ? <Check size={14} className="text-green-400" /> : <Copy size={14} />}
+              </button>
+            </div>
+            <p className="text-[10px] text-slate-400 mt-1">POST any JSON body to this URL. No auth needed.</p>
+          </>
+        ) : (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-3">
+            <p className="text-xs text-amber-700 font-medium">⚠ Save the workflow first to generate the webhook URL.</p>
+            <p className="text-[10px] text-amber-500 mt-1">The URL requires the workflow's database ID which is assigned on first save.</p>
+          </div>
         )}
       </div>
 
@@ -338,12 +347,12 @@ function WebhookNodeConfig({ node, workflowId, updateNodeFields }) {
         <div className="flex items-center justify-between mb-2">
           <label className="text-sm font-medium text-slate-700">Last Received Payload</label>
           <div className="flex gap-1.5">
-            <button type="button" onClick={fetchLastEvent} disabled={loadingEvents || !workflowId}
-              className="flex items-center gap-1 text-xs text-cyan-600 hover:text-cyan-800 border border-cyan-200 rounded-md px-2 py-1 hover:bg-cyan-50 transition-colors">
+            <button type="button" onClick={fetchLastEvent} disabled={loadingEvents || !isRealId}
+              className="flex items-center gap-1 text-xs text-cyan-600 hover:text-cyan-800 border border-cyan-200 rounded-md px-2 py-1 hover:bg-cyan-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
               {loadingEvents ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} />} Fetch
             </button>
-            <button type="button" onClick={clearEvents} disabled={!workflowId}
-              className="flex items-center gap-1 text-xs text-red-400 hover:text-red-600 border border-red-100 rounded-md px-2 py-1 hover:bg-red-50 transition-colors">
+            <button type="button" onClick={clearEvents} disabled={!isRealId}
+              className="flex items-center gap-1 text-xs text-red-400 hover:text-red-600 border border-red-100 rounded-md px-2 py-1 hover:bg-red-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
               <Trash2 size={11} /> Clear
             </button>
           </div>

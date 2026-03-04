@@ -79,10 +79,8 @@ export default function App() {
     localStorage.setItem('activePage', activePage);
     let path = `/${activePage === 'inbox' ? '' : activePage}`;
     if (activePage === 'workflows' && editingWorkflow) {
-      // Use name if possible (sanitized), otherwise use ID.
-      const identifier = editingWorkflow.name
-        ? encodeURIComponent(editingWorkflow.name.toLowerCase().replace(/\\s+/g, '-'))
-        : editingWorkflow.id;
+      // Always use the real UUID so initialWorkflow.id is always the DB id
+      const identifier = editingWorkflow.id || 'new';
       path = `/workflows/${identifier}`;
     }
     window.history.pushState(null, '', path);
