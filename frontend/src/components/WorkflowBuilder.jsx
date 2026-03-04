@@ -32,19 +32,17 @@ const NodeWrapper = ({ children, selected, title, icon: Icon, colorClass }) => (
 );
 
 const TriggerNode = ({ data, selected }) => {
-  const isWhatsapp = data.triggerType === 'incoming_whatsapp';
-
   return (
     <NodeWrapper
       selected={selected}
-      title={isWhatsapp ? "WhatsApp Incoming" : "Trigger"}
-      icon={isWhatsapp ? MessageSquare : Zap}
-      colorClass={isWhatsapp ? "bg-green-600" : "bg-purple-600"}
+      title="WhatsApp Incoming"
+      icon={MessageSquare}
+      colorClass="bg-green-600"
     >
       <div className="text-xs text-slate-600 mb-2">
-        {data.label || (isWhatsapp ? 'WhatsApp Keyword Trigger' : 'Configure Trigger')}
+        {data.label || 'WhatsApp Keyword Trigger'}
       </div>
-      {(isWhatsapp && data.keywords && data.keywords.trim() !== '') && (
+      {(data.keywords && data.keywords.trim() !== '') && (
         <div className="text-[10px] text-slate-500 bg-green-50 p-1.5 rounded border border-green-100 mb-1 flex flex-wrap gap-1">
           <span className="font-semibold text-green-700">Keywords:</span>
           {data.keywords.split(',').map((kw, i) => (
@@ -1244,9 +1242,9 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
             {viewMode === 'canvas' && (
               <DraggableBlock
                 type="trigger"
-                label="Trigger"
-                icon={Zap}
-                color="bg-purple-600"
+                label="Whatsapp Incoming"
+                icon={MessageSquare}
+                color="bg-green-600"
                 onAdd={handleAddNodeFromPalette}
                 disabledDrag={false}
               />
@@ -1741,60 +1739,24 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
               {/* Dynamic Config Forms based on Node Type */}
               {selectedNode.type === 'trigger' && (
                 <div className="space-y-4">
-                  <div className="space-y-3">
-                    <label className="block text-sm font-medium text-slate-700">Trigger Event</label>
-                    <select
-                      className="w-full border border-slate-300 rounded-md p-2 text-sm"
-                      value={selectedNode.data.triggerType || 'new_lead'}
-                      onChange={(e) => updateNodeData('triggerType', e.target.value)}
-                    >
-                      <option value="new_lead">New Lead Created</option>
-                      <option value="first_message">User Sends First Message</option>
-                      <option value="tag_added">Tag Added</option>
-
-                      <optgroup label="Communication">
-                        <option value="incoming_whatsapp">Incoming WhatsApp</option>
-                        <option value="campaign_sent">Campaign Sent</option>
-                        <option value="messenger">Messenger</option>
-                        <option value="instagram">Instagram</option>
-                      </optgroup>
-
-                      <optgroup label="E-Commerce">
-                        <option value="shopify_events">Shopify Events</option>
-                        <option value="commerce_event">Commerce Event</option>
-                      </optgroup>
-
-                      <optgroup label="Marketing & CRM">
-                        <option value="facebook_lead">Facebook Lead</option>
-                        <option value="new_contact">New contact</option>
-                        <option value="new_form_response">New form response</option>
-                      </optgroup>
-
-                      <optgroup label="Integrations">
-                        <option value="kylas_event_create">Kylas Event Create</option>
-                        <option value="kylas_event_update">Kylas Event Update</option>
-                        <option value="pabbly_event">Pabbly Event</option>
-                        <option value="incoming_webhook">Incoming Webhook</option>
-                      </optgroup>
-                    </select>
-                  </div>
-                  {selectedNode.data.triggerType === 'incoming_whatsapp' && (
-                    <div className="space-y-2 mt-4">
-                      <div className="bg-green-50 text-green-700 p-3 rounded-md text-xs border border-green-100 mb-2">
-                        This workflow triggers when an incoming WhatsApp message contains any of the specified keywords.
-                      </div>
-                      <label className="block text-sm font-medium text-slate-700">Keywords (comma separated)</label>
-                      <textarea
-                        className="w-full border border-slate-300 rounded-md p-2 text-sm min-h-[80px]"
-                        placeholder="e.g. cpa us, tax help, support"
-                        value={selectedNode.data.keywords || ''}
-                        onChange={(e) => updateNodeData('keywords', e.target.value)}
-                      />
-                      <p className="text-[10px] text-slate-500">
-                        Leave blank to trigger on *any* incoming WhatsApp message.
-                      </p>
+                  <div className="space-y-2 mt-4">
+                    <div className="bg-green-50 text-green-700 p-3 rounded-md text-xs border border-green-100 mb-2">
+                      This workflow triggers when an incoming WhatsApp message contains any of the specified keywords.
                     </div>
-                  )}
+                    <label className="block text-sm font-medium text-slate-700">Keywords (comma separated)</label>
+                    <textarea
+                      className="w-full border border-slate-300 rounded-md p-2 text-sm min-h-[80px]"
+                      placeholder="e.g. cpa us, tax help, support"
+                      value={selectedNode.data.keywords || ''}
+                      onChange={(e) => {
+                        updateNodeData('keywords', e.target.value);
+                        updateNodeData('triggerType', 'incoming_whatsapp');
+                      }}
+                    />
+                    <p className="text-[10px] text-slate-500">
+                      Leave blank to trigger on *any* incoming WhatsApp message.
+                    </p>
+                  </div>
                 </div>
               )}
 
