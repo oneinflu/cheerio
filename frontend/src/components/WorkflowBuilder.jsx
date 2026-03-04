@@ -257,6 +257,165 @@ const IncomingWebhookNode = ({ data, selected }) => {
   );
 };
 
+// ─── Proper component so hooks are called at top level (fixes Rules of Hooks) ──
+function WebhookNodeConfig({ node, workflowId, updateNodeFields }) {
+  const baseUrl = window.location.origin;
+  const webhookUrl = workflowId
+    ? `${baseUrl}/webhooks/workflow/${workflowId}`
+    : '(save workflow first to get URL)';
+
+  const [copied, setCopied] = useState(false);
+  const [loadingEvents, setLoadingEvents] = useState(false);
+  const [lastEvent, setLastEvent] = useState(null);
+  const [eventError, setEventError] = useState('');
+
+  const copyUrl = () => {
+    if (!workflowId) return;
+    navigator.clipboard.writeText(webhookUrl).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  const fetchLastEvent = async () => {
+    if (!workflowId) return;
+    setLoadingEvents(true);
+    setEventError('');
+    try {
+      const res = await getWebhookEvents(workflowId);
+      if (res.success && res.events.length > 0) {
+        const ev = res.events[0];
+        setLastEvent(ev);
+        const payload = ev.payload || {};
+        const existing = node.data.paramMapping || {};
+        const merged = { ...existing };
+        Object.keys(payload).forEach(k => { if (!(k in merged)) merged[k] = k; });
+        updateNodeFields(node.id, { paramMapping: merged, lastPayload: payload });
+      } else {
+        setLastEvent(null);
+        setEventError('No events received yet. Send a test POST to the webhook URL.');
+      }
+    } catch (e) {
+      setEventError('Failed to fetch events: ' + e.message);
+    } finally {
+      setLoadingEvents(false);
+    }
+  };
+
+  const clearEvents = async () => {
+    if (!workflowId) return;
+    await clearWebhookEvents(workflowId);
+    setLastEvent(null);
+    setEventError('');
+  };
+
+  const paramMapping = node.data.paramMapping || {};
+  const payloadKeys = lastEvent
+    ? Object.keys(lastEvent.payload || {})
+    : Object.keys(node.data.lastPayload || {});
+
+  return (
+    <div className="space-y-5">
+
+      {/* Webhook URL */}
+      <div>
+        <label className="block text-sm font-medium text-slate-700 mb-1.5">Webhook URL</label>
+        <div className="bg-slate-900 rounded-lg px-3 py-2.5 flex items-center gap-2">
+          <code className="text-cyan-300 text-[11px] flex-1 break-all leading-snug">{webhookUrl}</code>
+          <button type="button" onClick={copyUrl} disabled={!workflowId}
+            className="shrink-0 text-slate-400 hover:text-white transition-colors">
+            {copied ? <Check size={14} className="text-green-400" /> : <Copy size={14} />}
+          </button>
+        </div>
+        <p className="text-[10px] text-slate-400 mt-1">POST any JSON body to this URL. No auth needed.</p>
+        {!workflowId && (
+          <p className="text-[10px] text-amber-600 mt-1 font-medium">⚠ Save the workflow first to generate the URL.</p>
+        )}
+      </div>
+
+      {/* Last Received Payload */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <label className="text-sm font-medium text-slate-700">Last Received Payload</label>
+          <div className="flex gap-1.5">
+            <button type="button" onClick={fetchLastEvent} disabled={loadingEvents || !workflowId}
+              className="flex items-center gap-1 text-xs text-cyan-600 hover:text-cyan-800 border border-cyan-200 rounded-md px-2 py-1 hover:bg-cyan-50 transition-colors">
+              {loadingEvents ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} />} Fetch
+            </button>
+            <button type="button" onClick={clearEvents} disabled={!workflowId}
+              className="flex items-center gap-1 text-xs text-red-400 hover:text-red-600 border border-red-100 rounded-md px-2 py-1 hover:bg-red-50 transition-colors">
+              <Trash2 size={11} /> Clear
+            </button>
+          </div>
+        </div>
+
+        {eventError && (
+          <div className="text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded-md p-2">{eventError}</div>
+        )}
+        {lastEvent && (
+          <div className="space-y-1.5">
+            <div className="text-[10px] text-slate-400">
+              Received: {new Date(lastEvent.received_at).toLocaleString('en-IN')}
+              {lastEvent.source_ip && ` · from ${lastEvent.source_ip}`}
+            </div>
+            <pre className="bg-slate-900 text-green-300 text-[10px] rounded-lg p-3 overflow-auto max-h-[180px] leading-relaxed">
+              {JSON.stringify(lastEvent.payload, null, 2)}
+            </pre>
+          </div>
+        )}
+        {!lastEvent && !eventError && (
+          <div className="border-2 border-dashed border-slate-200 rounded-lg p-4 text-center">
+            <div className="text-slate-400 text-xs">No payload received yet</div>
+            <div className="text-[10px] text-slate-300 mt-1">Click Fetch after sending a test POST</div>
+          </div>
+        )}
+      </div>
+
+      {/* Parameter Mapping */}
+      <div>
+        <label className="block text-sm font-medium text-slate-700 mb-1">Parameter Mapping</label>
+        <p className="text-[10px] text-slate-400 mb-2">
+          Map each incoming JSON key to a variable name for use in later steps as <code className="bg-slate-100 px-1 rounded">{"{{variable}}"}</code>
+        </p>
+        {payloadKeys.length > 0 ? (
+          <div className="space-y-2">
+            {payloadKeys.map(key => (
+              <div key={key} className="flex items-center gap-2">
+                <div className="flex-1 bg-slate-100 border border-slate-200 rounded-md px-2 py-1.5 text-xs font-mono text-slate-600 truncate">{key}</div>
+                <span className="text-slate-400 text-xs shrink-0">→</span>
+                <input type="text"
+                  className="flex-1 border border-slate-300 rounded-md px-2 py-1.5 text-xs"
+                  placeholder={key}
+                  value={paramMapping[key] || ''}
+                  onChange={e => {
+                    const next = { ...paramMapping, [key]: e.target.value };
+                    updateNodeFields(node.id, { paramMapping: next });
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-[10px] text-slate-400 italic">Fetch a payload first — keys will appear here automatically.</div>
+        )}
+      </div>
+
+      {/* Usage guide */}
+      {Object.keys(paramMapping).length > 0 && (
+        <div className="bg-cyan-50 border border-cyan-100 rounded-lg p-3 space-y-1">
+          <div className="text-xs font-semibold text-cyan-800 mb-1.5">How to use in later nodes</div>
+          {Object.entries(paramMapping).filter(([, v]) => v).map(([key, varName]) => (
+            <div key={key} className="flex items-center gap-2 text-[11px]">
+              <code className="bg-white border border-cyan-200 rounded px-1.5 py-0.5 text-cyan-700 font-mono">{`{{${varName}}}`}</code>
+              <span className="text-slate-400">← payload.{key}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const nodeTypes = {
   trigger: TriggerNode,
   send_template: TemplateNode,
@@ -1944,197 +2103,13 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 </div>
               )}
 
-              {selectedNode.type === 'incoming_webhook' && (() => {
-                const workflowId = initialWorkflow?.id || null;
-                const baseUrl = window.location.origin;
-                const webhookUrl = workflowId
-                  ? `${baseUrl}/webhooks/workflow/${workflowId}`
-                  : '(save workflow first to get URL)';
-
-                const [copied, setCopied] = React.useState(false);
-                const [loadingEvents, setLoadingEvents] = React.useState(false);
-                const [lastEvent, setLastEvent] = React.useState(null);
-                const [eventError, setEventError] = React.useState('');
-
-                const copyUrl = () => {
-                  if (!workflowId) return;
-                  navigator.clipboard.writeText(webhookUrl).then(() => {
-                    setCopied(true);
-                    setTimeout(() => setCopied(false), 2000);
-                  });
-                };
-
-                const fetchLastEvent = async () => {
-                  if (!workflowId) return;
-                  setLoadingEvents(true);
-                  setEventError('');
-                  try {
-                    const res = await getWebhookEvents(workflowId);
-                    if (res.success && res.events.length > 0) {
-                      const ev = res.events[0];
-                      setLastEvent(ev);
-                      // Auto-seed paramMapping keys from payload if not already mapped
-                      const payload = ev.payload || {};
-                      const existing = selectedNode.data.paramMapping || {};
-                      const merged = { ...existing };
-                      Object.keys(payload).forEach(k => {
-                        if (!(k in merged)) merged[k] = k;
-                      });
-                      updateNodeFields(selectedNode.id, { paramMapping: merged, lastPayload: payload });
-                    } else {
-                      setLastEvent(null);
-                      setEventError('No events received yet. Send a test POST to the webhook URL.');
-                    }
-                  } catch (e) {
-                    setEventError('Failed to fetch events: ' + e.message);
-                  } finally {
-                    setLoadingEvents(false);
-                  }
-                };
-
-                const clearEvents = async () => {
-                  if (!workflowId) return;
-                  await clearWebhookEvents(workflowId);
-                  setLastEvent(null);
-                  setEventError('');
-                };
-
-                const paramMapping = selectedNode.data.paramMapping || {};
-                const payloadKeys = lastEvent
-                  ? Object.keys(lastEvent.payload || {})
-                  : Object.keys(selectedNode.data.lastPayload || {});
-
-                return (
-                  <div className="space-y-5">
-
-                    {/* Webhook URL */}
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1.5">Webhook URL</label>
-                      <div className="bg-slate-900 rounded-lg px-3 py-2.5 flex items-center gap-2">
-                        <code className="text-cyan-300 text-[11px] flex-1 break-all leading-snug">
-                          {webhookUrl}
-                        </code>
-                        <button
-                          type="button"
-                          onClick={copyUrl}
-                          disabled={!workflowId}
-                          className="shrink-0 text-slate-400 hover:text-white transition-colors"
-                        >
-                          {copied ? <Check size={14} className="text-green-400" /> : <Copy size={14} />}
-                        </button>
-                      </div>
-                      <p className="text-[10px] text-slate-400 mt-1">
-                        POST any JSON body to this URL. No auth needed.
-                      </p>
-                      {!workflowId && (
-                        <p className="text-[10px] text-amber-600 mt-1 font-medium">
-                          ⚠ Save the workflow first to generate the URL.
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Test & Inspect */}
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <label className="text-sm font-medium text-slate-700">Last Received Payload</label>
-                        <div className="flex gap-1.5">
-                          <button
-                            type="button"
-                            onClick={fetchLastEvent}
-                            disabled={loadingEvents || !workflowId}
-                            className="flex items-center gap-1 text-xs text-cyan-600 hover:text-cyan-800 border border-cyan-200 rounded-md px-2 py-1 hover:bg-cyan-50 transition-colors"
-                          >
-                            {loadingEvents ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} />}
-                            Fetch
-                          </button>
-                          <button
-                            type="button"
-                            onClick={clearEvents}
-                            disabled={!workflowId}
-                            className="flex items-center gap-1 text-xs text-red-400 hover:text-red-600 border border-red-100 rounded-md px-2 py-1 hover:bg-red-50 transition-colors"
-                          >
-                            <Trash2 size={11} /> Clear
-                          </button>
-                        </div>
-                      </div>
-
-                      {eventError && (
-                        <div className="text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded-md p-2">
-                          {eventError}
-                        </div>
-                      )}
-
-                      {lastEvent && (
-                        <div className="space-y-1.5">
-                          <div className="text-[10px] text-slate-400">
-                            Received: {new Date(lastEvent.received_at).toLocaleString('en-IN')}
-                            {lastEvent.source_ip && ` · from ${lastEvent.source_ip}`}
-                          </div>
-                          <pre className="bg-slate-900 text-green-300 text-[10px] rounded-lg p-3 overflow-auto max-h-[180px] leading-relaxed">
-                            {JSON.stringify(lastEvent.payload, null, 2)}
-                          </pre>
-                        </div>
-                      )}
-
-                      {!lastEvent && !eventError && (
-                        <div className="border-2 border-dashed border-slate-200 rounded-lg p-4 text-center">
-                          <div className="text-slate-400 text-xs">No payload received yet</div>
-                          <div className="text-[10px] text-slate-300 mt-1">Click Fetch after sending a test POST</div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Parameter Mapping */}
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Parameter Mapping</label>
-                      <p className="text-[10px] text-slate-400 mb-2">
-                        Map each incoming JSON key to a workflow variable name you can use in later steps as <code className="bg-slate-100 px-1 rounded">{'{{variable}}'}</code>
-                      </p>
-
-                      {payloadKeys.length > 0 ? (
-                        <div className="space-y-2">
-                          {payloadKeys.map(key => (
-                            <div key={key} className="flex items-center gap-2">
-                              <div className="flex-1 bg-slate-100 border border-slate-200 rounded-md px-2 py-1.5 text-xs font-mono text-slate-600 truncate">
-                                {key}
-                              </div>
-                              <span className="text-slate-400 text-xs shrink-0">→</span>
-                              <input
-                                type="text"
-                                className="flex-1 border border-slate-300 rounded-md px-2 py-1.5 text-xs"
-                                placeholder={key}
-                                value={paramMapping[key] || ''}
-                                onChange={e => {
-                                  const next = { ...paramMapping, [key]: e.target.value };
-                                  updateNodeFields(selectedNode.id, { paramMapping: next });
-                                }}
-                              />
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="text-[10px] text-slate-400 italic">
-                          Fetch a payload first — keys will appear here automatically.
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Usage guide */}
-                    {Object.keys(paramMapping).length > 0 && (
-                      <div className="bg-cyan-50 border border-cyan-100 rounded-lg p-3 space-y-1">
-                        <div className="text-xs font-semibold text-cyan-800 mb-1.5">How to use in later nodes</div>
-                        {Object.entries(paramMapping).filter(([, v]) => v).map(([key, varName]) => (
-                          <div key={key} className="flex items-center gap-2 text-[11px]">
-                            <code className="bg-white border border-cyan-200 rounded px-1.5 py-0.5 text-cyan-700 font-mono">{`{{${varName}}}`}</code>
-                            <span className="text-slate-400">← payload.{key}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                  </div>
-                );
-              })()}
+              {selectedNode.type === 'incoming_webhook' && (
+                <WebhookNodeConfig
+                  node={selectedNode}
+                  workflowId={initialWorkflow?.id || null}
+                  updateNodeFields={updateNodeFields}
+                />
+              )}
 
               {selectedNode.type === 'campaign_condition' && (() => {
                 const conditions = selectedNode.data.conditions || [
