@@ -14,8 +14,8 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { Button } from './ui/Button';
-import { Save, ArrowLeft, Plus, Clock, MessageSquare, GitBranch, Zap, StopCircle, Loader2, Play, MessageCircle, Code, UserCheck, Tag, Mic, Workflow as WorkflowIcon } from 'lucide-react';
-import { getTemplates, runWorkflow, aiGenerateWorkflow, getWorkflows } from '../api';
+import { Save, ArrowLeft, Plus, Clock, MessageSquare, GitBranch, Zap, StopCircle, Loader2, Play, MessageCircle, Code, UserCheck, Tag, Mic, Workflow as WorkflowIcon, Megaphone, Filter } from 'lucide-react';
+import { getTemplates, runWorkflow, aiGenerateWorkflow, getWorkflows, getCampaigns } from '../api';
 
 // --- Custom Node Components ---
 
@@ -195,6 +195,42 @@ const EndNode = ({ data, selected }) => {
   );
 };
 
+const CampaignTriggerNode = ({ data, selected }) => (
+  <NodeWrapper selected={selected} title="Campaign Sent" icon={Megaphone} colorClass="bg-purple-600">
+    <div className="text-xs text-slate-600 mb-1">
+      Campaign: <b>{data.campaignName || 'Select campaign...'}</b>
+    </div>
+    <Handle type="source" position={Position.Bottom} className="w-3 h-3 bg-slate-400" />
+  </NodeWrapper>
+);
+
+const CampaignConditionNode = ({ data, selected }) => {
+  const timeLabel = data.checkAfterValue
+    ? `After ${data.checkAfterValue} ${data.checkAfterUnit || 'hours'}`
+    : 'Timing not set';
+  const conditions = data.conditions || [
+    { variable: data.variable || 'WA message', operator: data.operator || 'eq', value: data.value || 'delivered' }
+  ];
+  return (
+    <NodeWrapper selected={selected} title="Campaign Condition" icon={Filter} colorClass="bg-violet-600">
+      <div className="text-xs text-slate-500 mb-1.5">{timeLabel}</div>
+      <div className="space-y-1">
+        {conditions.map((cond, i) => (
+          <div key={i} className="text-[11px] bg-violet-50 border border-violet-100 rounded px-2 py-1 text-violet-800 font-medium">
+            {cond.variable} {cond.operator === 'eq' ? '==' : '!='} <span className="text-violet-600">{cond.value}</span>
+          </div>
+        ))}
+      </div>
+      <div className="flex justify-between text-[10px] font-bold text-slate-500 px-1 mt-2">
+        <span>YES</span><span>NO</span>
+      </div>
+      <Handle type="target" position={Position.Top} className="w-3 h-3 bg-slate-400" />
+      <Handle type="source" position={Position.Bottom} id="yes" style={{ left: '30%' }} className="w-3 h-3 bg-green-500" />
+      <Handle type="source" position={Position.Bottom} id="no" style={{ left: '70%' }} className="w-3 h-3 bg-red-500" />
+    </NodeWrapper>
+  );
+};
+
 const nodeTypes = {
   trigger: TriggerNode,
   send_template: TemplateNode,
@@ -204,6 +240,8 @@ const nodeTypes = {
   custom_code: CustomCodeNode,
   action: ActionNode,
   end: EndNode,
+  campaign_trigger: CampaignTriggerNode,
+  campaign_condition: CampaignConditionNode,
 };
 
 // --- Helper Functions ---
@@ -260,6 +298,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [availableWorkflows, setAvailableWorkflows] = useState([]);
   const [loadingWorkflows, setLoadingWorkflows] = useState(false);
+  const [availableCampaigns, setAvailableCampaigns] = useState([]);
   const [viewMode, setViewMode] = useState('canvas');
   const [draggingNodeId, setDraggingNodeId] = useState(null);
   const [expandedNodeId, setExpandedNodeId] = useState(null);
@@ -348,6 +387,12 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
     };
     fetchWorkflows();
   }, [initialWorkflow]);
+
+  React.useEffect(() => {
+    getCampaigns()
+      .then(res => { if (res.success) setAvailableCampaigns(res.campaigns || []); })
+      .catch(console.error);
+  }, []);
 
   const onConnect = useCallback(
     (params) => setEdges((eds) => addEdge(params, eds)),
@@ -700,6 +745,39 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
     },
     [setNodes, syncGraphFromList, viewMode, branchTarget]
   );
+
+  // Drop BOTH campaign_trigger + campaign_condition pre-wired
+  const handleAddCampaignTrigger = useCallback(() => {
+    const triggerId = getId();
+    const conditionId = getId();
+    const triggerNode = {
+      id: triggerId,
+      type: 'campaign_trigger',
+      position: { x: 0, y: 0 },
+      data: { label: 'Campaign Sent', triggerType: 'campaign_sent', campaignId: '', campaignName: '' },
+    };
+    const conditionNode = {
+      id: conditionId,
+      type: 'campaign_condition',
+      position: { x: 0, y: 160 },
+      data: {
+        label: 'Campaign Condition',
+        checkAfterValue: 24,
+        checkAfterUnit: 'hours',
+        conditions: [
+          { variable: 'WA message', operator: 'eq', value: 'delivered' },
+        ],
+      },
+    };
+    const edge = {
+      id: `e_${triggerId}_${conditionId}`,
+      source: triggerId,
+      target: conditionId,
+    };
+    setNodes(nds => [...nds, triggerNode, conditionNode]);
+    setEdges(eds => [...eds, edge]);
+    setSelectedNode(triggerNode);
+  }, [setNodes, setEdges]);
 
   const updateNodeData = (key, value) => {
     if (!selectedNode) return;
@@ -1249,6 +1327,21 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 disabledDrag={false}
               />
             )}
+            {viewMode === 'canvas' && (
+              <div
+                className="flex items-center gap-2 p-2 rounded-md bg-purple-50 border border-purple-200 cursor-pointer hover:bg-purple-100 transition-colors"
+                onClick={handleAddCampaignTrigger}
+                title="Adds Campaign Sent trigger + Condition node pre-wired"
+              >
+                <div className="w-7 h-7 rounded-md bg-purple-600 flex items-center justify-center shrink-0">
+                  <Megaphone size={14} className="text-white" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold text-purple-800">Campaign Sent</div>
+                  <div className="text-[10px] text-purple-500">Adds trigger + condition</div>
+                </div>
+              </div>
+            )}
             {/*
             {viewMode === 'canvas' && (
               <DraggableBlock
@@ -1760,7 +1853,184 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 </div>
               )}
 
+              {selectedNode.type === 'campaign_trigger' && (
+                <div className="space-y-4">
+                  <div className="bg-purple-50 border border-purple-100 text-purple-700 rounded-md p-3 text-xs">
+                    This workflow triggers after a campaign message is sent to a contact.
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">Select Campaign</label>
+                    <select
+                      className="w-full border border-slate-300 rounded-md p-2 text-sm"
+                      value={selectedNode.data.campaignId || ''}
+                      onChange={e => {
+                        const camp = availableCampaigns.find(c => c.id === e.target.value);
+                        updateNodeFields(selectedNode.id, {
+                          campaignId: e.target.value,
+                          campaignName: camp?.name || '',
+                          triggerType: 'campaign_sent',
+                        });
+                      }}
+                    >
+                      <option value="">— Select a campaign —</option>
+                      {availableCampaigns.map(c => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {selectedNode.type === 'campaign_condition' && (() => {
+                const conditions = selectedNode.data.conditions || [
+                  { variable: 'WA message', operator: 'eq', value: 'delivered' }
+                ];
+                const MAX = 5;
+
+                const updateConditions = (newConds) => {
+                  updateNodeFields(selectedNode.id, { conditions: newConds });
+                };
+
+                const updateCond = (idx, field, val) => {
+                  const next = conditions.map((c, i) => i === idx ? { ...c, [field]: val } : c);
+                  updateConditions(next);
+                };
+
+                const addCond = () => {
+                  if (conditions.length >= MAX) return;
+                  updateConditions([...conditions, { variable: 'WA message', operator: 'eq', value: 'delivered' }]);
+                };
+
+                const removeCond = (idx) => {
+                  if (conditions.length <= 1) return;
+                  updateConditions(conditions.filter((_, i) => i !== idx));
+                };
+
+                return (
+                  <div className="space-y-4">
+                    {/* Timing */}
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1.5">Check After</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="number" min="1"
+                          className="w-20 border border-slate-300 rounded-md p-2 text-sm"
+                          value={selectedNode.data.checkAfterValue || ''}
+                          onChange={e => updateNodeData('checkAfterValue', parseInt(e.target.value) || 1)}
+                        />
+                        <select
+                          className="flex-1 border border-slate-300 rounded-md p-2 text-sm"
+                          value={selectedNode.data.checkAfterUnit || 'hours'}
+                          onChange={e => updateNodeData('checkAfterUnit', e.target.value)}
+                        >
+                          <option value="seconds">Seconds</option>
+                          <option value="minutes">Minutes</option>
+                          <option value="hours">Hours</option>
+                          <option value="specific_time">At specific time</option>
+                        </select>
+                      </div>
+                      {selectedNode.data.checkAfterUnit === 'specific_time' && (
+                        <input
+                          type="datetime-local"
+                          className="w-full mt-2 border border-slate-300 rounded-md p-2 text-sm"
+                          value={selectedNode.data.specificTime || ''}
+                          onChange={e => updateNodeData('specificTime', e.target.value)}
+                        />
+                      )}
+                    </div>
+
+                    {/* Condition Groups */}
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="text-sm font-medium text-slate-700">Conditions</label>
+                        <span className="text-xs text-slate-400">{conditions.length}/{MAX}</span>
+                      </div>
+
+                      <div className="space-y-3">
+                        {conditions.map((cond, idx) => (
+                          <div key={idx} className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Group {idx + 1}</span>
+                              {conditions.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => removeCond(idx)}
+                                  className="text-red-400 hover:text-red-600 text-xs"
+                                >
+                                  ✕ Remove
+                                </button>
+                              )}
+                            </div>
+
+                            <div>
+                              <label className="block text-xs text-slate-500 mb-1">Variable</label>
+                              <select
+                                className="w-full border border-slate-300 rounded-md px-2 py-1.5 text-xs"
+                                value={cond.variable || 'WA message'}
+                                onChange={e => updateCond(idx, 'variable', e.target.value)}
+                              >
+                                <option value="WA message">WA Message</option>
+                                <option value="link">Link</option>
+                                <option value="Email">Email</option>
+                                <option value="SMS">SMS</option>
+                              </select>
+                            </div>
+
+                            <div>
+                              <label className="block text-xs text-slate-500 mb-1">Condition</label>
+                              <select
+                                className="w-full border border-slate-300 rounded-md px-2 py-1.5 text-xs"
+                                value={cond.operator || 'eq'}
+                                onChange={e => updateCond(idx, 'operator', e.target.value)}
+                              >
+                                <option value="eq">Equal to</option>
+                                <option value="neq">Not equal to</option>
+                              </select>
+                            </div>
+
+                            <div>
+                              <label className="block text-xs text-slate-500 mb-1">Value</label>
+                              <select
+                                className="w-full border border-slate-300 rounded-md px-2 py-1.5 text-xs"
+                                value={cond.value || 'delivered'}
+                                onChange={e => updateCond(idx, 'value', e.target.value)}
+                              >
+                                <option value="sent">Sent</option>
+                                <option value="delivered">Delivered</option>
+                                <option value="opened">Opened</option>
+                                <option value="clicked">Clicked</option>
+                                <option value="replied">Replied</option>
+                              </select>
+                            </div>
+
+                            <div className="text-[10px] text-violet-600 bg-violet-50 border border-violet-100 rounded px-2 py-1 font-mono">
+                              {cond.variable} {cond.operator === 'eq' ? '==' : '!='} "{cond.value}"
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {conditions.length < MAX && (
+                        <button
+                          type="button"
+                          onClick={addCond}
+                          className="mt-3 w-full flex items-center justify-center gap-1.5 border border-dashed border-slate-300 rounded-lg py-2 text-xs text-slate-500 hover:border-violet-400 hover:text-violet-600 transition-colors"
+                        >
+                          <Plus size={12} /> Add Condition Group
+                        </button>
+                      )}
+
+                      {conditions.length >= MAX && (
+                        <p className="text-[10px] text-slate-400 text-center mt-2">Maximum of {MAX} condition groups reached.</p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
+
               {selectedNode.type === 'send_template' && (
+
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
                     <label className="block text-sm font-medium text-slate-700">Select Template</label>
