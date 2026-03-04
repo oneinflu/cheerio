@@ -13,13 +13,15 @@ import WorkflowsPage from './components/WorkflowsPage.jsx';
 import WorkflowBuilder from './components/WorkflowBuilder.jsx';
 import RulesPage from './components/RulesPage.jsx';
 import TeamMembersPage from './components/TeamMembersPage.jsx';
+import ContactsPage from './components/ContactsPage.jsx';
+import CampaignsPage from './components/CampaignsPage.jsx';
 import LoginPage from './components/LoginPage.jsx';
 import GuestChat from './components/GuestChat.jsx';
 import InstagramPage from './components/InstagramPage.jsx';
 import GalleryPage from './components/GalleryPage.jsx';
 import { connectSocket } from './socket.js';
 import { getInbox, getMessages, claimConversation, reassignConversation, forceReassignConversation, releaseConversation, markAsRead, resolveConversation, deleteConversation, blockConversation, unblockConversation, pinConversation, updateWorkflow, getTeamUser, getTeamUsers, reassignExternalLead } from './api.js';
-import { LayoutDashboard, MessageSquare, Users, Settings, LogOut, Search, Bell, FileText, Workflow, Shield, ChevronsUpDown, Check, Zap, GitBranch, Instagram } from 'lucide-react';
+import { LayoutDashboard, MessageSquare, Users, Megaphone, Settings, LogOut, Search, Bell, FileText, Workflow, Shield, ChevronsUpDown, Check, Zap, GitBranch, Instagram } from 'lucide-react';
 import { Button } from './components/ui/Button';
 import { Badge } from './components/ui/Badge';
 import { Card, CardHeader, CardTitle, CardContent } from './components/ui/Card';
@@ -36,10 +38,11 @@ export default function App() {
   });
   const [isLoggedIn, setIsLoggedIn] = useState(!!storedUser);
   const [socket, setSocket] = useState(null);
-  const validPages = ['dashboard', 'inbox', 'team-members', 'templates', 'flows', 'workflows', 'rules', 'instagram', 'gallery', 'settings'];
+  const validPages = ['dashboard', 'inbox', 'contacts', 'campaigns', 'team-members', 'templates', 'flows', 'workflows', 'rules', 'instagram', 'gallery', 'settings'];
 
   const [activePage, setActivePage] = useState(() => {
-    const path = window.location.pathname.substring(1);
+    const fullPath = window.location.pathname.substring(1);
+    const path = fullPath.split('/')[0];
     if (path && validPages.includes(path)) {
       return path;
     }
@@ -48,8 +51,18 @@ export default function App() {
 
   const [editingWorkflow, setEditingWorkflow] = useState(() => {
     try {
+      const fullPath = window.location.pathname.substring(1);
+      const pathParts = fullPath.split('/');
       const saved = localStorage.getItem('editingWorkflow');
-      return saved ? JSON.parse(saved) : null;
+      const parsedSaved = saved ? JSON.parse(saved) : null;
+
+      if (pathParts[0] === 'workflows' && pathParts[1]) {
+        if (parsedSaved && String(parsedSaved.id) === pathParts[1]) {
+          return parsedSaved;
+        }
+        return { id: pathParts[1], name: pathParts[1], steps: { nodes: [], edges: [] } };
+      }
+      return parsedSaved;
     } catch (e) {
       return null;
     }
@@ -57,16 +70,39 @@ export default function App() {
 
   useEffect(() => {
     localStorage.setItem('activePage', activePage);
-    window.history.pushState(null, '', `/${activePage === 'inbox' ? '' : activePage}`);
-  }, [activePage]);
+    let path = `/${activePage === 'inbox' ? '' : activePage}`;
+    if (activePage === 'workflows' && editingWorkflow) {
+      // Use name if possible (sanitized), otherwise use ID.
+      const identifier = editingWorkflow.name
+        ? encodeURIComponent(editingWorkflow.name.toLowerCase().replace(/\\s+/g, '-'))
+        : editingWorkflow.id;
+      path = `/workflows/${identifier}`;
+    }
+    window.history.pushState(null, '', path);
+  }, [activePage, editingWorkflow]);
 
   useEffect(() => {
     const handlePopState = () => {
-      const path = window.location.pathname.substring(1);
+      const fullPath = window.location.pathname.substring(1);
+      const pathParts = fullPath.split('/');
+      const path = pathParts[0];
+
       if (path && validPages.includes(path)) {
         setActivePage(path);
       } else if (!path) {
         setActivePage('inbox');
+      }
+
+      if (path === 'workflows') {
+        if (pathParts[1]) {
+          setEditingWorkflow((prev) => {
+            // Very simple check just to avoid unnecessary re-renders
+            if (prev) return prev;
+            return { id: pathParts[1], name: pathParts[1], steps: { nodes: [], edges: [] } };
+          });
+        } else {
+          setEditingWorkflow(null);
+        }
       }
     };
     window.addEventListener('popstate', handlePopState);
@@ -582,6 +618,34 @@ export default function App() {
               Inbox
             </span>
           </Button>
+
+          <Button
+            variant={activePage === 'contacts' ? 'secondary' : 'ghost'}
+            className="w-full flex items-center justify-start h-10 px-0 rounded-lg overflow-hidden shrink-0"
+            onClick={() => setActivePage('contacts')}
+            title="Contacts"
+          >
+            <div className="w-10 h-10 flex items-center justify-center shrink-0">
+              <Users size={20} />
+            </div>
+            <span className="ml-3 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100">
+              Contacts
+            </span>
+          </Button>
+
+          <Button
+            variant={activePage === 'campaigns' ? 'secondary' : 'ghost'}
+            className="w-full flex items-center justify-start h-10 px-0 rounded-lg overflow-hidden shrink-0"
+            onClick={() => setActivePage('campaigns')}
+            title="Campaigns"
+          >
+            <div className="w-10 h-10 flex items-center justify-center shrink-0">
+              <Megaphone size={20} />
+            </div>
+            <span className="ml-3 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100">
+              Campaigns
+            </span>
+          </Button>
           {['admin', 'super_admin'].includes((currentUser.role || '').toLowerCase()) && (
             <>
               <Button
@@ -759,6 +823,8 @@ export default function App() {
         {activePage === 'gallery' && <GalleryPage />}
 
         {activePage === 'team-members' && <TeamMembersPage />}
+        {activePage === 'contacts' && <ContactsPage />}
+        {activePage === 'campaigns' && <CampaignsPage />}
 
         {activePage === 'inbox' && (
           <>
