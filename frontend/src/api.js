@@ -630,3 +630,13 @@ function getAuthHeaders(contentType = 'application/json') {
   }
   return headers;
 }
+
+export async function getContacts(page = 1, limit = 10, search = "") {
+  const headers = getAuthHeaders();
+  const params = new URLSearchParams();
+  if (page) params.append("page", page);
+  if (limit) params.append("limit", limit);
+  if (search) params.append("search", search);
+  const res = await fetch(`/api/contacts?${params.toString()}`, { headers });
+  return res.json();
+}

@@ -14,6 +14,7 @@ import WorkflowBuilder from './components/WorkflowBuilder.jsx';
 import RulesPage from './components/RulesPage.jsx';
 import TeamMembersPage from './components/TeamMembersPage.jsx';
 import ContactsPage from './components/ContactsPage.jsx';
+import LabelsPage from './components/LabelsPage.jsx';
 import CampaignsPage from './components/CampaignsPage.jsx';
 import LoginPage from './components/LoginPage.jsx';
 import GuestChat from './components/GuestChat.jsx';
@@ -21,7 +22,7 @@ import InstagramPage from './components/InstagramPage.jsx';
 import GalleryPage from './components/GalleryPage.jsx';
 import { connectSocket } from './socket.js';
 import { getInbox, getMessages, claimConversation, reassignConversation, forceReassignConversation, releaseConversation, markAsRead, resolveConversation, deleteConversation, blockConversation, unblockConversation, pinConversation, updateWorkflow, getTeamUser, getTeamUsers, reassignExternalLead } from './api.js';
-import { LayoutDashboard, MessageSquare, Users, Megaphone, Settings, LogOut, Search, Bell, FileText, Workflow, Shield, ChevronsUpDown, Check, Zap, GitBranch, Instagram } from 'lucide-react';
+import { LayoutDashboard, MessageSquare, Users, Megaphone, Settings, LogOut, Search, Bell, FileText, Workflow, Shield, ChevronsUpDown, Check, Zap, GitBranch, Instagram, ChevronDown, ChevronRight } from 'lucide-react';
 import { Button } from './components/ui/Button';
 import { Badge } from './components/ui/Badge';
 import { Card, CardHeader, CardTitle, CardContent } from './components/ui/Card';
@@ -38,7 +39,7 @@ export default function App() {
   });
   const [isLoggedIn, setIsLoggedIn] = useState(!!storedUser);
   const [socket, setSocket] = useState(null);
-  const validPages = ['dashboard', 'inbox', 'contacts', 'campaigns', 'team-members', 'templates', 'flows', 'workflows', 'rules', 'instagram', 'gallery', 'settings'];
+  const validPages = ['dashboard', 'inbox', 'contacts', 'labels', 'campaigns', 'team-members', 'templates', 'flows', 'workflows', 'rules', 'instagram', 'gallery', 'settings'];
 
   const [activePage, setActivePage] = useState(() => {
     const fullPath = window.location.pathname.substring(1);
@@ -47,6 +48,12 @@ export default function App() {
       return path;
     }
     return localStorage.getItem('activePage') || 'inbox';
+  });
+
+  const [isContactsMenuOpen, setIsContactsMenuOpen] = useState(() => {
+    const fullPath = window.location.pathname.substring(1);
+    const path = fullPath.split('/')[0];
+    return path === 'contacts' || path === 'labels';
   });
 
   const [editingWorkflow, setEditingWorkflow] = useState(() => {
@@ -619,19 +626,47 @@ export default function App() {
             </span>
           </Button>
 
-          <Button
-            variant={activePage === 'contacts' ? 'secondary' : 'ghost'}
-            className="w-full flex items-center justify-start h-10 px-0 rounded-lg overflow-hidden shrink-0"
-            onClick={() => setActivePage('contacts')}
-            title="Contacts"
-          >
-            <div className="w-10 h-10 flex items-center justify-center shrink-0">
-              <Users size={20} />
-            </div>
-            <span className="ml-3 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100">
-              Contacts
-            </span>
-          </Button>
+          <div className="flex flex-col space-y-1">
+            <Button
+              variant={['contacts', 'labels'].includes(activePage) ? 'secondary' : 'ghost'}
+              className="w-full flex items-center justify-between h-10 px-0 rounded-lg overflow-hidden shrink-0"
+              onClick={() => setIsContactsMenuOpen(!isContactsMenuOpen)}
+              title="Contacts Menu"
+            >
+              <div className="flex items-center">
+                <div className="w-10 h-10 flex items-center justify-center shrink-0">
+                  <Users size={20} />
+                </div>
+                <span className="ml-3 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100 text-left">
+                  Contacts
+                </span>
+              </div>
+              <div className="pr-3 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100 flex items-center shrink-0">
+                {isContactsMenuOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              </div>
+            </Button>
+
+            {isContactsMenuOpen && (
+              <div className="pl-10 space-y-1 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100">
+                <Button
+                  variant={activePage === 'contacts' ? 'secondary' : 'ghost'}
+                  className="w-full flex items-center justify-start h-8 px-3 rounded-lg text-sm text-slate-600 hover:text-slate-900"
+                  onClick={() => setActivePage('contacts')}
+                  title="All Contacts"
+                >
+                  All Contacts
+                </Button>
+                <Button
+                  variant={activePage === 'labels' ? 'secondary' : 'ghost'}
+                  className="w-full flex items-center justify-start h-8 px-3 rounded-lg text-sm text-slate-600 hover:text-slate-900"
+                  onClick={() => setActivePage('labels')}
+                  title="Labels"
+                >
+                  Labels
+                </Button>
+              </div>
+            )}
+          </div>
 
           <Button
             variant={activePage === 'campaigns' ? 'secondary' : 'ghost'}
@@ -824,6 +859,7 @@ export default function App() {
 
         {activePage === 'team-members' && <TeamMembersPage />}
         {activePage === 'contacts' && <ContactsPage />}
+        {activePage === 'labels' && <LabelsPage />}
         {activePage === 'campaigns' && <CampaignsPage />}
 
         {activePage === 'inbox' && (
