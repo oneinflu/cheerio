@@ -1219,9 +1219,20 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
         {/* Left Sidebar - Palette */}
         <div className="w-60 bg-white border-r border-slate-200 flex flex-col shrink-0">
           <div className="p-4 border-b border-slate-100">
-            <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Blocks</h2>
+            <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Triggers</h2>
           </div>
           <div className="p-4 space-y-3 overflow-y-auto">
+            {viewMode === 'canvas' && (
+              <DraggableBlock
+                type="trigger"
+                label="Whatsapp Incoming"
+                icon={MessageSquare}
+                color="bg-green-500"
+                onAdd={handleAddNodeFromPalette}
+                disabledDrag={false}
+              />
+            )}
+            {/*
             {viewMode === 'canvas' && (
               <DraggableBlock
                 type="trigger"
@@ -1320,6 +1331,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 />
               </>
             )}
+            */}
           </div>
         </div>
 
