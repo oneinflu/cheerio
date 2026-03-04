@@ -700,3 +700,34 @@ export async function getLabelContacts(labelId) {
   return res.json();
 }
 
+export async function getCampaigns() {
+  const res = await fetch('/api/campaigns', { headers: getAuthHeaders() });
+  return res.json();
+}
+
+export async function createCampaign(data) {
+  const res = await fetch('/api/campaigns', {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
+export async function stopCampaign(id) {
+  const res = await fetch(`/api/campaigns/${id}/stop`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+  });
+  return res.json();
+}
+
+export async function deleteCampaign(id) {
+  const res = await fetch(`/api/campaigns/${id}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+  });
+  return res.json();
+}
+
+

@@ -37,6 +37,7 @@ const settingsRouter = require('./src/routes/settings');
 const whatsappFlowsRouter = require('./src/routes/whatsappFlows');
 const contactsRouter = require('./src/routes/contacts');
 const labelsRouter = require('./src/routes/labels');
+const campaignsRouter = require('./src/routes/campaigns');
 const auth = require('./src/middlewares/auth');
 
 // Read environment-based config for HTTP concerns. Defaults are safe for dev.
@@ -130,6 +131,7 @@ function createApp() {
   app.use('/api/whatsappFlows', whatsappFlowsRouter);
   app.use('/api/contacts', contactsRouter);
   app.use('/api/labels', labelsRouter);
+  app.use('/api/campaigns', campaignsRouter);
 
   /**
    * Serve static assets in production.

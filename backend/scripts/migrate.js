@@ -231,6 +231,24 @@ async function runMigrations() {
           console.log('[migrate] contact_labels tables already exist.');
         }
 
+        const campaignsTableRes = await client.query(`
+          SELECT EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE  table_schema = 'public'
+            AND    table_name   = 'campaigns'
+          );
+        `);
+
+        if (!campaignsTableRes.rows[0].exists) {
+          console.log('[migrate] Adding campaigns and campaign_logs tables...');
+          await client.query('BEGIN');
+          await runSQLFile(client, path.join(__dirname, '..', 'db', 'migrations', '0012_campaigns.sql'));
+          await client.query('COMMIT');
+          console.log('[migrate] Applied campaigns migration.');
+        } else {
+          console.log('[migrate] campaigns table already exists.');
+        }
+
         return;
       }
     }
