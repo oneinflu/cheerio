@@ -204,29 +204,40 @@ const CampaignTriggerNode = ({ data, selected }) => (
   </NodeWrapper>
 );
 
+const COND_COLORS = ['bg-green-500', 'bg-blue-500', 'bg-orange-500', 'bg-purple-500', 'bg-pink-500'];
+
 const CampaignConditionNode = ({ data, selected }) => {
-  const timeLabel = data.checkAfterValue
-    ? `After ${data.checkAfterValue} ${data.checkAfterUnit || 'hours'}`
-    : 'Timing not set';
+  const d = data.checkDays || 0;
+  const h = data.checkHours || 0;
+  const m = data.checkMinutes || 0;
+  const isSpecific = data.timingMode === 'specific';
+  const timeLabel = isSpecific
+    ? (data.specificTime ? `At: ${new Date(data.specificTime).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}` : 'Specific time not set')
+    : (d || h || m) ? `After ${d ? d + 'd ' : ''}${h ? h + 'h ' : ''}${m ? m + 'm' : ''}`.trim() : 'Timing not set';
   const conditions = data.conditions || [
-    { variable: data.variable || 'WA message', operator: data.operator || 'eq', value: data.value || 'delivered' }
+    { variable: 'WA message', operator: 'eq', value: 'delivered' }
   ];
+  const count = conditions.length;
   return (
     <NodeWrapper selected={selected} title="Campaign Condition" icon={Filter} colorClass="bg-violet-600">
       <div className="text-xs text-slate-500 mb-1.5">{timeLabel}</div>
-      <div className="space-y-1">
+      <div className="space-y-1 mb-3">
         {conditions.map((cond, i) => (
-          <div key={i} className="text-[11px] bg-violet-50 border border-violet-100 rounded px-2 py-1 text-violet-800 font-medium">
-            {cond.variable} {cond.operator === 'eq' ? '==' : '!='} <span className="text-violet-600">{cond.value}</span>
+          <div key={i} className="relative flex items-center justify-between">
+            <div className="text-[11px] flex-1 bg-violet-50 border border-violet-100 rounded px-2 py-1 text-violet-800 font-medium pr-5">
+              {cond.variable} {cond.operator === 'eq' ? '==' : '!='} <span className="text-violet-600 font-semibold">{cond.value}</span>
+            </div>
+            <Handle
+              type="source"
+              position={Position.Right}
+              id={`cond-${i}`}
+              className={`w-3 h-3 !right-[-6px] ${COND_COLORS[i] || 'bg-slate-400'}`}
+              style={{ top: '50%', transform: 'translateY(-50%)', position: 'absolute' }}
+            />
           </div>
         ))}
       </div>
-      <div className="flex justify-between text-[10px] font-bold text-slate-500 px-1 mt-2">
-        <span>YES</span><span>NO</span>
-      </div>
       <Handle type="target" position={Position.Top} className="w-3 h-3 bg-slate-400" />
-      <Handle type="source" position={Position.Bottom} id="yes" style={{ left: '30%' }} className="w-3 h-3 bg-green-500" />
-      <Handle type="source" position={Position.Bottom} id="no" style={{ left: '70%' }} className="w-3 h-3 bg-red-500" />
     </NodeWrapper>
   );
 };
@@ -762,8 +773,11 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
       position: { x: 0, y: 160 },
       data: {
         label: 'Campaign Condition',
-        checkAfterValue: 24,
-        checkAfterUnit: 'hours',
+        timingMode: 'after',  // 'after' | 'specific'
+        checkDays: 0,
+        checkHours: 24,
+        checkMinutes: 0,
+        specificTime: '',
         conditions: [
           { variable: 'WA message', operator: 'eq', value: 'delivered' },
         ],
@@ -1908,36 +1922,85 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
 
                 return (
                   <div className="space-y-4">
-                    {/* Timing */}
+                    {/* Timing mode toggle */}
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1.5">Check After</label>
-                      <div className="flex gap-2">
-                        <input
-                          type="number" min="1"
-                          className="w-20 border border-slate-300 rounded-md p-2 text-sm"
-                          value={selectedNode.data.checkAfterValue || ''}
-                          onChange={e => updateNodeData('checkAfterValue', parseInt(e.target.value) || 1)}
-                        />
-                        <select
-                          className="flex-1 border border-slate-300 rounded-md p-2 text-sm"
-                          value={selectedNode.data.checkAfterUnit || 'hours'}
-                          onChange={e => updateNodeData('checkAfterUnit', e.target.value)}
+                      <label className="block text-sm font-medium text-slate-700 mb-2">When to Check</label>
+                      <div className="flex rounded-lg border border-slate-200 overflow-hidden text-xs">
+                        <button
+                          type="button"
+                          onClick={() => updateNodeData('timingMode', 'after')}
+                          className={`flex-1 py-1.5 font-medium transition-colors ${(selectedNode.data.timingMode || 'after') === 'after'
+                              ? 'bg-violet-600 text-white'
+                              : 'bg-white text-slate-500 hover:bg-slate-50'
+                            }`}
                         >
-                          <option value="seconds">Seconds</option>
-                          <option value="minutes">Minutes</option>
-                          <option value="hours">Hours</option>
-                          <option value="specific_time">At specific time</option>
-                        </select>
+                          After Duration
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => updateNodeData('timingMode', 'specific')}
+                          className={`flex-1 py-1.5 font-medium transition-colors ${selectedNode.data.timingMode === 'specific'
+                              ? 'bg-violet-600 text-white'
+                              : 'bg-white text-slate-500 hover:bg-slate-50'
+                            }`}
+                        >
+                          Specific Date &amp; Time
+                        </button>
                       </div>
-                      {selectedNode.data.checkAfterUnit === 'specific_time' && (
+                    </div>
+
+                    {/* After Duration */}
+                    {(selectedNode.data.timingMode || 'after') === 'after' && (() => {
+                      const d = parseInt(selectedNode.data.checkDays) || 0;
+                      const h = parseInt(selectedNode.data.checkHours) || 0;
+                      const m = parseInt(selectedNode.data.checkMinutes) || 0;
+                      const totalMs = (d * 86400 + h * 3600 + m * 60) * 1000;
+                      const recheckAt = totalMs > 0 ? new Date(Date.now() + totalMs) : null;
+                      return (
+                        <div className="space-y-2">
+                          <label className="block text-xs text-slate-500">Duration from now</label>
+                          <div className="grid grid-cols-3 gap-2">
+                            {[['checkDays', 'Days'], ['checkHours', 'Hours'], ['checkMinutes', 'Mins']].map(([key, lbl]) => (
+                              <div key={key}>
+                                <label className="block text-[10px] text-slate-400 mb-0.5 text-center">{lbl}</label>
+                                <input
+                                  type="number" min="0"
+                                  className="w-full border border-slate-300 rounded-md px-2 py-1.5 text-sm text-center"
+                                  value={selectedNode.data[key] ?? 0}
+                                  onChange={e => updateNodeData(key, Math.max(0, parseInt(e.target.value) || 0))}
+                                />
+                              </div>
+                            ))}
+                          </div>
+                          {recheckAt ? (
+                            <div className="bg-violet-50 border border-violet-100 rounded-md px-3 py-2 text-xs text-violet-700">
+                              🔁 Will recheck at: <b>{recheckAt.toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</b>
+                            </div>
+                          ) : (
+                            <div className="text-xs text-slate-400 text-center py-1">Enter a duration above to see recheck time</div>
+                          )}
+                        </div>
+                      );
+                    })()}
+
+                    {/* Specific date/time */}
+                    {selectedNode.data.timingMode === 'specific' && (
+                      <div className="space-y-2">
+                        <label className="block text-xs text-slate-500">Recheck at this exact date &amp; time</label>
                         <input
                           type="datetime-local"
-                          className="w-full mt-2 border border-slate-300 rounded-md p-2 text-sm"
+                          className="w-full border border-slate-300 rounded-md p-2 text-sm"
                           value={selectedNode.data.specificTime || ''}
+                          min={new Date().toISOString().slice(0, 16)}
                           onChange={e => updateNodeData('specificTime', e.target.value)}
                         />
-                      )}
-                    </div>
+                        {selectedNode.data.specificTime && (
+                          <div className="bg-violet-50 border border-violet-100 rounded-md px-3 py-2 text-xs text-violet-700">
+                            🔁 Will recheck at: <b>{new Date(selectedNode.data.specificTime).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</b>
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     {/* Condition Groups */}
                     <div>
