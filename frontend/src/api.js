@@ -640,3 +640,25 @@ export async function getContacts(page = 1, limit = 10, search = "") {
   const res = await fetch(`/api/contacts?${params.toString()}`, { headers });
   return res.json();
 }
+
+export async function getLabels() {
+  const res = await fetch(`/api/labels`, { headers: getAuthHeaders() });
+  return res.json();
+}
+
+export async function createLabel(name) {
+  const res = await fetch(`/api/labels`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ name }),
+  });
+  return res.json();
+}
+
+export async function deleteLabel(id) {
+  const res = await fetch(`/api/labels/${id}`, {
+    method: "DELETE",
+    headers: getAuthHeaders(),
+  });
+  return res.json();
+}

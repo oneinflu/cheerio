@@ -20,7 +20,7 @@ async function runMigrations() {
         AND    table_name   = 'users'
       );
     `);
-    
+
     const tablesExist = res.rows[0].exists;
     if (tablesExist) {
       // Check if we need to upgrade from UUID to TEXT ids (schema change)
@@ -29,22 +29,22 @@ async function runMigrations() {
         FROM information_schema.columns 
         WHERE table_name = 'users' AND column_name = 'id'
       `);
-      
+
       const isTextId = idTypeRes.rows[0] && idTypeRes.rows[0].data_type === 'text';
-      
+
       if (!isTextId) {
         console.log('[migrate] Detected old schema (UUID IDs). Re-running migration to update to TEXT IDs...');
         // Fall through to run migration
       } else {
         console.log('[migrate] Tables already exist and schema matches.');
-        
+
         // Check if password_hash column exists
         const colRes = await client.query(`
           SELECT column_name 
           FROM information_schema.columns 
           WHERE table_name='users' AND column_name='password_hash'
         `);
-        
+
         if (colRes.rowCount === 0) {
           console.log('[migrate] Adding password_hash column...');
           await client.query('BEGIN');
@@ -62,11 +62,11 @@ async function runMigrations() {
         `);
 
         if (leadColRes.rowCount === 0) {
-           console.log('[migrate] Adding lead_id column to conversations...');
-           await client.query('BEGIN');
-           await runSQLFile(client, path.join(__dirname, '..', 'db', 'migrations', '0003_add_lead_id_to_conversations.sql'));
-           await client.query('COMMIT');
-           console.log('[migrate] Applied lead_id migration.');
+          console.log('[migrate] Adding lead_id column to conversations...');
+          await client.query('BEGIN');
+          await runSQLFile(client, path.join(__dirname, '..', 'db', 'migrations', '0003_add_lead_id_to_conversations.sql'));
+          await client.query('COMMIT');
+          console.log('[migrate] Applied lead_id migration.');
         } else {
           console.log('[migrate] Schema up to date (lead_id exists).');
         }
@@ -102,7 +102,7 @@ async function runMigrations() {
           await client.query('COMMIT');
           console.log('[migrate] Relaxed Team constraints.');
         } else {
-           console.log('[migrate] Team constraints already relaxed.');
+          console.log('[migrate] Team constraints already relaxed.');
         }
 
         // Check if template_settings table exists
@@ -115,13 +115,13 @@ async function runMigrations() {
         `);
 
         if (!templateSettingsRes.rows[0].exists) {
-           console.log('[migrate] Adding template_settings table...');
-           await client.query('BEGIN');
-           await runSQLFile(client, path.join(__dirname, '..', 'db', 'migrations', '0006_create_template_settings.sql'));
-           await client.query('COMMIT');
-           console.log('[migrate] Applied template_settings migration.');
+          console.log('[migrate] Adding template_settings table...');
+          await client.query('BEGIN');
+          await runSQLFile(client, path.join(__dirname, '..', 'db', 'migrations', '0006_create_template_settings.sql'));
+          await client.query('COMMIT');
+          console.log('[migrate] Applied template_settings migration.');
         } else {
-           console.log('[migrate] template_settings table already exists.');
+          console.log('[migrate] template_settings table already exists.');
         }
 
         const rulesTableRes = await client.query(`
@@ -212,7 +212,25 @@ async function runMigrations() {
         } else {
           console.log('[migrate] whatsapp_flow_settings table already exists.');
         }
-        
+
+        const labelsTableRes = await client.query(`
+          SELECT EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE  table_schema = 'public'
+            AND    table_name   = 'contact_labels'
+          );
+        `);
+
+        if (!labelsTableRes.rows[0].exists) {
+          console.log('[migrate] Adding contact_labels and contact_label_maps tables...');
+          await client.query('BEGIN');
+          await runSQLFile(client, path.join(__dirname, '..', 'db', 'migrations', '0002_contact_labels.sql'));
+          await client.query('COMMIT');
+          console.log('[migrate] Applied contact_labels migration.');
+        } else {
+          console.log('[migrate] contact_labels tables already exist.');
+        }
+
         return;
       }
     }
@@ -231,7 +249,7 @@ async function runMigrations() {
   } catch (err) {
     try {
       await client.query('ROLLBACK');
-    } catch (_) {}
+    } catch (_) { }
     console.error('[migrate] Error:', err.message);
     // If called from script, exit with error. If called from server, rethrow.
     if (require.main === module) {
