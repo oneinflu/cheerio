@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Download, Upload, Plus, Search, MoreHorizontal, User } from 'lucide-react';
 import { Button } from './ui/Button';
-import { getContacts } from '../api';
+import { getContacts, getTeamUsers, reassignConversation } from '../api';
 
 export default function ContactsPage() {
     const [contacts, setContacts] = useState([]);
@@ -10,6 +10,12 @@ export default function ContactsPage() {
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const [totalContacts, setTotalContacts] = useState(0);
+    const [teamMembers, setTeamMembers] = useState([]);
+    const [isAssigning, setIsAssigning] = useState(null);
+
+    // Get current team configuration
+    const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
+    const teamId = storedUser?.teamIds?.[0] || 'default_team';
 
     const fetchContacts = async (pageNum, search) => {
         setIsLoading(true);
@@ -37,10 +43,48 @@ export default function ContactsPage() {
         return () => clearTimeout(handler);
     }, [searchTerm]);
 
+    useEffect(() => {
+        const fetchTeamData = async () => {
+            try {
+                const membersRes = await getTeamUsers();
+                if (membersRes.success) {
+                    setTeamMembers(membersRes.users);
+                }
+            } catch (e) {
+                console.error('Failed to load team members:', e);
+            }
+        };
+        fetchTeamData();
+    }, []);
+
     const handlePageChange = (newPage) => {
         if (newPage >= 1 && newPage <= totalPages) {
             setPage(newPage);
             fetchContacts(newPage, searchTerm);
+        }
+    };
+
+    const handleAssign = async (contactId, conversationId, assigneeId) => {
+        if (!conversationId) {
+            alert("This contact does not have an active conversation to assign.");
+            return;
+        }
+
+        setIsAssigning(contactId);
+        try {
+            const res = await reassignConversation(conversationId, teamId, assigneeId);
+            if (res.success) {
+                // Instantly update UI optimistically
+                const assignedUser = teamMembers.find(m => m.id === assigneeId);
+                if (assignedUser) {
+                    setContacts(prev => prev.map(c => c.id === contactId ? { ...c, assignee_name: assignedUser.name, assignee_id: assignedUser.id } : c));
+                }
+            }
+        } catch (e) {
+            console.error("Failed to assign:", e);
+            alert("Failed to assign contact.");
+        } finally {
+            setIsAssigning(null);
         }
     };
 
@@ -133,8 +177,21 @@ export default function ContactsPage() {
                                                         <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-purple-50 text-purple-700 border border-purple-100">
                                                             {contact.assignee_name}
                                                         </span>
+                                                    ) : contact.conversation_id ? (
+                                                        <select
+                                                            disabled={isAssigning === contact.id}
+                                                            onChange={(e) => handleAssign(contact.id, contact.conversation_id, e.target.value)}
+                                                            className="text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200 rounded-lg p-1 outline-none focus:ring-1 focus:ring-blue-500 min-w-[120px]"
+                                                        >
+                                                            <option value="">{isAssigning === contact.id ? 'Assigning...' : 'Unassigned (Assign)'}</option>
+                                                            {teamMembers.map((member) => (
+                                                                <option key={member.id} value={member.id}>
+                                                                    {member.name}
+                                                                </option>
+                                                            ))}
+                                                        </select>
                                                     ) : (
-                                                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                                                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200" title="No conversation exists to assign">
                                                             Unassigned
                                                         </span>
                                                     )}
