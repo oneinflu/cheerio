@@ -16,7 +16,18 @@ router.get('/', auth.requireRole('admin', 'agent', 'supervisor'), async (req, re
 
         let countQuery = 'SELECT count(*) FROM contacts';
         let dataQuery = `
-      SELECT c.id, c.channel_id, c.external_id, c.display_name, c.profile, c.created_at, c.updated_at, ch.type as channel_type, ch.name as channel_name
+      SELECT 
+        c.id, c.channel_id, c.external_id, c.display_name, c.profile, c.created_at, c.updated_at, 
+        ch.type as channel_type, ch.name as channel_name,
+        (
+            SELECT u.name
+            FROM conversations curr_conv
+            LEFT JOIN conversation_assignments ca ON ca.conversation_id = curr_conv.id AND ca.released_at IS NULL
+            LEFT JOIN users u ON u.id = ca.assignee_user_id
+            WHERE curr_conv.contact_id = c.id
+            ORDER BY curr_conv.created_at DESC
+            LIMIT 1
+        ) as assignee_name
       FROM contacts c
       JOIN channels ch ON c.channel_id = ch.id
     `;

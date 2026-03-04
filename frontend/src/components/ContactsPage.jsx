@@ -89,6 +89,7 @@ export default function ContactsPage() {
                                         <th className="px-6 py-4">Contact</th>
                                         <th className="px-6 py-4">External ID</th>
                                         <th className="px-6 py-4">Channel</th>
+                                        <th className="px-6 py-4">Assigned To</th>
                                         <th className="px-6 py-4">Created At</th>
                                         <th className="px-6 py-4"></th>
                                     </tr>
@@ -96,13 +97,13 @@ export default function ContactsPage() {
                                 <tbody className="divide-y divide-slate-200">
                                     {isLoading ? (
                                         <tr>
-                                            <td colSpan="5" className="px-6 py-12 text-center text-slate-500">
+                                            <td colSpan="6" className="px-6 py-12 text-center text-slate-500">
                                                 Loading contacts...
                                             </td>
                                         </tr>
                                     ) : contacts.length === 0 ? (
                                         <tr>
-                                            <td colSpan="5" className="px-6 py-12 text-center text-slate-500">
+                                            <td colSpan="6" className="px-6 py-12 text-center text-slate-500">
                                                 No contacts found.
                                             </td>
                                         </tr>
@@ -126,6 +127,17 @@ export default function ContactsPage() {
                                                     <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 capitalize border border-blue-100">
                                                         {contact.channel_type || 'Unknown'}
                                                     </span>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    {contact.assignee_name ? (
+                                                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-purple-50 text-purple-700 border border-purple-100">
+                                                            {contact.assignee_name}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                                                            Unassigned
+                                                        </span>
+                                                    )}
                                                 </td>
                                                 <td className="px-6 py-4 text-slate-500">
                                                     {new Date(contact.created_at).toLocaleDateString()}
