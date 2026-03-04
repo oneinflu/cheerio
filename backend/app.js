@@ -38,6 +38,7 @@ const whatsappFlowsRouter = require('./src/routes/whatsappFlows');
 const contactsRouter = require('./src/routes/contacts');
 const labelsRouter = require('./src/routes/labels');
 const campaignsRouter = require('./src/routes/campaigns');
+const { publicRouter: webhookTriggerPublic, privateRouter: webhookTriggerPrivate } = require('./src/routes/webhookTriggers');
 const auth = require('./src/middlewares/auth');
 
 // Read environment-based config for HTTP concerns. Defaults are safe for dev.
@@ -132,6 +133,8 @@ function createApp() {
   app.use('/api/contacts', contactsRouter);
   app.use('/api/labels', labelsRouter);
   app.use('/api/campaigns', campaignsRouter);
+  app.use('/webhooks/workflow', webhookTriggerPublic);  // PUBLIC — no auth
+  app.use('/api/workflow-webhooks', webhookTriggerPrivate); // PRIVATE — requires auth
 
   /**
    * Serve static assets in production.

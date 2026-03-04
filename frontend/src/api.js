@@ -730,4 +730,19 @@ export async function deleteCampaign(id) {
   return res.json();
 }
 
+// ─── Webhook Trigger events ───────────────────────────────────────────────────
 
+export async function getWebhookEvents(workflowId) {
+  const res = await fetch(`/api/workflow-webhooks/${workflowId}/events`, {
+    headers: getAuthHeaders(),
+  });
+  return res.json();
+}
+
+export async function clearWebhookEvents(workflowId) {
+  const res = await fetch(`/api/workflow-webhooks/${workflowId}/events`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+  });
+  return res.json();
+}
