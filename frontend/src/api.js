@@ -54,7 +54,7 @@ export async function deleteTemplate(name, hsmId) {
   const params = new URLSearchParams();
   if (name) params.append('name', name);
   if (hsmId) params.append('hsm_id', hsmId);
-  
+
   const res = await fetch(`/api/templates?${params.toString()}`, {
     method: 'DELETE',
     headers,
@@ -198,7 +198,7 @@ export async function uploadMedia(conversationId, file) {
   const formData = new FormData();
   formData.append('conversationId', conversationId);
   formData.append('file', file);
-  
+
   const res = await fetch('/api/whatsapp/upload', {
     method: 'POST',
     headers,
@@ -211,15 +211,15 @@ export async function uploadFlowMedia(file) {
   const headers = getAuthHeaders(null); // No Content-Type for FormData
   const formData = new FormData();
   formData.append('file', file);
-  
+
   const res = await fetch('/api/templates/upload-test-media', {
     method: 'POST',
     headers,
     body: formData,
   });
-  
+
   if (!res.ok) {
-     throw new Error('Upload failed');
+    throw new Error('Upload failed');
   }
   return res.json();
 }
@@ -239,7 +239,7 @@ export async function uploadTemplateExampleMedia(file) {
   const headers = getAuthHeaders(null); // No Content-Type for FormData
   const formData = new FormData();
   formData.append('file', file);
-  
+
   const res = await fetch('/api/templates/upload-example', {
     method: 'POST',
     headers,
@@ -617,9 +617,9 @@ function getAuthHeaders(contentType = 'application/json') {
     try {
       const u = JSON.parse(user);
       role = u.role || 'agent';
-    } catch (e) {}
+    } catch (e) { }
   }
-  
+
   const headers = {};
   if (contentType) {
     headers['Content-Type'] = contentType;
@@ -659,6 +659,20 @@ export async function deleteLabel(id) {
   const res = await fetch(`/api/labels/${id}`, {
     method: "DELETE",
     headers: getAuthHeaders(),
+  });
+  return res.json();
+}
+
+export async function getContactChannels() {
+  const res = await fetch(`/api/contacts/channels`, { headers: getAuthHeaders() });
+  return res.json();
+}
+
+export async function addContact(data) {
+  const res = await fetch(`/api/contacts`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data),
   });
   return res.json();
 }

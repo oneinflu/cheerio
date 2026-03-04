@@ -98,4 +98,19 @@ router.post('/', auth.requireRole('admin', 'agent', 'supervisor'), async (req, r
     }
 });
 
+/**
+ * GET /api/contacts/channels
+ * Returns all active channels for use in dropdown selects.
+ */
+router.get('/channels', auth.requireRole('admin', 'agent', 'supervisor'), async (req, res, next) => {
+    try {
+        const result = await db.query(
+            `SELECT id, type, name, external_id FROM channels WHERE active = true ORDER BY name ASC`
+        );
+        return res.json({ success: true, channels: result.rows });
+    } catch (err) {
+        next(err);
+    }
+});
+
 module.exports = router;
