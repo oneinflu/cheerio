@@ -676,3 +676,27 @@ export async function addContact(data) {
   });
   return res.json();
 }
+
+export async function createLabelWithContacts(name, contact_ids) {
+  const res = await fetch(`/api/labels`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ name, contact_ids }),
+  });
+  return res.json();
+}
+
+export async function addContactsToLabel(labelId, contact_ids) {
+  const res = await fetch(`/api/labels/${labelId}/contacts`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ contact_ids }),
+  });
+  return res.json();
+}
+
+export async function getLabelContacts(labelId) {
+  const res = await fetch(`/api/labels/${labelId}/contacts`, { headers: getAuthHeaders() });
+  return res.json();
+}
+
