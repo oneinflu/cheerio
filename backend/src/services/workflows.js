@@ -8,6 +8,18 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const WABA_ID = process.env.WHATSAPP_BUSINESS_ACCOUNT_ID || '';
 
 /**
+ * Resolve {{variable}} placeholders in a string against a context object.
+ * e.g. resolvePlaceholders('Hello {{name}}', { name: 'John' }) => 'Hello John'
+ */
+function resolvePlaceholders(str, context) {
+  if (!str || typeof str !== 'string') return str;
+  return str.replace(/\{\{([^}]+)\}\}/g, (_, key) => {
+    const k = key.trim();
+    return Object.prototype.hasOwnProperty.call(context, k) ? String(context[k]) : `{{${k}}}`;
+  });
+}
+
+/**
  * Service: Workflows
  * Manage automation workflows.
  */
@@ -115,40 +127,49 @@ async function deleteWorkflow(id) {
 }
 
 async function triggerWorkflowsForEvent(triggerType, phoneNumber, context = {}, excludeWorkflowId = null) {
-  if (!triggerType || !phoneNumber) {
-    return;
-  }
+  if (!triggerType) return;
+  console.log(`[WorkflowEvents] Checking workflows for trigger type: ${triggerType}`);
   try {
     const res = await db.query(
-      `
-      SELECT id, steps
-      FROM workflows
-      WHERE status = 'active'
-      `
+      `SELECT id, steps FROM workflows WHERE status = 'active'`
     );
     const rows = res.rows || [];
     for (const row of rows) {
       const id = row.id;
       if (excludeWorkflowId && String(id) === String(excludeWorkflowId)) continue;
       const steps = row.steps || {};
+      // steps might be stored as { trigger: 'new_contact', nodes: [...], edges: [...] }
       const wfTrigger = steps.trigger || steps.event || null;
       if (wfTrigger === triggerType) {
-        console.log(
-          `[WorkflowEvents] Triggering workflow ${id} for event ${triggerType} and phone ${phoneNumber}`
-        );
-        runWorkflow(id, phoneNumber).catch((err) => {
-          console.error(
-            `[WorkflowEvents] Workflow ${id} failed for event ${triggerType}: ${err.message}`
-          );
+        console.log(`[WorkflowEvents] Triggering workflow ${id} for event ${triggerType}`);
+        // For new_contact and incoming_webhook triggers, phone may be null; still execute
+        const phone = phoneNumber || 'unknown';
+        runWorkflow(id, phone, context).catch((err) => {
+          console.error(`[WorkflowEvents] Workflow ${id} failed for event ${triggerType}: ${err.message}`);
         });
       }
     }
   } catch (err) {
-    console.error(
-      `[WorkflowEvents] Failed to trigger workflows for event ${triggerType}:`,
-      err
-    );
+    console.error(`[WorkflowEvents] Failed to trigger workflows for event ${triggerType}:`, err);
   }
+}
+
+/**
+ * Called when a new contact is created.
+ * Finds and runs all workflows triggered by 'new_contact'.
+ */
+async function triggerContactCreatedWorkflows(contactData) {
+  const phoneNumber = contactData.phone || contactData.external_id || null;
+  const context = {
+    name: contactData.name || contactData.display_name || '',
+    phone: contactData.phone || contactData.external_id || '',
+    email: contactData.email || '',
+    tags: Array.isArray(contactData.tags) ? contactData.tags.join(',') : (contactData.tags || ''),
+    source: contactData.source || '',
+    contact_id: contactData.id || contactData.contact_id || '',
+  };
+  console.log(`[WorkflowEvents] New contact created: ${phoneNumber}. Context:`, context);
+  await triggerWorkflowsForEvent('new_contact', phoneNumber, context);
 }
 
 async function checkUserReply(phoneNumber, sinceTime) {
@@ -206,7 +227,7 @@ async function checkUserReply(phoneNumber, sinceTime) {
   }
 }
 
-async function runWorkflow(id, phoneNumber) {
+async function runWorkflow(id, phoneNumber, context = {}) {
   const workflow = await getWorkflow(id);
   if (!workflow) throw new Error('Workflow not found');
 
@@ -451,6 +472,65 @@ async function runWorkflow(id, phoneNumber) {
           }
         } catch (err) {
           console.error(`[WorkflowRunner] Action failed: ${err.message}`);
+        }
+      } else if (currentNode.type === 'xolox_event') {
+        // ── XOLOX CRM webhook call ──────────────────────────────────────────
+        const xd = currentNode.data || {};
+        const webhookUrl = xd.webhookUrl;
+        const method = (xd.method || 'POST').toUpperCase();
+        const payloadFields = Array.isArray(xd.payloadFields) ? xd.payloadFields : [];
+        const successCondition = xd.successCondition || 'status_2xx';
+
+        if (!webhookUrl) {
+          console.warn(`[WorkflowRunner] xolox_event node ${currentNode.id} has no webhookUrl — skipping`);
+        } else {
+          // Build payload by resolving {{variable}} placeholders against context
+          const payload = {};
+          for (const { field, variable } of payloadFields) {
+            if (field) {
+              payload[field] = resolvePlaceholders(variable || '', context);
+            }
+          }
+          console.log(`[WorkflowRunner] Calling XOLOX webhook ${method} ${webhookUrl} with payload:`, payload);
+
+          let xoloxSuccess = false;
+          try {
+            const axiosConfig = {
+              method,
+              url: webhookUrl,
+              timeout: 15000,
+              headers: { 'Content-Type': 'application/json' },
+            };
+            if (method === 'GET') {
+              axiosConfig.params = payload;
+            } else {
+              axiosConfig.data = payload;
+            }
+            const xoloxRes = await axios(axiosConfig);
+            console.log(`[WorkflowRunner] XOLOX response status: ${xoloxRes.status}`);
+
+            if (successCondition === 'status_2xx') {
+              xoloxSuccess = xoloxRes.status >= 200 && xoloxRes.status < 300;
+            } else if (successCondition === 'field_true') {
+              const fieldKey = xd.successField || '';
+              const expectedValue = String(xd.successValue || 'true');
+              const responseBody = xoloxRes.data || {};
+              const actualValue = String(responseBody[fieldKey] ?? '');
+              xoloxSuccess = actualValue === expectedValue;
+              console.log(`[WorkflowRunner] XOLOX field check: ${fieldKey}=${actualValue} vs expected=${expectedValue} => ${xoloxSuccess}`);
+            }
+          } catch (xoloxErr) {
+            console.error(`[WorkflowRunner] XOLOX webhook call failed: ${xoloxErr.message}`);
+            xoloxSuccess = false;
+          }
+
+          console.log(`[WorkflowRunner] XOLOX event result: ${xoloxSuccess ? 'SUCCESS' : 'FAIL'}`);
+          context.xolox_success = xoloxSuccess ? 'true' : 'false';
+
+          // Route to onSuccess or onFail branch
+          const nextId = xoloxSuccess ? currentNode.onSuccess : currentNode.onFail;
+          currentNode = nextId ? nodes.find(n => n.id === nextId) : null;
+          continue; // Skip the standard next-node logic below
         }
       }
 
@@ -944,5 +1024,6 @@ module.exports = {
   deleteWorkflow,
   runWorkflow,
   triggerWorkflowsForEvent,
+  triggerContactCreatedWorkflows,
   generateWorkflowFromDescription,
 };

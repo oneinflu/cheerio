@@ -499,23 +499,16 @@ export default function App() {
   const handleWorkflowSave = async (workflowJson) => {
     try {
       if (editingWorkflow && editingWorkflow.id) {
-        // Merge the existing workflow metadata with the new JSON structure
-        // The builder returns { workflow_id, trigger, nodes }
-        // We probably want to save this into the 'steps' or 'definition' column of the workflow
-        // adjusting based on what the backend expects.
-        // Assuming backend expects { ...workflowData }
-
-        // If the builder returns the full structure needed by backend:
-        await updateWorkflow(editingWorkflow.id, {
+        const updatedWorkflow = {
           ...editingWorkflow,
           steps: workflowJson
-        });
-        // Do not close the builder automatically on save
-        // setEditingWorkflow(null); 
+        };
+        await updateWorkflow(editingWorkflow.id, updatedWorkflow);
+        // CRITICAL: update local state so that refreshing the page restores all nodes
+        setEditingWorkflow(updatedWorkflow);
       }
     } catch (err) {
       console.error('Failed to save workflow:', err);
-      // Optional: Show error toast
     }
   };
 

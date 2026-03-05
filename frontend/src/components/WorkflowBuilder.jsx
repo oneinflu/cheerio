@@ -14,7 +14,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { Button } from './ui/Button';
-import { Save, ArrowLeft, Plus, Clock, MessageSquare, GitBranch, Zap, StopCircle, Loader2, Play, MessageCircle, Code, UserCheck, Tag, Mic, Workflow as WorkflowIcon, Megaphone, Filter, Link, Copy, Check, RefreshCw, Trash2 } from 'lucide-react';
+import { Save, ArrowLeft, Plus, Clock, MessageSquare, GitBranch, Zap, StopCircle, Loader2, Play, MessageCircle, Code, UserCheck, Tag, Mic, Workflow as WorkflowIcon, Megaphone, Filter, Link, Copy, Check, RefreshCw, Trash2, Globe, Send, ChevronDown, ChevronUp } from 'lucide-react';
 import { getTemplates, runWorkflow, aiGenerateWorkflow, getWorkflows, getCampaigns, getWebhookEvents, clearWebhookEvents } from '../api';
 
 // --- Custom Node Components ---
@@ -281,6 +281,28 @@ const NewContactCreatedNode = ({ data, selected }) => {
   );
 };
 
+const XoloxEventNode = ({ data, selected }) => {
+  const fieldCount = Array.isArray(data.payloadFields) ? data.payloadFields.length : 0;
+  return (
+    <NodeWrapper selected={selected} title={data.eventName || 'XOLOX Event'} icon={Globe} colorClass="bg-orange-600">
+      <div className="text-[10px] text-slate-400 mb-1 truncate max-w-[180px]">{data.webhookUrl || 'Set webhook URL...'}</div>
+      <div className="flex gap-1 mb-2 flex-wrap">
+        {fieldCount > 0 && (
+          <span className="text-[10px] bg-orange-50 border border-orange-200 text-orange-700 rounded px-1.5 py-0.5">{fieldCount} field{fieldCount !== 1 ? 's' : ''}</span>
+        )}
+        <span className="text-[10px] bg-slate-100 border border-slate-200 text-slate-500 rounded px-1.5 py-0.5">{data.method || 'POST'}</span>
+      </div>
+      <div className="flex justify-between text-[10px] font-bold text-slate-500 px-1 mb-0.5">
+        <span className="text-green-600">SUCCESS</span>
+        <span className="text-red-500">FAIL</span>
+      </div>
+      <Handle type="target" position={Position.Top} className="w-3 h-3 bg-slate-400" />
+      <Handle type="source" position={Position.Bottom} id="success" style={{ left: '30%' }} className="w-3 h-3 bg-green-500" />
+      <Handle type="source" position={Position.Bottom} id="fail" style={{ left: '70%' }} className="w-3 h-3 bg-red-400" />
+    </NodeWrapper>
+  );
+};
+
 // ─── Proper component so hooks are called at top level (fixes Rules of Hooks) ──
 function WebhookNodeConfig({ node, workflowId, updateNodeFields }) {
   const baseUrl = window.location.origin;
@@ -462,6 +484,7 @@ const nodeTypes = {
   campaign_condition: CampaignConditionNode,
   incoming_webhook: IncomingWebhookNode,
   new_contact: NewContactCreatedNode,
+  xolox_event: XoloxEventNode,
 };
 
 // --- Helper Functions ---
@@ -1039,6 +1062,35 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
     setSelectedNode(newContactNode);
   }, [setNodes]);
 
+  // Add a XOLOX Event node — action with YES/NO output branches
+  const handleAddXoloxEvent = useCallback(() => {
+    const nodeId = getId();
+    const node = {
+      id: nodeId,
+      type: 'xolox_event',
+      position: { x: 0, y: 160 },
+      data: {
+        label: 'XOLOX Event',
+        eventName: 'Lead Create',
+        webhookUrl: '',
+        method: 'POST',
+        // Array of { field: string, variable: string } — field = key XOLOX expects, variable = {{var}} to inject
+        payloadFields: [
+          { field: 'name', variable: '{{name}}' },
+          { field: 'phone', variable: '{{phone}}' },
+          { field: 'email', variable: '{{email}}' },
+          { field: 'source', variable: '{{source}}' },
+        ],
+        // How to judge success: 'status_2xx' | 'field_true'
+        successCondition: 'status_2xx',
+        successField: '',      // e.g. 'success' when condition is field_true
+        successValue: 'true',  // value to compare against
+      },
+    };
+    setNodes(nds => [...nds, node]);
+    setSelectedNode(node);
+  }, [setNodes]);
+
   const updateNodeData = (key, value) => {
     if (!selectedNode) return;
     setNodes((nds) =>
@@ -1095,9 +1147,15 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
     // Convert Graph to JSON format required
     // { workflow_id, trigger, nodes: [...] }
 
-    // Find trigger node
-    const triggerNode = nodes.find(n => n.type === 'trigger');
-    const triggerType = triggerNode?.data?.triggerType || 'incoming_whatsapp';
+    // Find trigger node — support both old 'trigger' type and new typed triggers
+    const triggerNode = nodes.find(n =>
+      n.type === 'trigger' || n.type === 'incoming_webhook' ||
+      n.type === 'new_contact' || n.type === 'campaign_trigger'
+    );
+    let triggerType = triggerNode?.data?.triggerType || 'incoming_whatsapp';
+    // Map canvas node types to execution trigger keys
+    if (triggerNode?.type === 'incoming_webhook') triggerType = 'incoming_webhook';
+    if (triggerNode?.type === 'new_contact') triggerType = 'new_contact';
 
     const formattedNodes = nodes.map(node => {
       const nodeDef = {
@@ -1107,8 +1165,8 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
         data: node.data
       };
 
-      // Find connections
-      if (node.type === 'condition') {
+      // Find connections for each node type
+      if (node.type === 'condition' || node.type === 'campaign_condition') {
         const yesEdge = edges.find(e => e.source === node.id && e.sourceHandle === 'yes');
         const noEdge = edges.find(e => e.source === node.id && e.sourceHandle === 'no');
         if (yesEdge) nodeDef.yes = yesEdge.target;
@@ -1121,6 +1179,12 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
             nodeDef.routes[btn] = edge.target;
           }
         });
+      } else if (node.type === 'xolox_event') {
+        // XOLOX event node has two named handles: success and fail
+        const successEdge = edges.find(e => e.source === node.id && e.sourceHandle === 'success');
+        const failEdge = edges.find(e => e.source === node.id && e.sourceHandle === 'fail');
+        if (successEdge) nodeDef.onSuccess = successEdge.target;
+        if (failEdge) nodeDef.onFail = failEdge.target;
       } else {
         const edge = edges.find(e => e.source === node.id);
         if (edge) nodeDef.next = edge.target;
@@ -1137,17 +1201,22 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
     };
 
     console.log('Saved Workflow JSON:', workflowJson);
-    if (onSave) onSave(workflowJson);
     return workflowJson; // Return for immediate use if needed
   };
 
+  const [saveStatus, setSaveStatus] = useState(null); // null | 'saving' | 'saved' | 'error'
+
   const handleManualSave = async () => {
+    setSaveStatus('saving');
     try {
-      handleSave();
-      alert('Workflow saved successfully!');
+      const json = handleSave();
+      if (onSave) await onSave(json);
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus(null), 2500);
     } catch (err) {
       console.error(err);
-      alert('Failed to save workflow.');
+      setSaveStatus('error');
+      setTimeout(() => setSaveStatus(null), 3000);
     }
   };
 
@@ -1563,9 +1632,21 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
             <Play size={16} />
             Run Test
           </Button>
-          <Button onClick={handleManualSave} className="flex items-center gap-2">
-            <Save size={16} />
-            Save Workflow
+          <Button
+            onClick={handleManualSave}
+            disabled={saveStatus === 'saving'}
+            className={`flex items-center gap-2 transition-colors ${saveStatus === 'saved' ? 'bg-green-600 hover:bg-green-700' :
+                saveStatus === 'error' ? 'bg-red-600 hover:bg-red-700' : ''
+              }`}
+          >
+            {saveStatus === 'saving' ? <Loader2 size={16} className="animate-spin" /> :
+              saveStatus === 'saved' ? <Check size={16} /> :
+                saveStatus === 'error' ? <span className="text-xs">✗</span> :
+                  <Save size={16} />}
+            {saveStatus === 'saving' ? 'Saving…' :
+              saveStatus === 'saved' ? 'Saved!' :
+                saveStatus === 'error' ? 'Save Failed' :
+                  'Save Workflow'}
           </Button>
         </div>
       </div>
@@ -1629,6 +1710,22 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 <div className="min-w-0">
                   <div className="text-xs font-semibold text-emerald-800">New Contact Created</div>
                   <div className="text-[10px] text-emerald-500">Contact added → workflow</div>
+                </div>
+              </div>
+            )}
+            {/* XOLOX CRM integration */}
+            {viewMode === 'canvas' && (
+              <div
+                className="flex items-center gap-2 p-2 rounded-md bg-orange-50 border border-orange-200 cursor-pointer hover:bg-orange-100 transition-colors mt-1"
+                onClick={handleAddXoloxEvent}
+                title="Send data to XOLOX CRM webhook; branches on success/fail"
+              >
+                <div className="w-7 h-7 rounded-md bg-orange-600 flex items-center justify-center shrink-0">
+                  <Globe size={14} className="text-white" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold text-orange-800">XOLOX Event</div>
+                  <div className="text-[10px] text-orange-500">CRM webhook → YES / NO</div>
                 </div>
               </div>
             )}
@@ -2235,6 +2332,196 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                         ))}
                       </div>
                     )}
+                  </div>
+                );
+              })()}
+
+              {selectedNode.type === 'xolox_event' && (() => {
+                const d = selectedNode.data;
+                const payloadFields = Array.isArray(d.payloadFields) ? d.payloadFields : [];
+
+                const updateField = (idx, key, val) => {
+                  const next = payloadFields.map((f, i) => i === idx ? { ...f, [key]: val } : f);
+                  updateNodeFields(selectedNode.id, { payloadFields: next });
+                };
+                const addField = () => {
+                  updateNodeFields(selectedNode.id, { payloadFields: [...payloadFields, { field: '', variable: '' }] });
+                };
+                const removeField = (idx) => {
+                  updateNodeFields(selectedNode.id, { payloadFields: payloadFields.filter((_, i) => i !== idx) });
+                };
+
+                return (
+                  <div className="space-y-5">
+
+                    {/* Banner */}
+                    <div className="bg-orange-50 border border-orange-100 rounded-lg p-3">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Globe size={14} className="text-orange-600" />
+                        <span className="text-xs font-semibold text-orange-800">XOLOX CRM Event</span>
+                      </div>
+                      <p className="text-[11px] text-orange-600 leading-relaxed">
+                        Paste the webhook URL from <strong>xolox.io</strong>, define the fields XOLOX expects, map each to a <code className="bg-white border border-orange-200 rounded px-1">{'{{variable}}'}</code> from earlier nodes, then connect <span className="text-green-600 font-semibold">SUCCESS</span> and <span className="text-red-500 font-semibold">FAIL</span> branches.
+                      </p>
+                    </div>
+
+                    {/* Event name */}
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Event Name <span className="text-slate-400 text-[10px] font-normal">(label only)</span></label>
+                      <input
+                        type="text"
+                        className="w-full border border-slate-300 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+                        placeholder="e.g. Lead Create, Contact Update"
+                        value={d.eventName || ''}
+                        onChange={e => updateNodeFields(selectedNode.id, { eventName: e.target.value })}
+                      />
+                    </div>
+
+                    {/* Webhook URL */}
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">XOLOX Webhook URL</label>
+                      <input
+                        type="url"
+                        className="w-full border border-slate-300 rounded-md px-2 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-orange-300"
+                        placeholder="https://xolox.io/webhooks/…"
+                        value={d.webhookUrl || ''}
+                        onChange={e => updateNodeFields(selectedNode.id, { webhookUrl: e.target.value })}
+                      />
+                    </div>
+
+                    {/* HTTP Method */}
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">HTTP Method</label>
+                      <select
+                        className="w-full border border-slate-300 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+                        value={d.method || 'POST'}
+                        onChange={e => updateNodeFields(selectedNode.id, { method: e.target.value })}
+                      >
+                        <option value="POST">POST</option>
+                        <option value="PUT">PUT</option>
+                        <option value="PATCH">PATCH</option>
+                        <option value="GET">GET</option>
+                      </select>
+                    </div>
+
+                    {/* Payload Fields */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-sm font-medium text-slate-700">Request Payload Fields</label>
+                        <button
+                          type="button"
+                          onClick={addField}
+                          className="flex items-center gap-1 text-[11px] text-orange-600 hover:text-orange-800 border border-orange-200 rounded px-2 py-0.5 hover:bg-orange-50 transition-colors"
+                        >
+                          <Plus size={11} /> Add Field
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-slate-400 mb-2">
+                        Left = field key XOLOX expects &nbsp;·&nbsp; Right = <code className="bg-slate-100 px-0.5 rounded">{'{{variable}}'}</code> from previous nodes
+                      </p>
+                      {payloadFields.length === 0 && (
+                        <div className="border-2 border-dashed border-slate-200 rounded-lg p-3 text-center text-[11px] text-slate-400">
+                          No fields yet — click <strong>Add Field</strong> to define the payload
+                        </div>
+                      )}
+                      <div className="space-y-2">
+                        {payloadFields.map((f, idx) => (
+                          <div key={idx} className="flex items-center gap-1.5">
+                            <input
+                              type="text"
+                              className="flex-1 border border-slate-300 rounded-md px-2 py-1.5 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-orange-300"
+                              placeholder="fieldKey"
+                              value={f.field}
+                              onChange={e => updateField(idx, 'field', e.target.value)}
+                            />
+                            <span className="text-slate-400 text-xs shrink-0">→</span>
+                            <input
+                              type="text"
+                              className="flex-1 border border-slate-300 rounded-md px-2 py-1.5 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-orange-300"
+                              placeholder="{{variable}}"
+                              value={f.variable}
+                              onChange={e => updateField(idx, 'variable', e.target.value)}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => removeField(idx)}
+                              className="shrink-0 text-red-400 hover:text-red-600 transition-colors"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Available variables hint */}
+                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                      <div className="text-[11px] font-semibold text-slate-600 mb-1.5">Available variables from earlier nodes</div>
+                      <div className="flex flex-wrap gap-1">
+                        {['{{name}}', '{{phone}}', '{{email}}', '{{tags}}', '{{source}}', '{{contact_id}}'].map(v => (
+                          <code
+                            key={v}
+                            className="text-[10px] bg-white border border-slate-200 text-slate-600 rounded px-1.5 py-0.5 cursor-pointer hover:border-orange-300 hover:text-orange-700 transition-colors"
+                            title="Click to copy"
+                            onClick={() => navigator.clipboard?.writeText(v)}
+                          >{v}</code>
+                        ))}
+                      </div>
+                      <p className="text-[9px] text-slate-400 mt-1.5">Click any tag to copy · Add your own <code>{'{{variable}}'}</code> names from other nodes</p>
+                    </div>
+
+                    {/* Divider */}
+                    <div className="border-t border-slate-100" />
+
+                    {/* Success condition */}
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Success Condition</label>
+                      <p className="text-[10px] text-slate-400 mb-2">Determines which branch (SUCCESS / FAIL) to take after the call</p>
+                      <select
+                        className="w-full border border-slate-300 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+                        value={d.successCondition || 'status_2xx'}
+                        onChange={e => updateNodeFields(selectedNode.id, { successCondition: e.target.value })}
+                      >
+                        <option value="status_2xx">HTTP 2xx status = SUCCESS</option>
+                        <option value="field_true">Response JSON field equals value</option>
+                      </select>
+
+                      {d.successCondition === 'field_true' && (
+                        <div className="mt-2 space-y-2">
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              className="flex-1 border border-slate-300 rounded-md px-2 py-1.5 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-orange-300"
+                              placeholder="response field e.g. success"
+                              value={d.successField || ''}
+                              onChange={e => updateNodeFields(selectedNode.id, { successField: e.target.value })}
+                            />
+                            <span className="text-slate-400 text-xs self-center">=</span>
+                            <input
+                              type="text"
+                              className="flex-1 border border-slate-300 rounded-md px-2 py-1.5 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-orange-300"
+                              placeholder="true"
+                              value={d.successValue || ''}
+                              onChange={e => updateNodeFields(selectedNode.id, { successValue: e.target.value })}
+                            />
+                          </div>
+                          <p className="text-[10px] text-slate-400">e.g. field <code className="bg-slate-100 px-0.5 rounded">success</code> = <code className="bg-slate-100 px-0.5 rounded">true</code></p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Branch legend */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="bg-green-50 border border-green-100 rounded-lg p-2.5 text-center">
+                        <div className="text-[11px] font-bold text-green-700 mb-0.5">✓ SUCCESS branch</div>
+                        <div className="text-[10px] text-green-500">XOLOX responded OK</div>
+                      </div>
+                      <div className="bg-red-50 border border-red-100 rounded-lg p-2.5 text-center">
+                        <div className="text-[11px] font-bold text-red-600 mb-0.5">✗ FAIL branch</div>
+                        <div className="text-[10px] text-red-400">Error or condition not met</div>
+                      </div>
+                    </div>
+
                   </div>
                 );
               })()}

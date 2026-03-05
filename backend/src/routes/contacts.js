@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../../db');
 const auth = require('../middlewares/auth');
+const workflowSvc = require('../services/workflows');
 
 /**
  * GET /api/contacts
@@ -72,11 +73,10 @@ router.get('/', auth.requireRole('admin', 'agent', 'supervisor'), async (req, re
  * POST /api/contacts
  * Adds a single contact manually
  */
-router.post('/', auth.requireRole('admin', 'agent', 'supervisor'), async (req, res, next) => {
+router.post('/', auth.requireRole('admin', 'super_admin', 'quality_manager', 'agent', 'supervisor'), async (req, res, next) => {
     try {
         const { channel_id, external_id, display_name, profile } = req.body;
 
-        // This is a minimal implementation. In production, validate input securely.
         if (!channel_id || !external_id) {
             return res.status(400).json({ error: 'channel_id and external_id are required' });
         }
@@ -87,10 +87,21 @@ router.post('/', auth.requireRole('admin', 'agent', 'supervisor'), async (req, r
         RETURNING *
             `;
         const result = await db.query(insertQuery, [channel_id, external_id, display_name || null, profile || {}]);
+        const newContact = result.rows[0];
 
-        return res.json({ success: true, contact: result.rows[0] });
+        // Fire new_contact workflows in background (non-blocking)
+        workflowSvc.triggerContactCreatedWorkflows({
+            id: newContact.id,
+            external_id: newContact.external_id,
+            name: newContact.display_name || '',
+            phone: newContact.external_id || '',
+            email: (newContact.profile && newContact.profile.email) || '',
+            tags: (newContact.profile && newContact.profile.tags) || [],
+            source: (newContact.profile && newContact.profile.source) || '',
+        }).catch(err => console.error('[ContactsRoute] Failed to trigger new_contact workflows:', err.message));
+
+        return res.json({ success: true, contact: newContact });
     } catch (err) {
-        // Handle unique constraint violation gracefully
         if (err.code === '23505') {
             return res.status(409).json({ error: 'Contact already exists on this channel' });
         }
