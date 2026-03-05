@@ -746,3 +746,12 @@ export async function clearWebhookEvents(workflowId) {
   });
   return res.json();
 }
+export async function createPaymentLink(data) {
+  const headers = getAuthHeaders();
+  const res = await fetch('/api/payments/create-link', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}

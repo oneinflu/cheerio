@@ -134,6 +134,7 @@ function createApp() {
   app.use('/api/contacts', contactsRouter);
   app.use('/api/labels', labelsRouter);
   app.use('/api/campaigns', campaignsRouter);
+  app.use('/api/payments', require('./src/routes/payments'));
   app.use('/webhooks/workflow', webhookTriggerPublic);  // PUBLIC — no auth
   app.use('/api/workflow-webhooks', webhookTriggerPrivate); // PRIVATE — requires auth
 

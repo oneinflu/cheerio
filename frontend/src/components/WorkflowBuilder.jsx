@@ -15,7 +15,7 @@ import {
 import '@xyflow/react/dist/style.css';
 import { Button } from './ui/Button';
 import { Save, ArrowLeft, Plus, Clock, MessageSquare, GitBranch, Zap, StopCircle, Loader2, Play, MessageCircle, Code, UserCheck, Tag, Mic, Workflow as WorkflowIcon, Megaphone, Filter, Link, Copy, Check, RefreshCw, Trash2, Globe, Send, ChevronDown, ChevronUp, Image, Video, FileText as FileIcon, Upload, X, Star, CreditCard, BellRing, Bell } from 'lucide-react';
-import { getTemplates, runWorkflow, aiGenerateWorkflow, getWorkflows, getCampaigns, getWebhookEvents, clearWebhookEvents, fetchMediaLibrary, uploadFlowMedia } from '../api';
+import { getTemplates, runWorkflow, aiGenerateWorkflow, getWorkflows, getCampaigns, getWebhookEvents, clearWebhookEvents, fetchMediaLibrary, uploadFlowMedia, createPaymentLink } from '../api';
 import { GallerySelectModal } from './GallerySelectModal';
 
 // --- Custom Node Components ---
@@ -667,6 +667,55 @@ const nodeTypes = {
   new_contact: NewContactCreatedNode,
   xolox_event: XoloxEventNode,
   notification: NotificationNode,
+};
+
+const COURSE_PAPERS = {
+  'CPA US': [
+    { id: 'FAR', name: 'Financial Accounting and Reporting (FAR)' },
+    { id: 'REG', name: 'Regulation (REG)' },
+    { id: 'BEC', name: 'Business Environment and Concepts (BEC)' },
+    { id: 'AUD', name: 'Auditing and Attestation (AUD)' },
+    { id: 'ISC', name: 'Information Systems and Controls (ISC)' },
+    { id: 'TCP', name: 'Tax Compliance and Planning (TCP)' },
+  ],
+  'CMA US': [
+    { id: 'Part 1', name: 'Part 1: Financial Planning, Performance, and Analytics' },
+    { id: 'Part 2', name: 'Part 2: Strategic Financial Management' },
+  ],
+  'ACCA': [
+    {
+      level: 'Applied Knowledge', papers: [
+        { id: 'BT', name: 'Business and Technology (BT)' },
+        { id: 'MA', name: 'Management Accounting (MA)' },
+        { id: 'FA', name: 'Financial Accounting (FA)' },
+      ]
+    },
+    {
+      level: 'Applied Skills', papers: [
+        { id: 'LW', name: 'Corporate and Business Law (LW)' },
+        { id: 'PM', name: 'Performance Management (PM)' },
+        { id: 'TX', name: 'Taxation (TX)' },
+        { id: 'FR', name: 'Financial Reporting (FR)' },
+        { id: 'AA', name: 'Audit and Assurance (AA)' },
+        { id: 'FM', name: 'Financial Management (FM)' },
+      ]
+    },
+    {
+      level: 'Strategic Professional', papers: [
+        { id: 'SBL', name: 'Strategic Business Leader (SBL)' },
+        { id: 'SBR', name: 'Strategic Business Reporting (SBR)' },
+        { id: 'AFM', name: 'Advanced Financial Management (AFM)' },
+        { id: 'APM', name: 'Advanced Performance Management (APM)' },
+        { id: 'ATX', name: 'Advanced Taxation (ATX)' },
+        { id: 'AAA', name: 'Advanced Audit and Assurance (AAA)' },
+      ]
+    }
+  ],
+  'EA': [
+    { id: 'Part 1', name: 'Part 1: Individuals' },
+    { id: 'Part 2', name: 'Part 2: Businesses' },
+    { id: 'Part 3', name: 'Part 3: Representation, Practices, and Procedures' },
+  ],
 };
 
 // --- Helper Functions ---
@@ -3775,53 +3824,83 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                           <label className="text-[10px] font-bold text-slate-500 uppercase">Selected Course</label>
                           <select
                             className="w-full text-sm p-2 border border-slate-300 rounded-lg bg-white"
-                            value={selectedNode.data.course || ''}
+                            value={selectedNode.data.course || 'CPA US'}
                             onChange={(e) => {
                               updateNodeData('course', e.target.value);
                               updateNodeData('papers', []);
                             }}
                           >
-                            <option value="CPA US">CPA US</option>
-                            <option value="CMA US">CMA US</option>
-                            <option value="ACCA">ACCA</option>
+                            <option value="CPA US">CPA US (Certified Public Accountant)</option>
+                            <option value="CMA US">CMA US (Certified Management Accountant)</option>
+                            <option value="ACCA">ACCA (Global Accountancy)</option>
                             <option value="EA">EA (Enrolled Agent)</option>
                           </select>
                         </div>
 
-                        <div className="space-y-1">
+                        <div className="space-y-2">
                           <label className="text-[10px] font-bold text-slate-500 uppercase">Select Papers Included</label>
-                          <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 p-3 bg-slate-50 rounded-lg border border-slate-200 max-h-[160px] overflow-y-auto no-scrollbar">
+                          <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 max-h-[300px] overflow-y-auto no-scrollbar">
                             {(() => {
-                              const course = selectedNode.data.course;
-                              let pList = [];
-                              if (course === 'CPA US') pList = ['FAR', 'REG', 'BEC', 'AUD', 'IEC', 'TCP'];
-                              else if (course === 'CMA US') pList = ['Paper 1', 'Paper 2'];
-                              else if (course === 'ACCA') {
-                                pList = [
-                                  'Level 1 - Paper 1', 'Level 1 - Paper 2', 'Level 1 - Paper 3', 'Level 1 - Paper 4',
-                                  'Level 2 - Paper 1', 'Level 2 - Paper 2', 'Level 2 - Paper 3', 'Level 2 - Paper 4',
-                                  'Level 3 - Paper 1', 'Level 3 - Paper 2', 'Level 3 - Paper 3', 'Level 3 - Paper 4'
-                                ];
-                              }
-                              else if (course === 'EA') pList = ['Part 1', 'Part 2', 'Part 3'];
+                              const course = selectedNode.data.course || 'CPA US';
+                              const papers = COURSE_PAPERS[course] || [];
 
-                              return pList.map(p => (
-                                <label key={p} className="flex items-center gap-2 text-[10px] text-slate-700 cursor-pointer hover:text-indigo-600 transition-colors">
-                                  <input
-                                    type="checkbox"
-                                    className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-3 w-3"
-                                    checked={(selectedNode.data.papers || []).includes(p)}
-                                    onChange={(e) => {
-                                      const current = selectedNode.data.papers || [];
-                                      const next = e.target.checked
-                                        ? [...current, p]
-                                        : current.filter(item => item !== p);
-                                      updateNodeData('papers', next);
-                                    }}
-                                  />
-                                  <span className="truncate">{p}</span>
-                                </label>
-                              ));
+                              if (course === 'ACCA') {
+                                return papers.map(lvl => (
+                                  <div key={lvl.level} className="mb-4 last:mb-0">
+                                    <div className="text-[9px] font-black text-indigo-500 uppercase mb-2 tracking-tighter border-b border-indigo-100 pb-1">
+                                      {lvl.level}
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2">
+                                      {lvl.papers.map(p => (
+                                        <label key={p.id} className="flex items-center gap-2 p-2 bg-white rounded-lg border border-slate-100 hover:border-indigo-200 cursor-pointer transition-all shadow-sm">
+                                          <input
+                                            type="checkbox"
+                                            className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-3 w-3"
+                                            checked={(selectedNode.data.papers || []).includes(p.id)}
+                                            onChange={(e) => {
+                                              const current = selectedNode.data.papers || [];
+                                              const next = e.target.checked
+                                                ? [...current, p.id]
+                                                : current.filter(item => item !== p.id);
+                                              updateNodeData('papers', next);
+                                            }}
+                                          />
+                                          <div className="min-w-0">
+                                            <div className="text-[10px] font-bold text-slate-800 leading-none mb-0.5">{p.id}</div>
+                                            <div className="text-[8px] text-slate-500 truncate">{p.name}</div>
+                                          </div>
+                                        </label>
+                                      ))}
+                                    </div>
+                                  </div>
+                                ));
+                              }
+
+                              // Default for CPA, CMA, EA
+                              return (
+                                <div className="grid grid-cols-2 gap-2">
+                                  {papers.map(p => (
+                                    <label key={p.id} className="flex items-center gap-2 p-2 bg-white rounded-lg border border-slate-100 hover:border-indigo-200 cursor-pointer transition-all shadow-sm">
+                                      <input
+                                        type="checkbox"
+                                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-3 w-3"
+                                        checked={(selectedNode.data.papers || []).includes(p.id)}
+                                        onChange={(e) => {
+                                          const current = selectedNode.data.papers || [];
+                                          const next = e.target.checked
+                                            ? [...current, p.id]
+                                            : current.filter(item => item !== p.id);
+                                          updateNodeData('papers', next);
+                                        }}
+                                      />
+                                      <div className="min-w-0">
+                                        <div className="text-[10px] font-bold text-slate-800 leading-none mb-0.5">{p.id}</div>
+                                        <div className="text-[8px] text-slate-500 truncate">{p.name}</div>
+                                      </div>
+                                    </label>
+                                  ))}
+                                </div>
+                              );
                             })()}
                           </div>
                         </div>
@@ -3859,6 +3938,46 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                         onChange={(e) => updateNodeData('paymentSummary', e.target.value)}
                         placeholder="e.g. Advance payment for full course enrollment..."
                       />
+                    </div>
+
+                    <div className="pt-4 border-t border-slate-100">
+                      <Button
+                        variant="secondary"
+                        className="w-full bg-indigo-600 text-white hover:bg-indigo-700 flex items-center justify-center gap-2"
+                        onClick={async () => {
+                          const amt = selectedNode.data.amount;
+                          if (!amt || isNaN(amt)) return alert('Please enter a valid amount');
+
+                          const node = selectedNode;
+                          const originalLabel = 'Generate Live Link';
+
+                          try {
+                            // Update UI to show loading
+                            console.log('Generating Razorpay link for test...');
+                            const result = await createPaymentLink({
+                              amount: parseFloat(amt),
+                              description: (node.data.requestType === 'course') ? `Course: ${node.data.course}` : `Webinar: ${node.data.webinarName}`,
+                              contact: '9123456789', // test contact
+                              email: 'test@example.com',
+                              notes: { source: 'workflow_builder_test', node_id: node.id }
+                            });
+
+                            if (result && result.short_url) {
+                              window.open(result.short_url, '_blank');
+                            } else {
+                              throw new Error('No link returned from Razorpay');
+                            }
+                          } catch (err) {
+                            alert(`Failed to create link: ${err.message}`);
+                          }
+                        }}
+                      >
+                        <Link size={14} />
+                        Generate & Preview Link
+                      </Button>
+                      <div className="mt-2 text-[9px] text-center text-slate-400">
+                        Uses Razorpay keys from environment to create a real payment link.
+                      </div>
                     </div>
                   </div>
                 </div>
