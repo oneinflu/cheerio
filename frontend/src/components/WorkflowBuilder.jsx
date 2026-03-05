@@ -612,6 +612,61 @@ const buildTemplateComponentsPayload = (tmpl, variables) => {
   ];
 };
 
+/**
+ * Centrally manages the collection of all {{variables}} available to a given node
+ * by walking backward through the workflow graph (BFS).
+ */
+const getUpstreamVariables = (targetNodeId, nodes, edges) => {
+  const vars = [];
+  const visited = new Set();
+  const queue = [targetNodeId];
+
+  while (queue.length > 0) {
+    const nid = queue.shift();
+    if (visited.has(nid)) continue;
+    visited.add(nid);
+
+    // Find all edges pointing to this node
+    const incomingEdges = edges.filter(e => e.target === nid);
+    for (const edge of incomingEdges) {
+      const srcNode = nodes.find(n => n.id === edge.source);
+      if (!srcNode) continue;
+
+      if (srcNode.type === 'new_contact') {
+        const fm = srcNode.data.fieldMapping || {};
+        Object.values(fm).forEach(v => {
+          if (v && !vars.includes(`{{${v}}}`)) vars.push(`{{${v}}}`);
+        });
+        // Core defaults
+        ['name', 'phone', 'email', 'tags', 'source', 'contact_id'].forEach(def => {
+          if (!vars.includes(`{{${def}}}`)) vars.push(`{{${def}}}`);
+        });
+      } else if (srcNode.type === 'incoming_webhook') {
+        const pm = srcNode.data.paramMapping || {};
+        Object.values(pm).forEach(v => {
+          if (v && !vars.includes(`{{${v}}}`)) vars.push(`{{${v}}}`);
+        });
+      } else if (srcNode.type === 'response_message') {
+        // Collect the variable name the user defined to save their choice
+        const saveVar = srcNode.data.saveVariable;
+        if (saveVar && !vars.includes(`{{${saveVar}}}`)) {
+          vars.push(`{{${saveVar}}}`);
+        }
+      }
+
+      // Continue walking backward
+      queue.push(edge.source);
+    }
+  }
+
+  // Fallback defaults if the graph is empty or disconnected
+  if (vars.length === 0) {
+    ['{{name}}', '{{phone}}', '{{email}}', '{{tags}}', '{{source}}', '{{contact_id}}'].forEach(v => vars.push(v));
+  }
+
+  return vars;
+};
+
 // --- Main Component ---
 
 export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
@@ -2640,48 +2695,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                     {/* Available variables hint — dynamically computed from upstream nodes */}
                     {(() => {
                       // Walk backward through edges to find all variables exposed by upstream nodes
-                      const upstreamVars = (() => {
-                        const vars = [];
-                        const visited = new Set();
-                        const queue = [selectedNode.id];
-                        while (queue.length > 0) {
-                          const nid = queue.shift();
-                          if (visited.has(nid)) continue;
-                          visited.add(nid);
-                          const incomingEdges = edges.filter(e => e.target === nid);
-                          for (const edge of incomingEdges) {
-                            const srcNode = nodes.find(n => n.id === edge.source);
-                            if (!srcNode) continue;
-                            if (srcNode.type === 'new_contact') {
-                              // Collect mapped variable names from fieldMapping
-                              const fm = srcNode.data.fieldMapping || {};
-                              Object.values(fm).forEach(varName => {
-                                if (varName && !vars.includes(`{{${varName}}}`)) {
-                                  vars.push(`{{${varName}}}`);
-                                }
-                              });
-                              // Always expose defaults if not already listed
-                              ['name', 'phone', 'email', 'tags', 'source', 'contact_id'].forEach(def => {
-                                if (!vars.includes(`{{${def}}}`)) vars.push(`{{${def}}}`);
-                              });
-                            } else if (srcNode.type === 'incoming_webhook') {
-                              // Collect variable names from paramMapping
-                              const pm = srcNode.data.paramMapping || {};
-                              Object.values(pm).forEach(varName => {
-                                if (varName && !vars.includes(`{{${varName}}}`)) {
-                                  vars.push(`{{${varName}}}`);
-                                }
-                              });
-                            }
-                            queue.push(edge.source);
-                          }
-                        }
-                        // If nothing found upstream, show sensible defaults
-                        if (vars.length === 0) {
-                          ['{{name}}', '{{phone}}', '{{email}}', '{{tags}}', '{{source}}', '{{contact_id}}'].forEach(v => vars.push(v));
-                        }
-                        return vars;
-                      })();
+                      const upstreamVars = getUpstreamVariables(selectedNode.id, nodes, edges);
 
                       return (
                         <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
@@ -2999,35 +3013,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 const setHeader = (fields) => updateNodeFields(selectedNode.id, fields);
 
                 // Compute upstream variables (same BFS as XOLOX panel)
-                const upstreamVars = (() => {
-                  const result = [];
-                  const visited = new Set();
-                  const queue = [selectedNode.id];
-                  while (queue.length > 0) {
-                    const nid = queue.shift();
-                    if (visited.has(nid)) continue;
-                    visited.add(nid);
-                    edges.filter(e => e.target === nid).forEach(edge => {
-                      const src = nodes.find(n => n.id === edge.source);
-                      if (!src) return;
-                      if (src.type === 'new_contact') {
-                        const fm = src.data.fieldMapping || {};
-                        Object.values(fm).forEach(v => { if (v && !result.includes(`{{${v}}}`)) result.push(`{{${v}}}`); });
-                        ['name', 'phone', 'email', 'tags', 'source', 'contact_id'].forEach(def => {
-                          if (!result.includes(`{{${def}}}`)) result.push(`{{${def}}}`);
-                        });
-                      } else if (src.type === 'incoming_webhook') {
-                        const pm = src.data.paramMapping || {};
-                        Object.values(pm).forEach(v => { if (v && !result.includes(`{{${v}}}`)) result.push(`{{${v}}}`); });
-                      }
-                      queue.push(edge.source);
-                    });
-                  }
-                  if (result.length === 0) {
-                    ['{{name}}', '{{phone}}', '{{email}}', '{{tags}}', '{{source}}', '{{contact_id}}'].forEach(v => result.push(v));
-                  }
-                  return result;
-                })();
+                const upstreamVars = getUpstreamVariables(selectedNode.id, nodes, edges);
 
                 return (
                   <div className="space-y-4">
@@ -3259,35 +3245,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 const msg = d.message || '';
 
                 // Compute upstream variables (reuse same logic)
-                const upstreamVars = (() => {
-                  const result = [];
-                  const visited = new Set();
-                  const queue = [selectedNode.id];
-                  while (queue.length > 0) {
-                    const nid = queue.shift();
-                    if (visited.has(nid)) continue;
-                    visited.add(nid);
-                    edges.filter(e => e.target === nid).forEach(edge => {
-                      const src = nodes.find(n => n.id === edge.source);
-                      if (!src) return;
-                      if (src.type === 'new_contact') {
-                        const fm = src.data.fieldMapping || {};
-                        Object.values(fm).forEach(v => { if (v && !result.includes(`{{${v}}}`)) result.push(`{{${v}}}`); });
-                        ['name', 'phone', 'email', 'tags', 'source', 'contact_id'].forEach(def => {
-                          if (!result.includes(`{{${def}}}`)) result.push(`{{${def}}}`);
-                        });
-                      } else if (src.type === 'incoming_webhook') {
-                        const pm = src.data.paramMapping || {};
-                        Object.values(pm).forEach(v => { if (v && !result.includes(`{{${v}}}`)) result.push(`{{${v}}}`); });
-                      }
-                      queue.push(edge.source);
-                    });
-                  }
-                  if (result.length === 0) {
-                    ['{{name}}', '{{phone}}', '{{email}}', '{{tags}}', '{{source}}', '{{contact_id}}'].forEach(v => result.push(v));
-                  }
-                  return result;
-                })();
+                const upstreamVars = getUpstreamVariables(selectedNode.id, nodes, edges);
 
                 const setField = (key, val) => updateNodeFields(selectedNode.id, { [key]: val });
 
