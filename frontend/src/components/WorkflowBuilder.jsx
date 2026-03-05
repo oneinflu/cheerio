@@ -32,6 +32,46 @@ const NodeWrapper = ({ children, selected, title, icon: Icon, colorClass }) => (
   </div>
 );
 
+const MediaPreview = ({ type, url, fileName }) => {
+  if (!type || type === 'none' || !url) return null;
+
+  // Simple check for cloudinary/external URLs that might be variables
+  const isVariable = url.startsWith('{{') && url.endsWith('}}');
+
+  return (
+    <div className="mb-2 bg-slate-50 border border-slate-200 rounded overflow-hidden">
+      {type === 'image' ? (
+        isVariable ? (
+          <div className="w-full h-20 bg-teal-50 flex items-center justify-center p-2 text-center border-b border-teal-100 italic text-[9px] text-teal-600">
+            Image: {url}
+          </div>
+        ) : (
+          <img src={url} alt="preview" className="w-full h-24 object-cover" onError={(e) => { e.target.style.display = 'none'; }} />
+        )
+      ) : type === 'video' ? (
+        <div className="w-full h-20 bg-slate-800 flex flex-col items-center justify-center gap-1">
+          <Video size={24} className="text-white opacity-60" />
+          <span className="text-[8px] text-slate-400 px-2 truncate w-full text-center">
+            {isVariable ? url : (fileName || 'Video')}
+          </span>
+        </div>
+      ) : type === 'document' ? (
+        <div className="w-full h-20 bg-slate-100 flex flex-col items-center justify-center p-2 text-center">
+          <FileIcon size={24} className="text-slate-400 mb-1" />
+          <span className="text-[9px] text-slate-500 truncate w-full">
+            {isVariable ? url : (fileName || 'Document')}
+          </span>
+        </div>
+      ) : (
+        <div className="p-2 flex items-center gap-2">
+          <Link size={14} className="text-slate-400" />
+          <span className="text-[10px] text-slate-500 truncate">{isVariable ? url : (fileName || url)}</span>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const TriggerNode = ({ data, selected }) => {
   return (
     <NodeWrapper
@@ -63,11 +103,12 @@ const TemplateNode = ({ data, selected }) => {
 
   return (
     <NodeWrapper selected={selected} title="Send Template" icon={MessageSquare} colorClass="bg-green-600">
-      <div className="text-xs text-slate-600 mb-2">Template: <b>{data.template || 'Select...'}</b></div>
+      <MediaPreview type={data.headerType} url={data.headerUrl} fileName={data.headerFileName} />
+      <div className="text-xs text-slate-600 mb-2 font-medium">Template: <span className="text-green-700">{data.template || 'Select...'}</span></div>
 
       {/* Template Content Preview */}
       {data.content && (
-        <div className="w-[250px] text-[10px] text-slate-500 bg-slate-50 p-2 rounded mb-2 border border-slate-100 whitespace-pre-wrap break-words">
+        <div className="text-[10px] text-slate-500 bg-slate-50 p-2 rounded mb-2 border border-slate-100 whitespace-pre-wrap break-words leading-relaxed">
           {data.content}
         </div>
       )}
@@ -139,18 +180,8 @@ const ResponseMessageNode = ({ data, selected }) => {
 
   return (
     <NodeWrapper selected={selected} title="Response Message" icon={MessageSquare} colorClass="bg-teal-600">
-      {hasMedia && (
-        <div className="mb-2 bg-slate-50 border border-slate-200 rounded p-1 flex items-center gap-2">
-          {data.headerType === 'image' ? <Image size={14} className="text-teal-600" /> :
-            data.headerType === 'video' ? <Video size={14} className="text-teal-600" /> :
-              data.headerType === 'document' ? <FileIcon size={14} className="text-teal-600" /> :
-                <Link size={14} className="text-teal-600" />}
-          <span className="text-[10px] text-slate-500 truncate max-w-[150px]">
-            {data.headerFileName || 'Media Attached'}
-          </span>
-        </div>
-      )}
-      <div className="text-xs text-slate-600 mb-2 truncate max-w-[180px] line-clamp-2">
+      <MediaPreview type={data.headerType} url={data.headerUrl} fileName={data.headerFileName} />
+      <div className="text-xs text-slate-600 mb-2 whitespace-pre-wrap break-words leading-relaxed">
         {data.message || 'Enter message...'}
       </div>
 
@@ -3282,8 +3313,8 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                               type="button"
                               onClick={() => updateNodeFields(selectedNode.id, { headerType: key, headerUrl: '', headerFileName: '' })}
                               className={`flex-1 flex flex-col items-center gap-0.5 py-1.5 rounded border text-[10px] font-medium transition-colors ${headerType === key
-                                  ? 'bg-teal-50 border-teal-400 text-teal-700'
-                                  : 'bg-white border-slate-200 text-slate-500 hover:border-teal-300'
+                                ? 'bg-teal-50 border-teal-400 text-teal-700'
+                                : 'bg-white border-slate-200 text-slate-500 hover:border-teal-300'
                                 }`}
                             >
                               {Icon && <Icon size={12} />}
