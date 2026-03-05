@@ -133,6 +133,56 @@ const SendMessageNode = ({ data, selected }) => {
   );
 };
 
+const ResponseMessageNode = ({ data, selected }) => {
+  const buttons = data.buttons || [];
+  const hasMedia = data.headerType && data.headerType !== 'none';
+
+  return (
+    <NodeWrapper selected={selected} title="Response Message" icon={MessageSquare} colorClass="bg-teal-600">
+      {hasMedia && (
+        <div className="mb-2 bg-slate-50 border border-slate-200 rounded p-1 flex items-center gap-2">
+          {data.headerType === 'image' ? <Image size={14} className="text-teal-600" /> :
+            data.headerType === 'video' ? <Video size={14} className="text-teal-600" /> :
+              data.headerType === 'document' ? <FileIcon size={14} className="text-teal-600" /> :
+                <Link size={14} className="text-teal-600" />}
+          <span className="text-[10px] text-slate-500 truncate max-w-[150px]">
+            {data.headerFileName || 'Media Attached'}
+          </span>
+        </div>
+      )}
+      <div className="text-xs text-slate-600 mb-2 truncate max-w-[180px] line-clamp-2">
+        {data.message || 'Enter message...'}
+      </div>
+
+      <Handle type="target" position={Position.Top} className="w-3 h-3 bg-slate-400" />
+
+      {buttons.length > 0 ? (
+        <div className="space-y-2 mt-2 pt-2 border-t border-slate-100">
+          {buttons.map((btnText, idx) => (
+            <div key={idx} className="relative flex items-center justify-end">
+              <span className="text-[10px] text-slate-500 mr-2 bg-slate-100 px-1 rounded truncate max-w-[120px]">{btnText}</span>
+              <Handle
+                type="source"
+                position={Position.Right}
+                id={`btn-${idx}`}
+                className="w-3 h-3 bg-blue-400 !right-[-6px]"
+                style={{ top: '50%', transform: 'translateY(-50%)' }}
+              />
+            </div>
+          ))}
+          {/* Default branch if user skipReply is true or no reply matches */}
+          <div className="relative flex items-center justify-center pt-1 border-t border-slate-100 mt-2">
+            <span className="text-[9px] text-slate-400 italic">Default</span>
+            <Handle type="source" position={Position.Bottom} id="default" className="w-3 h-3 bg-slate-400" />
+          </div>
+        </div>
+      ) : (
+        <Handle type="source" position={Position.Bottom} id="default" className="w-3 h-3 bg-slate-400" />
+      )}
+    </NodeWrapper>
+  );
+};
+
 const CustomCodeNode = ({ data, selected }) => {
   return (
     <NodeWrapper selected={selected} title="Custom Code" icon={Code} colorClass="bg-gray-800">
@@ -481,6 +531,7 @@ const nodeTypes = {
   custom_code: CustomCodeNode,
   action: ActionNode,
   end: EndNode,
+  response_message: ResponseMessageNode,
   campaign_trigger: CampaignTriggerNode,
   campaign_condition: CampaignConditionNode,
   incoming_webhook: IncomingWebhookNode,
@@ -1113,6 +1164,27 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
         components: [],
         buttons: [],
         headerType: 'none',  // 'none' | 'image' | 'video' | 'document'
+        headerUrl: '',
+        headerFileName: '',
+      },
+    };
+    setNodes(nds => [...nds, node]);
+    setSelectedNode(node);
+  }, [setNodes]);
+
+  const handleAddResponseMessageAction = useCallback(() => {
+    const nodeId = getId();
+    const node = {
+      id: nodeId,
+      type: 'response_message',
+      position: { x: 0, y: 200 },
+      data: {
+        label: 'Response Message',
+        message: '',
+        buttons: [],
+        skipReply: false,
+        saveVariable: '',
+        headerType: 'none',
         headerUrl: '',
         headerFileName: '',
       },
@@ -1786,6 +1858,23 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 <div className="min-w-0">
                   <div className="text-xs font-semibold text-green-800">Send Template</div>
                   <div className="text-[10px] text-green-600">WhatsApp template + media</div>
+                </div>
+              </div>
+            )}
+
+            {/* Response Message action */}
+            {viewMode === 'canvas' && (
+              <div
+                className="flex items-center gap-2 p-2 rounded-md bg-teal-50 border border-teal-200 cursor-pointer hover:bg-teal-100 transition-colors"
+                onClick={handleAddResponseMessageAction}
+                title="Send a direct message with optional media and quick reply options"
+              >
+                <div className="w-7 h-7 rounded-md bg-teal-600 flex items-center justify-center shrink-0">
+                  <MessageCircle size={14} className="text-white" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold text-teal-800">Response Message</div>
+                  <div className="text-[10px] text-teal-600">Direct message + Quick replies</div>
                 </div>
               </div>
             )}
@@ -2975,8 +3064,8 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                               type="button"
                               onClick={() => setHeader({ headerType: key, headerUrl: '', headerFileName: '' })}
                               className={`flex-1 flex flex-col items-center gap-0.5 py-1.5 rounded border text-[10px] font-medium transition-colors ${headerType === key
-                                  ? 'bg-green-50 border-green-400 text-green-700'
-                                  : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
+                                ? 'bg-green-50 border-green-400 text-green-700'
+                                : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
                                 }`}
                             >
                               {Icon && <Icon size={13} />}
@@ -3103,8 +3192,8 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                             <code
                               key={v}
                               className={`text-[10px] rounded px-1.5 py-0.5 cursor-pointer font-mono select-none transition-colors ${templateFocusedVarKey
-                                  ? 'bg-green-50 border border-green-300 text-green-700 hover:bg-green-100'
-                                  : 'bg-white border border-slate-200 text-slate-500 hover:border-green-300 hover:text-green-700'
+                                ? 'bg-green-50 border border-green-300 text-green-700 hover:bg-green-100'
+                                : 'bg-white border border-slate-200 text-slate-500 hover:border-green-300 hover:text-green-700'
                                 }`}
                               title={templateFocusedVarKey ? `Insert ${v} into {{${templateFocusedVarKey}}}` : 'Focus a variable input first'}
                               onClick={() => {
@@ -3130,6 +3219,219 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 );
               })()}
 
+
+
+              {selectedNode.type === 'response_message' && (() => {
+                const d = selectedNode.data;
+                const headerType = d.headerType || 'none';
+                const buttons = d.buttons || [];
+                const msg = d.message || '';
+
+                // Compute upstream variables (reuse same logic)
+                const upstreamVars = (() => {
+                  const result = [];
+                  const visited = new Set();
+                  const queue = [selectedNode.id];
+                  while (queue.length > 0) {
+                    const nid = queue.shift();
+                    if (visited.has(nid)) continue;
+                    visited.add(nid);
+                    edges.filter(e => e.target === nid).forEach(edge => {
+                      const src = nodes.find(n => n.id === edge.source);
+                      if (!src) return;
+                      if (src.type === 'new_contact') {
+                        const fm = src.data.fieldMapping || {};
+                        Object.values(fm).forEach(v => { if (v && !result.includes(`{{${v}}}`)) result.push(`{{${v}}}`); });
+                        ['name', 'phone', 'email', 'tags', 'source', 'contact_id'].forEach(def => {
+                          if (!result.includes(`{{${def}}}`)) result.push(`{{${def}}}`);
+                        });
+                      } else if (src.type === 'incoming_webhook') {
+                        const pm = src.data.paramMapping || {};
+                        Object.values(pm).forEach(v => { if (v && !result.includes(`{{${v}}}`)) result.push(`{{${v}}}`); });
+                      }
+                      queue.push(edge.source);
+                    });
+                  }
+                  if (result.length === 0) {
+                    ['{{name}}', '{{phone}}', '{{email}}', '{{tags}}', '{{source}}', '{{contact_id}}'].forEach(v => result.push(v));
+                  }
+                  return result;
+                })();
+
+                const setField = (key, val) => updateNodeFields(selectedNode.id, { [key]: val });
+
+                return (
+                  <div className="space-y-4">
+                    {/* ① Media Header */}
+                    <div className="border border-slate-200 rounded-lg overflow-hidden">
+                      <div className="bg-teal-50 px-3 py-2 border-b border-teal-100 flex items-center gap-2">
+                        <Image size={13} className="text-teal-600" />
+                        <span className="text-xs font-semibold text-teal-800">Media Option (Optional)</span>
+                      </div>
+                      <div className="p-3 space-y-3">
+                        {/* Type selector */}
+                        <div className="flex gap-1.5">
+                          {[
+                            { key: 'none', label: 'None', icon: null },
+                            { key: 'image', label: 'Image', icon: Image },
+                            { key: 'video', label: 'Video', icon: Video },
+                            { key: 'document', label: 'Document', icon: FileIcon },
+                          ].map(({ key, label, icon: Icon }) => (
+                            <button
+                              key={key}
+                              type="button"
+                              onClick={() => updateNodeFields(selectedNode.id, { headerType: key, headerUrl: '', headerFileName: '' })}
+                              className={`flex-1 flex flex-col items-center gap-0.5 py-1.5 rounded border text-[10px] font-medium transition-colors ${headerType === key
+                                  ? 'bg-teal-50 border-teal-400 text-teal-700'
+                                  : 'bg-white border-slate-200 text-slate-500 hover:border-teal-300'
+                                }`}
+                            >
+                              {Icon && <Icon size={12} />}
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+
+                        {headerType !== 'none' && (
+                          <div className="space-y-2">
+                            {d.headerUrl && (
+                              <div className="flex items-center gap-2 bg-slate-50 rounded px-2 py-1.5 border border-slate-200">
+                                <span className="text-[11px] text-slate-600 truncate flex-1 min-w-0">{d.headerFileName || d.headerUrl}</span>
+                                <button type="button" onClick={() => updateNodeFields(selectedNode.id, { headerUrl: '', headerFileName: '' })} className="text-red-400 hover:text-red-600">
+                                  <X size={12} />
+                                </button>
+                              </div>
+                            )}
+                            <div className="flex gap-1.5">
+                              <label className="flex-1 flex items-center justify-center gap-1.5 border border-dashed border-slate-300 rounded px-2 py-1.5 text-[10px] text-slate-500 hover:border-teal-400 hover:text-teal-600 cursor-pointer transition-colors text-center">
+                                <Upload size={12} /> Upload
+                                <input type="file" className="sr-only" onChange={async (e) => {
+                                  const file = e.target.files?.[0]; if (!file) return;
+                                  const formData = new FormData(); formData.append('file', file);
+                                  const res = await uploadFlowMedia(formData);
+                                  updateNodeFields(selectedNode.id, { headerUrl: res.url || res.data?.url || '', headerFileName: file.name });
+                                }} />
+                              </label>
+                              <button onClick={openGallery} className="flex-1 flex items-center justify-center gap-1.5 border border-dashed border-slate-300 rounded px-2 py-1.5 text-[10px] text-slate-500 hover:border-teal-400 hover:text-teal-600 transition-colors text-center">
+                                <Image size={12} /> Gallery
+                              </button>
+                            </div>
+                            <input
+                              className="w-full border border-slate-300 rounded px-2 py-1.5 text-[10px] font-mono focus:ring-1 focus:ring-teal-400 focus:outline-none"
+                              placeholder="Paste public URL or {{variable}}..."
+                              value={d.headerUrl || ''}
+                              onChange={e => setField('headerUrl', e.target.value)}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* ② Message Text */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-slate-700">Message to send</label>
+                      <textarea
+                        className="w-full border border-slate-300 rounded-md p-2.5 text-sm min-h-[100px] focus:ring-2 focus:ring-teal-300 focus:outline-none"
+                        placeholder="Type your message here... Use {{variable}} to map data."
+                        value={msg}
+                        onChange={(e) => setField('message', e.target.value)}
+                        onFocus={() => setFocusedVarIdx('msg_text')}
+                        onBlur={() => setTimeout(() => setFocusedVarIdx(null), 200)}
+                      />
+
+                      {/* Variable chips for message text */}
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {upstreamVars.map(v => (
+                          <span
+                            key={v}
+                            onClick={() => {
+                              if (focusedVarIdx === 'msg_text') {
+                                setField('message', msg + v);
+                              } else {
+                                navigator.clipboard.writeText(v);
+                              }
+                            }}
+                            className="bg-white border border-slate-200 text-slate-500 text-[9px] px-1.5 py-0.5 rounded cursor-pointer hover:border-teal-400 hover:text-teal-600 transition-colors font-mono"
+                          >
+                            {v}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* ③ Quick Replies (Buttons) */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-sm font-medium text-slate-700">Quick Replies</label>
+                        <span className="text-[10px] text-slate-400">{buttons.length} options</span>
+                      </div>
+                      <div className="space-y-2">
+                        {buttons.map((btn, idx) => (
+                          <div key={idx} className="flex gap-1.5 items-center">
+                            <input
+                              className="flex-1 border border-slate-300 rounded px-2 py-1.5 text-xs focus:ring-1 focus:ring-teal-400 outline-none"
+                              value={btn}
+                              placeholder={`Option ${idx + 1}`}
+                              onChange={(e) => {
+                                const next = [...buttons];
+                                next[idx] = e.target.value;
+                                setField('buttons', next);
+                              }}
+                            />
+                            <button onClick={() => {
+                              const next = buttons.filter((_, i) => i !== idx);
+                              setField('buttons', next);
+                            }} className="text-slate-300 hover:text-red-500 transition-colors">
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        ))}
+                        <button
+                          onClick={() => setField('buttons', [...buttons, ''])}
+                          className="w-full border border-dashed border-slate-300 rounded py-1.5 text-[11px] text-slate-400 hover:border-teal-400 hover:text-teal-600 transition-all flex items-center justify-center gap-1"
+                        >
+                          <Plus size={12} /> Add Option
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* ④ Response Settings */}
+                    <div className="pt-3 border-t border-slate-100 space-y-4">
+                      {/* Save reply variable */}
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] font-bold text-slate-600 uppercase tracking-tight">Save reply in variable</label>
+                        <div className="relative">
+                          <input
+                            className="w-full border border-slate-300 rounded px-2 py-1.5 text-xs font-mono focus:ring-1 focus:ring-teal-400 outline-none pl-7"
+                            placeholder="e.g. user_choice"
+                            value={d.saveVariable || ''}
+                            onChange={(e) => setField('saveVariable', e.target.value)}
+                          />
+                          <Code size={12} className="absolute left-2.5 top-2.5 text-slate-400" />
+                        </div>
+                        <p className="text-[10px] text-slate-400 italic">This will store the text of the button user clicks.</p>
+                      </div>
+
+                      {/* Skip Toggle */}
+                      <div className="flex items-center justify-between bg-slate-50 rounded-lg p-3 border border-slate-100">
+                        <div className="min-w-0 pr-2">
+                          <div className="text-xs font-semibold text-slate-700">Skip User Reply</div>
+                          <div className="text-[10px] text-slate-500 leading-tight">If ON, workflow continues immediately without waiting for user interaction.</div>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            className="sr-only peer"
+                            checked={!!d.skipReply}
+                            onChange={(e) => setField('skipReply', e.target.checked)}
+                          />
+                          <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-teal-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-teal-600"></div>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {selectedNode.type === 'delay' && (
                 <div className="space-y-3">
