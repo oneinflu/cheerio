@@ -14,8 +14,8 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { Button } from './ui/Button';
-import { Save, ArrowLeft, Plus, Clock, MessageSquare, GitBranch, Zap, StopCircle, Loader2, Play, MessageCircle, Code, UserCheck, Tag, Mic, Workflow as WorkflowIcon, Megaphone, Filter, Link, Copy, Check, RefreshCw, Trash2, Globe, Send, ChevronDown, ChevronUp } from 'lucide-react';
-import { getTemplates, runWorkflow, aiGenerateWorkflow, getWorkflows, getCampaigns, getWebhookEvents, clearWebhookEvents } from '../api';
+import { Save, ArrowLeft, Plus, Clock, MessageSquare, GitBranch, Zap, StopCircle, Loader2, Play, MessageCircle, Code, UserCheck, Tag, Mic, Workflow as WorkflowIcon, Megaphone, Filter, Link, Copy, Check, RefreshCw, Trash2, Globe, Send, ChevronDown, ChevronUp, Image, Video, FileText as FileIcon, Upload, X } from 'lucide-react';
+import { getTemplates, runWorkflow, aiGenerateWorkflow, getWorkflows, getCampaigns, getWebhookEvents, clearWebhookEvents, fetchMediaLibrary, uploadFlowMedia } from '../api';
 
 // --- Custom Node Components ---
 
@@ -561,6 +561,12 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
   const [isRecording, setIsRecording] = useState(false);
   // Tracks which XOLOX payload variable input is focused (for chip-click-to-insert)
   const [focusedVarIdx, setFocusedVarIdx] = useState(null);
+  // Template media gallery state
+  const [galleryItems, setGalleryItems] = useState([]);
+  const [galleryLoading, setGalleryLoading] = useState(false);
+  const [showGalleryModal, setShowGalleryModal] = useState(false);
+  const [galleryTarget, setGalleryTarget] = useState(null); // 'header' | null
+  const [templateFocusedVarKey, setTemplateFocusedVarKey] = useState(null);
   const recognitionRef = useRef(null);
 
   React.useEffect(() => {
@@ -1092,6 +1098,43 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
     setNodes(nds => [...nds, node]);
     setSelectedNode(node);
   }, [setNodes]);
+
+  // Create a clean send_template action node (with header/variable slots)
+  const handleAddSendTemplateAction = useCallback(() => {
+    const nodeId = getId();
+    const node = {
+      id: nodeId,
+      type: 'send_template',
+      position: { x: 0, y: 200 },
+      data: {
+        label: 'Send Template',
+        template: '',
+        languageCode: 'en_US',
+        variables: {},
+        components: [],
+        buttons: [],
+        headerType: 'none',  // 'none' | 'image' | 'video' | 'document'
+        headerUrl: '',
+        headerFileName: '',
+      },
+    };
+    setNodes(nds => [...nds, node]);
+    setSelectedNode(node);
+  }, [setNodes]);
+
+  // Load gallery and open the picker modal
+  const openGallery = useCallback(async () => {
+    setShowGalleryModal(true);
+    setGalleryLoading(true);
+    try {
+      const res = await fetchMediaLibrary(50);
+      setGalleryItems(Array.isArray(res) ? res : (res.media || res.data || []));
+    } catch (e) {
+      console.error('Failed to load gallery', e);
+    } finally {
+      setGalleryLoading(false);
+    }
+  }, []);
 
   const updateNodeData = (key, value) => {
     if (!selectedNode) return;
@@ -1715,10 +1758,18 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 </div>
               </div>
             )}
+
+            {/* ── Actions heading ─────────────────────────── */}
+            {viewMode === 'canvas' && (
+              <div className="pt-3 pb-1">
+                <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Actions</h2>
+              </div>
+            )}
+
             {/* XOLOX CRM integration */}
             {viewMode === 'canvas' && (
               <div
-                className="flex items-center gap-2 p-2 rounded-md bg-orange-50 border border-orange-200 cursor-pointer hover:bg-orange-100 transition-colors mt-1"
+                className="flex items-center gap-2 p-2 rounded-md bg-orange-50 border border-orange-200 cursor-pointer hover:bg-orange-100 transition-colors"
                 onClick={handleAddXoloxEvent}
                 title="Send data to XOLOX CRM webhook; branches on success/fail"
               >
@@ -1728,6 +1779,23 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 <div className="min-w-0">
                   <div className="text-xs font-semibold text-orange-800">XOLOX Event</div>
                   <div className="text-[10px] text-orange-500">CRM webhook → YES / NO</div>
+                </div>
+              </div>
+            )}
+
+            {/* Send Template action */}
+            {viewMode === 'canvas' && (
+              <div
+                className="flex items-center gap-2 p-2 rounded-md bg-green-50 border border-green-200 cursor-pointer hover:bg-green-100 transition-colors"
+                onClick={handleAddSendTemplateAction}
+                title="Send a WhatsApp template with variables and optional media header"
+              >
+                <div className="w-7 h-7 rounded-md bg-green-600 flex items-center justify-center shrink-0">
+                  <MessageSquare size={14} className="text-white" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold text-green-800">Send Template</div>
+                  <div className="text-[10px] text-green-600">WhatsApp template + media</div>
                 </div>
               </div>
             )}
@@ -2426,7 +2494,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                           No fields yet — click <strong>Add Field</strong> to define the payload
                         </div>
                       )}
-                       <div className="space-y-1.5">
+                      <div className="space-y-1.5">
                         {payloadFields.map((f, idx) => (
                           <div key={idx} className={`flex items-center gap-1 min-w-0 rounded p-0.5 transition-colors ${focusedVarIdx === idx ? 'bg-orange-50 ring-1 ring-orange-200' : ''}`}>
                             <input
@@ -2810,113 +2878,271 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
               })()}
 
 
-              {selectedNode.type === 'send_template' && (
+              {selectedNode.type === 'send_template' && (() => {
+                const d = selectedNode.data;
+                const tmpl = templates.find(t => t.name === d.template);
+                const varKeys = tmpl ? extractTemplatePlaceholders(tmpl.bodyText || '') : [];
+                const vars = d.variables || {};
+                const headerType = d.headerType || 'none';
 
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <label className="block text-sm font-medium text-slate-700">Select Template</label>
-                    {loadingTemplates && <Loader2 size={12} className="animate-spin text-slate-400" />}
-                  </div>
-                  <select
-                    className="w-full border border-slate-300 rounded-md p-2 text-sm"
-                    value={selectedNode.data.template || ''}
-                    onChange={(e) => {
-                      const tName = e.target.value;
-                      const found = templates.find((t) => t.name === tName);
-                      let btns = [];
-                      let content = '';
-                      let vars = {};
-                      let components = [];
-                      if (found) {
-                        content = found.bodyText || '';
-                        if (found.buttons && Array.isArray(found.buttons)) {
-                          btns = found.buttons.map((b) => b.text).filter(Boolean);
-                        }
-                        const keys = extractTemplatePlaceholders(found.bodyText || '');
-                        keys.forEach((k) => {
-                          const ex = found.examples && Object.prototype.hasOwnProperty.call(found.examples, k)
-                            ? found.examples[k]
-                            : '';
-                          vars[k] = ex || '';
+                // ── Helpers ────────────────────────────────────────
+                const setHeader = (fields) => updateNodeFields(selectedNode.id, fields);
+
+                // Compute upstream variables (same BFS as XOLOX panel)
+                const upstreamVars = (() => {
+                  const result = [];
+                  const visited = new Set();
+                  const queue = [selectedNode.id];
+                  while (queue.length > 0) {
+                    const nid = queue.shift();
+                    if (visited.has(nid)) continue;
+                    visited.add(nid);
+                    edges.filter(e => e.target === nid).forEach(edge => {
+                      const src = nodes.find(n => n.id === edge.source);
+                      if (!src) return;
+                      if (src.type === 'new_contact') {
+                        const fm = src.data.fieldMapping || {};
+                        Object.values(fm).forEach(v => { if (v && !result.includes(`{{${v}}}`)) result.push(`{{${v}}}`); });
+                        ['name','phone','email','tags','source','contact_id'].forEach(def => {
+                          if (!result.includes(`{{${def}}}`)) result.push(`{{${def}}}`);
                         });
-                        components = buildTemplateComponentsPayload(found, vars);
+                      } else if (src.type === 'incoming_webhook') {
+                        const pm = src.data.paramMapping || {};
+                        Object.values(pm).forEach(v => { if (v && !result.includes(`{{${v}}}`)) result.push(`{{${v}}}`); });
                       }
-                      if (!selectedNode) return;
-                      setNodes((nds) =>
-                        nds.map((node) => {
-                          if (node.id === selectedNode.id) {
-                            const newData = {
-                              ...node.data,
-                              template: tName,
-                              buttons: btns,
-                              content,
-                              variables: vars,
-                              components,
-                              languageCode: found ? (found.language || 'en_US') : 'en_US',
-                            };
+                      queue.push(edge.source);
+                    });
+                  }
+                  if (result.length === 0) {
+                    ['{{name}}','{{phone}}','{{email}}','{{tags}}','{{source}}','{{contact_id}}'].forEach(v => result.push(v));
+                  }
+                  return result;
+                })();
+
+                return (
+                  <div className="space-y-4">
+
+                    {/* ① Template picker */}
+                    <div>
+                      <div className="flex justify-between items-center mb-1">
+                        <label className="text-sm font-medium text-slate-700">Select Template</label>
+                        {loadingTemplates && <Loader2 size={12} className="animate-spin text-slate-400" />}
+                      </div>
+                      <select
+                        className="w-full border border-slate-300 rounded-md px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
+                        value={d.template || ''}
+                        onChange={(e) => {
+                          const tName = e.target.value;
+                          const found = templates.find(t => t.name === tName);
+                          let btns = [], content = '', nextVars = {}, components = [];
+                          if (found) {
+                            content = found.bodyText || '';
+                            btns = (found.buttons || []).map(b => b.text).filter(Boolean);
+                            extractTemplatePlaceholders(found.bodyText || '').forEach(k => {
+                              nextVars[k] = (found.examples && found.examples[k]) || '';
+                            });
+                            components = buildTemplateComponentsPayload(found, nextVars);
+                          }
+                          if (!selectedNode) return;
+                          setNodes(nds => nds.map(node => {
+                            if (node.id !== selectedNode.id) return node;
+                            const newData = { ...node.data, template: tName, buttons: btns, content, variables: nextVars, components, languageCode: found ? (found.language || 'en_US') : 'en_US' };
                             setSelectedNode({ ...node, data: newData });
                             return { ...node, data: newData };
-                          }
-                          return node;
-                        })
-                      );
-                    }}
-                  >
-                    <option value="">-- Select Template --</option>
-                    {templates.length > 0 ? (
-                      templates.map(t => (
-                        <option key={t.id} value={t.name}>
-                          {t.name} ({t.language})
-                        </option>
-                      ))
-                    ) : (
-                      <option disabled>No approved templates found</option>
-                    )}
-                  </select>
+                          }));
+                        }}
+                      >
+                        <option value="">-- Select Template --</option>
+                        {templates.length > 0
+                          ? templates.map(t => <option key={t.id} value={t.name}>{t.name} ({t.language})</option>)
+                          : <option disabled>No approved templates found</option>}
+                      </select>
+                      {tmpl && tmpl.bodyText && (
+                        <div className="mt-1.5 text-[11px] bg-green-50 border border-green-100 rounded px-2 py-1.5 text-green-800 leading-relaxed whitespace-pre-wrap">
+                          {tmpl.bodyText}
+                        </div>
+                      )}
+                    </div>
 
-                  <div className="pt-2">
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Variables</label>
-                    {(() => {
-                      const tmpl = templates.find((t) => t.name === selectedNode.data.template);
-                      const keys = tmpl ? extractTemplatePlaceholders(tmpl.bodyText || '') : [];
-                      const vars = selectedNode.data.variables || {};
-                      if (!tmpl || keys.length === 0) {
-                        return (
-                          <div className="text-xs text-slate-500">
-                            No variables for this template.
-                          </div>
-                        );
-                      }
-                      return (
-                        <div className="space-y-2">
-                          {keys.map((k) => (
-                            <div key={k} className="space-y-1">
-                              <div className="text-xs text-slate-500 font-mono">
-                                {'{{' + k + '}}'}
+                    {/* ② Media Header (only when template has a header component) */}
+                    <div className="border border-slate-200 rounded-lg overflow-hidden">
+                      <div className="bg-slate-50 px-3 py-2 border-b border-slate-200 flex items-center gap-2">
+                        <Image size={13} className="text-slate-500" />
+                        <span className="text-xs font-semibold text-slate-600">Media Header</span>
+                        <span className="ml-auto text-[10px] text-slate-400">optional</span>
+                      </div>
+                      <div className="p-3 space-y-2">
+                        {/* Type selector */}
+                        <div className="flex gap-1.5">
+                          {[
+                            { key: 'none',     label: 'None',     icon: null },
+                            { key: 'image',    label: 'Image',    icon: Image },
+                            { key: 'video',    label: 'Video',    icon: Video },
+                            { key: 'document', label: 'Document', icon: FileIcon },
+                          ].map(({ key, label, icon: Icon }) => (
+                            <button
+                              key={key}
+                              type="button"
+                              onClick={() => setHeader({ headerType: key, headerUrl: '', headerFileName: '' })}
+                              className={`flex-1 flex flex-col items-center gap-0.5 py-1.5 rounded border text-[10px] font-medium transition-colors ${
+                                headerType === key
+                                  ? 'bg-green-50 border-green-400 text-green-700'
+                                  : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
+                              }`}
+                            >
+                              {Icon && <Icon size={13} />}
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+
+                        {headerType !== 'none' && (
+                          <div className="space-y-2 pt-1">
+                            {/* Current preview */}
+                            {d.headerUrl && (
+                              <div className="flex items-center gap-2 bg-slate-50 rounded px-2 py-1.5 border border-slate-200">
+                                {headerType === 'image' && (
+                                  <img src={d.headerUrl} alt="header" className="w-10 h-10 object-cover rounded" onError={e => { e.target.style.display='none'; }} />
+                                )}
+                                {headerType === 'video' && <Video size={20} className="text-slate-400 shrink-0" />}
+                                {headerType === 'document' && <FileIcon size={20} className="text-slate-400 shrink-0" />}
+                                <span className="text-[11px] text-slate-600 truncate flex-1 min-w-0">{d.headerFileName || d.headerUrl}</span>
+                                <button type="button" onClick={() => setHeader({ headerUrl: '', headerFileName: '' })} className="text-red-400 hover:text-red-600 shrink-0">
+                                  <X size={13} />
+                                </button>
                               </div>
+                            )}
+
+                            {/* Actions: Upload or Gallery */}
+                            <div className="flex gap-1.5">
+                              <label className="flex-1 flex items-center justify-center gap-1.5 border border-dashed border-slate-300 rounded px-2 py-2 text-[11px] text-slate-500 hover:border-green-400 hover:text-green-600 cursor-pointer transition-colors">
+                                <Upload size={12} />
+                                Upload file
+                                <input
+                                  type="file"
+                                  className="sr-only"
+                                  accept={
+                                    headerType === 'image' ? 'image/*' :
+                                    headerType === 'video' ? 'video/*' :
+                                    'application/pdf,.doc,.docx,.xlsx,.pptx'
+                                  }
+                                  onChange={async (e) => {
+                                    const file = e.target.files && e.target.files[0];
+                                    if (!file) return;
+                                    try {
+                                      const formData = new FormData();
+                                      formData.append('file', file);
+                                      const res = await uploadFlowMedia(formData);
+                                      const url = res.url || res.link || res.data?.url || '';
+                                      setHeader({ headerUrl: url, headerFileName: file.name });
+                                    } catch (err) {
+                                      console.error('Upload failed', err);
+                                      alert('Upload failed: ' + err.message);
+                                    }
+                                  }}
+                                />
+                              </label>
+                              <button
+                                type="button"
+                                onClick={openGallery}
+                                className="flex-1 flex items-center justify-center gap-1.5 border border-dashed border-slate-300 rounded px-2 py-2 text-[11px] text-slate-500 hover:border-green-400 hover:text-green-600 transition-colors"
+                              >
+                                <Image size={12} />
+                                From gallery
+                              </button>
+                            </div>
+
+                            {/* Manual URL input */}
+                            <input
+                              type="url"
+                              className="w-full border border-slate-300 rounded px-2 py-1.5 text-[11px] font-mono focus:outline-none focus:ring-1 focus:ring-green-300"
+                              placeholder="or paste a direct URL…"
+                              value={d.headerUrl || ''}
+                              onChange={e => setHeader({ headerUrl: e.target.value, headerFileName: '' })}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* ③ Template variables with upstream chips */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-sm font-medium text-slate-700">Variables</label>
+                        {templateFocusedVarKey && (
+                          <span className="text-[10px] text-green-600 font-medium">→ inserting into {`{{${templateFocusedVarKey}}}`}</span>
+                        )}
+                      </div>
+
+                      {!tmpl || varKeys.length === 0 ? (
+                        <p className="text-xs text-slate-400 italic">
+                          {d.template ? 'This template has no variables.' : 'Select a template above.'}
+                        </p>
+                      ) : (
+                        <div className="space-y-2">
+                          {varKeys.map(k => (
+                            <div key={k} className={`rounded p-1 transition-colors ${templateFocusedVarKey === k ? 'bg-green-50 ring-1 ring-green-200' : ''}`}>
+                              <div className="text-[11px] text-slate-500 font-mono mb-0.5">{'{{' + k + '}}'}</div>
                               <input
-                                className="w-full border border-slate-300 rounded-md p-2 text-sm"
-                                placeholder={`Value for ${k}`}
+                                className={`w-full border rounded px-2 py-1.5 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-green-300 transition-colors ${
+                                  templateFocusedVarKey === k ? 'border-green-400 bg-green-50' : 'border-slate-300'
+                                }`}
+                                placeholder={`Value or {{variable}}`}
                                 value={vars[k] || ''}
                                 onChange={(e) => {
-                                  const value = e.target.value;
-                                  const nextVars = { ...vars, [k]: value };
-                                  const meta = templates.find((t) => t.name === selectedNode.data.template);
-                                  const nextComps = buildTemplateComponentsPayload(meta, nextVars);
-                                  updateNodeFields(selectedNode.id, {
-                                    variables: nextVars,
-                                    components: nextComps,
-                                  });
+                                  const nextVars = { ...vars, [k]: e.target.value };
+                                  const nextComps = buildTemplateComponentsPayload(tmpl, nextVars);
+                                  updateNodeFields(selectedNode.id, { variables: nextVars, components: nextComps });
                                 }}
+                                onFocus={() => setTemplateFocusedVarKey(k)}
+                                onBlur={() => setTimeout(() => setTemplateFocusedVarKey(null), 200)}
                               />
                             </div>
                           ))}
                         </div>
-                      );
-                    })()}
+                      )}
+
+                      {/* Upstream variable chips */}
+                      <div className="mt-2 bg-slate-50 border border-slate-200 rounded-lg p-2.5">
+                        <div className="text-[11px] font-semibold text-slate-600 mb-1">
+                          Variables from upstream nodes
+                          {templateFocusedVarKey && (
+                            <span className="ml-1 text-[10px] font-normal text-green-500">click chip to insert into focused field</span>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {upstreamVars.map(v => (
+                            <code
+                              key={v}
+                              className={`text-[10px] rounded px-1.5 py-0.5 cursor-pointer font-mono select-none transition-colors ${
+                                templateFocusedVarKey
+                                  ? 'bg-green-50 border border-green-300 text-green-700 hover:bg-green-100'
+                                  : 'bg-white border border-slate-200 text-slate-500 hover:border-green-300 hover:text-green-700'
+                              }`}
+                              title={templateFocusedVarKey ? `Insert ${v} into {{${templateFocusedVarKey}}}` : 'Focus a variable input first'}
+                              onClick={() => {
+                                if (templateFocusedVarKey) {
+                                  const nextVars = { ...vars, [templateFocusedVarKey]: v };
+                                  const nextComps = buildTemplateComponentsPayload(tmpl, nextVars);
+                                  updateNodeFields(selectedNode.id, { variables: nextVars, components: nextComps });
+                                } else {
+                                  navigator.clipboard?.writeText(v);
+                                }
+                              }}
+                            >{v}</code>
+                          ))}
+                        </div>
+                        <p className="text-[9px] text-slate-400 mt-1">
+                          {templateFocusedVarKey
+                            ? `Click a chip to fill in {{${templateFocusedVarKey}}}`
+                            : 'Click a variable input above, then click a chip to fill it'}
+                        </p>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
+
 
               {selectedNode.type === 'delay' && (
                 <div className="space-y-3">
@@ -3135,6 +3361,66 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
             </div>
           </div>
         )}
+
+      {/* ── Gallery Picker Modal ────────────────────────────────────── */}
+      {showGalleryModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setShowGalleryModal(false)}>
+          <div className="bg-white rounded-xl shadow-2xl w-[600px] max-h-[75vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
+              <h3 className="font-semibold text-slate-800">Select from Media Library</h3>
+              <button type="button" onClick={() => setShowGalleryModal(false)} className="text-slate-400 hover:text-slate-700">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              {galleryLoading ? (
+                <div className="flex items-center justify-center h-40">
+                  <Loader2 size={24} className="animate-spin text-slate-400" />
+                </div>
+              ) : galleryItems.length === 0 ? (
+                <p className="text-center text-slate-400 text-sm py-12">No media files found in library.</p>
+              ) : (
+                <div className="grid grid-cols-4 gap-3">
+                  {galleryItems.map((item, i) => {
+                    const url = item.url || item.media_url || item.link || '';
+                    const name = item.name || item.original_name || item.filename || '';
+                    const type = (item.type || item.media_type || '').toLowerCase();
+                    const isImage = type.includes('image') || /\.(png|jpg|jpeg|gif|webp)$/i.test(url);
+                    const isVideo = type.includes('video') || /\.(mp4|mov|webm)$/i.test(url);
+                    return (
+                      <button
+                        key={i}
+                        type="button"
+                        title={name}
+                        className="group relative aspect-square border-2 border-transparent rounded-lg overflow-hidden hover:border-green-400 transition-all bg-slate-100"
+                        onClick={() => {
+                          updateNodeFields(selectedNode?.id, { headerUrl: url, headerFileName: name, headerType: isVideo ? 'video' : isImage ? 'image' : 'document' });
+                          setShowGalleryModal(false);
+                        }}
+                      >
+                        {isImage ? (
+                          <img src={url} alt={name} className="w-full h-full object-cover" />
+                        ) : isVideo ? (
+                          <div className="w-full h-full flex flex-col items-center justify-center gap-1 text-slate-500">
+                            <Video size={24} />
+                            <span className="text-[9px] truncate max-w-full px-1">{name}</span>
+                          </div>
+                        ) : (
+                          <div className="w-full h-full flex flex-col items-center justify-center gap-1 text-slate-500">
+                            <FileIcon size={24} />
+                            <span className="text-[9px] truncate max-w-full px-1">{name}</span>
+                          </div>
+                        )}
+                        <div className="absolute inset-0 bg-green-500/0 group-hover:bg-green-500/10 transition-colors" />
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       </div>
     </div>
   );
