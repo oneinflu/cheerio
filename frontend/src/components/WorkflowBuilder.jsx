@@ -250,25 +250,30 @@ const PaymentRequestNode = ({ data, selected }) => {
   const type = data.requestType || 'course';
   return (
     <NodeWrapper selected={selected} title="Payment Request" icon={CreditCard} colorClass="bg-indigo-600">
-      <div className="space-y-1">
-        <div className="flex justify-between items-center text-[10px]">
-          <span className="font-bold text-slate-600 uppercase tracking-tight">{type === 'webinar' ? 'WEBINAR' : 'COURSE'}</span>
-          <span className="text-indigo-600 font-bold">₹{data.amount || '0'}</span>
+      <div className="bg-slate-50 -mx-3 -mb-3 p-3 rounded-b-xl border-t border-slate-100">
+        <div className="text-[9px] font-black text-indigo-500 uppercase tracking-tighter mb-1 border-b border-indigo-100 pb-1">
+          {data.headerText || 'Secure Payment'}
         </div>
-        <div className="text-[11px] font-medium text-slate-800 line-clamp-1">
-          {type === 'webinar' ? (data.webinarName || 'No Webinar Selected') : (data.course || 'No Course Selected')}
-        </div>
-        {type === 'course' && data.papers && data.papers.length > 0 && (
-          <div className="flex flex-wrap gap-1 mt-1">
-            {data.papers.map(p => (
-              <span key={p} className="text-[8px] px-1 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded leading-none">
-                {p}
-              </span>
-            ))}
+        <div className="space-y-1 py-1">
+          <div className="flex justify-between items-center">
+            <span className="text-[10px] font-bold text-slate-700 truncate mr-2">
+              {type === 'webinar' ? (data.webinarName || 'Webinar') : (data.course || 'Course')}
+            </span>
+            <span className="text-[10px] font-black text-emerald-600">₹{data.amount || '0'}</span>
           </div>
-        )}
-        <div className="text-[9px] text-slate-400 italic mt-1 line-clamp-1 border-t border-slate-50 pt-1">
-          {data.paymentSummary || 'No summary...'}
+          {type === 'course' && data.papers && data.papers.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {data.papers.map(p => (
+                <span key={p} className="text-[7px] font-bold bg-white border border-slate-200 text-slate-500 px-1 rounded">
+                  {p}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="mt-2 border-t border-slate-200 pt-2 flex items-center justify-center gap-1.5 text-indigo-600 font-bold text-[10px] bg-white rounded-lg py-1.5 shadow-sm border border-slate-100">
+          <Link size={10} />
+          {data.buttonText || 'Pay Now'}
         </div>
       </div>
       <Handle type="target" position={Position.Top} />
@@ -1467,7 +1472,10 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
         papers: ['FAR'],
         packageName: 'Full Course',
         validityTerms: '12 Months',
-        paymentSummary: 'Standard course enrollment fee'
+        paymentSummary: 'Standard course enrollment fee',
+        headerText: '💳 Secure Payment Request',
+        buttonText: 'Pay Now',
+        footerText: 'Official Razorpay link'
       },
     };
     setNodes(nds => [...nds, node]);
@@ -3940,44 +3948,131 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                       />
                     </div>
 
-                    <div className="pt-4 border-t border-slate-100">
+                    <div className="space-y-4 pt-4 border-t border-slate-100">
+                      <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest bg-slate-100 px-2 py-1 rounded w-fit">Message Customization</h4>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase">Interactive Header</label>
+                        <input
+                          type="text"
+                          className="w-full text-sm p-2 border border-slate-300 rounded-lg"
+                          value={selectedNode.data.headerText || '💳 Secure Payment Request'}
+                          onChange={(e) => updateNodeData('headerText', e.target.value)}
+                          placeholder="Checkout Now..."
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-slate-500 uppercase">Button Label</label>
+                          <input
+                            type="text"
+                            className="w-full text-sm p-2 border border-slate-300 rounded-lg"
+                            value={selectedNode.data.buttonText || 'Pay Now'}
+                            onChange={(e) => updateNodeData('buttonText', e.target.value)}
+                            placeholder="e.g. Pay Now"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-slate-500 uppercase">Footer Note</label>
+                          <input
+                            type="text"
+                            className="w-full text-sm p-2 border border-slate-300 rounded-lg"
+                            value={selectedNode.data.footerText || 'Official Razorpay link'}
+                            onChange={(e) => updateNodeData('footerText', e.target.value)}
+                            placeholder="e.g. Valid for 24h"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="p-4 bg-slate-900 rounded-2xl border-4 border-slate-800 shadow-2xl mt-4 relative overflow-hidden group">
+                      <div className="absolute top-0 left-0 w-full h-1 bg-indigo-500"></div>
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase">WhatsApp Preview</span>
+                        <div className="flex gap-1">
+                          <div className="w-1.5 h-1.5 rounded-full bg-slate-700"></div>
+                          <div className="w-1.5 h-1.5 rounded-full bg-slate-700"></div>
+                        </div>
+                      </div>
+
+                      <div className="bg-[#e5ddd5] rounded-lg p-3 shadow-inner relative max-w-[240px] ml-1">
+                        <div className="text-[11px] font-bold text-slate-800 border-b border-white/50 pb-1.5 mb-2">
+                          {selectedNode.data.headerText || '💳 Secure Payment Request'}
+                        </div>
+                        <div className="text-[10px] text-slate-600 whitespace-pre-line leading-relaxed pb-2">
+                          {(selectedNode.data.requestType === 'course')
+                            ? `💳 *Payment Request*\n*Course:* ${selectedNode.data.course || 'Select...'}\n*Amount:* ₹${selectedNode.data.amount || '0'}`
+                            : `💳 *Payment Request*\n*Webinar:* ${selectedNode.data.webinarName || 'Enter...'}\n*Amount:* ₹${selectedNode.data.amount || '0'}`
+                          }
+                          {selectedNode.data.paymentSummary && `\n\n*Note:* ${selectedNode.data.paymentSummary}`}
+                        </div>
+                        <div className="text-[8px] text-slate-400 mt-1 uppercase italic tracking-tighter">
+                          {selectedNode.data.footerText || 'Official Razorpay link'}
+                        </div>
+
+                        <div className="mt-3 bg-white hover:bg-slate-50 rounded-md py-2 flex items-center justify-center gap-2 text-[#00a884] font-bold text-[11px] shadow-sm transition-colors cursor-pointer border border-slate-100">
+                          <Link size={12} />
+                          {selectedNode.data.buttonText || 'Pay Now'}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 space-y-3">
                       <Button
                         variant="secondary"
-                        className="w-full bg-indigo-600 text-white hover:bg-indigo-700 flex items-center justify-center gap-2"
+                        className="w-full bg-slate-800 text-white border border-slate-700 hover:bg-slate-900 flex items-center justify-center gap-2 group transition-all shadow-lg py-2.5"
                         onClick={async () => {
                           const amt = selectedNode.data.amount;
                           if (!amt || isNaN(amt)) return alert('Please enter a valid amount');
 
-                          const node = selectedNode;
-                          const originalLabel = 'Generate Live Link';
-
                           try {
-                            // Update UI to show loading
-                            console.log('Generating Razorpay link for test...');
                             const result = await createPaymentLink({
                               amount: parseFloat(amt),
-                              description: (node.data.requestType === 'course') ? `Course: ${node.data.course}` : `Webinar: ${node.data.webinarName}`,
-                              contact: '9123456789', // test contact
+                              description: (selectedNode.data.requestType === 'course') ? `Course: ${selectedNode.data.course}` : `Webinar: ${selectedNode.data.webinarName}`,
+                              contact: '9123456789',
                               email: 'test@example.com',
-                              notes: { source: 'workflow_builder_test', node_id: node.id }
+                              notes: { source: 'preview', node_id: selectedNode.id }
                             });
 
                             if (result && result.short_url) {
-                              window.open(result.short_url, '_blank');
-                            } else {
-                              throw new Error('No link returned from Razorpay');
+                              updateNodeData('generatedLink', result.short_url);
+                              navigator.clipboard.writeText(result.short_url);
                             }
                           } catch (err) {
-                            alert(`Failed to create link: ${err.message}`);
+                            alert(`Error: ${err.message}`);
                           }
                         }}
                       >
-                        <Link size={14} />
-                        Generate & Preview Link
+                        <RefreshCw size={14} className="group-hover:rotate-180 transition-transform duration-500" />
+                        Generate Live Test Link
                       </Button>
-                      <div className="mt-2 text-[9px] text-center text-slate-400">
-                        Uses Razorpay keys from environment to create a real payment link.
-                      </div>
+
+                      {selectedNode.data.generatedLink && (
+                        <div className="space-y-1 animate-in fade-in slide-in-from-top-2 duration-300">
+                          <label className="text-[10px] font-bold text-emerald-600 uppercase flex items-center gap-1">
+                            <Check size={10} /> Live Checkout URL
+                          </label>
+                          <div className="flex gap-1">
+                            <input
+                              readOnly
+                              type="text"
+                              className="flex-1 text-[10px] bg-emerald-50 border border-emerald-200 text-emerald-700 p-2 rounded-lg font-mono focus:outline-none"
+                              value={selectedNode.data.generatedLink}
+                            />
+                            <button
+                              onClick={() => {
+                                navigator.clipboard.writeText(selectedNode.data.generatedLink);
+                                alert('URL Copied!');
+                              }}
+                              className="p-2 bg-emerald-100 text-emerald-600 rounded-lg hover:bg-emerald-200 border border-emerald-200"
+                            >
+                              <Copy size={12} />
+                            </button>
+                          </div>
+                          <p className="text-[9px] text-slate-400">Generated successfully. Copied to clipboard.</p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
