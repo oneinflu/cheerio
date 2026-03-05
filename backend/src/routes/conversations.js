@@ -21,7 +21,7 @@ const axios = require('axios');
  * GET /api/conversations/:conversationId/contact
  * Returns contact details (name, number, course)
  */
-router.get('/:conversationId/contact', auth.requireRole('admin','agent','supervisor'), async (req, res, next) => {
+router.get('/:conversationId/contact', auth.requireRole('admin', 'super_admin', 'quality_manager', 'agent', 'supervisor'), async (req, res, next) => {
   try {
     const { conversationId } = req.params;
     const result = await db.query(
@@ -53,11 +53,11 @@ router.get('/:conversationId/contact', auth.requireRole('admin','agent','supervi
  * PUT /api/conversations/:conversationId/contact
  * Updates contact details (name, course)
  */
-router.put('/:conversationId/contact', auth.requireRole('admin','agent','supervisor'), async (req, res, next) => {
+router.put('/:conversationId/contact', auth.requireRole('admin', 'super_admin', 'quality_manager', 'agent', 'supervisor'), async (req, res, next) => {
   try {
     const { conversationId } = req.params;
     const { name, course } = req.body;
-    
+
     const cRes = await db.query('SELECT contact_id, lead_id FROM conversations WHERE id = $1', [conversationId]);
     if (cRes.rows.length === 0) {
       return res.status(404).json({ error: 'Conversation not found' });
@@ -79,65 +79,65 @@ router.put('/:conversationId/contact', auth.requireRole('admin','agent','supervi
     // It seems the user might be updating a DIFFERENT conversation or the frontend is passing the wrong ID?
     // OR, maybe the leadId is in the profile but not the column?
     // But inbox query uses column.
-    
+
     // However, if leadId is missing, we can try to "find" it via webhook or passed in body?
     // User input: "pass the leadId and courseName na why not passing"
     // This suggests we should accept leadId in the request body if available.
-    
+
     let effectiveLeadId = leadId;
     if (!effectiveLeadId && req.body.leadId) {
-        effectiveLeadId = req.body.leadId;
-        // Optionally update the conversation with this leadId?
-        // await db.query('UPDATE conversations SET lead_id = $1 WHERE id = $2', [effectiveLeadId, conversationId]);
+      effectiveLeadId = req.body.leadId;
+      // Optionally update the conversation with this leadId?
+      // await db.query('UPDATE conversations SET lead_id = $1 WHERE id = $2', [effectiveLeadId, conversationId]);
     }
 
     if (!effectiveLeadId) {
-         // Fallback: Check contact profile for leadId
-         const ctRes = await db.query('SELECT profile FROM contacts WHERE id = $1', [contactId]);
-         if (ctRes.rows.length > 0 && ctRes.rows[0].profile && ctRes.rows[0].profile.leadId) {
-             effectiveLeadId = ctRes.rows[0].profile.leadId;
-         }
+      // Fallback: Check contact profile for leadId
+      const ctRes = await db.query('SELECT profile FROM contacts WHERE id = $1', [contactId]);
+      if (ctRes.rows.length > 0 && ctRes.rows[0].profile && ctRes.rows[0].profile.leadId) {
+        effectiveLeadId = ctRes.rows[0].profile.leadId;
+      }
     }
 
     if (!effectiveLeadId) {
-         const ctRes = await db.query('SELECT external_id, display_name FROM contacts WHERE id = $1', [contactId]);
-         if (ctRes.rows.length > 0) {
-             let mobile = ctRes.rows[0].external_id;
-             let displayName = ctRes.rows[0].display_name;
-             if (mobile.startsWith('91') && mobile.length > 10) mobile = mobile.slice(2);
-             
-             console.log(`[ContactUpdate] lead_id missing. Attempting to fetch via webhook for mobile: ${mobile}`);
-             
-             try {
-                 // Call the webhook endpoint to get/create lead
-                 const res = await axios.post('https://api.starforze.com/api/webhook/whatsapp-lead', {
-                    mobile: mobile,
-                    name: displayName || 'Unknown',
-                    course: '' // Just fetching
-                 });
-                 
-                 if (res.data && res.data.data && res.data.data.lead && res.data.data.lead._id) {
-                     effectiveLeadId = res.data.data.lead._id;
-                     console.log(`[ContactUpdate] Successfully fetched lead_id: ${effectiveLeadId}`);
-                     
-                     // Persist the fetched leadId immediately
-                     await db.query('UPDATE conversations SET lead_id = $1 WHERE id = $2', [effectiveLeadId, conversationId]);
-                     await db.query(`
+      const ctRes = await db.query('SELECT external_id, display_name FROM contacts WHERE id = $1', [contactId]);
+      if (ctRes.rows.length > 0) {
+        let mobile = ctRes.rows[0].external_id;
+        let displayName = ctRes.rows[0].display_name;
+        if (mobile.startsWith('91') && mobile.length > 10) mobile = mobile.slice(2);
+
+        console.log(`[ContactUpdate] lead_id missing. Attempting to fetch via webhook for mobile: ${mobile}`);
+
+        try {
+          // Call the webhook endpoint to get/create lead
+          const res = await axios.post('https://api.starforze.com/api/webhook/whatsapp-lead', {
+            mobile: mobile,
+            name: displayName || 'Unknown',
+            course: '' // Just fetching
+          });
+
+          if (res.data && res.data.data && res.data.data.lead && res.data.data.lead._id) {
+            effectiveLeadId = res.data.data.lead._id;
+            console.log(`[ContactUpdate] Successfully fetched lead_id: ${effectiveLeadId}`);
+
+            // Persist the fetched leadId immediately
+            await db.query('UPDATE conversations SET lead_id = $1 WHERE id = $2', [effectiveLeadId, conversationId]);
+            await db.query(`
                         UPDATE contacts 
                         SET profile = jsonb_set(COALESCE(profile, '{}'), '{leadId}', to_jsonb($1::text), true)
                         WHERE id = $2
                      `, [effectiveLeadId, contactId]);
-                 } else {
-                     console.warn(`[ContactUpdate] Webhook response did not contain lead._id`);
-                 }
-             } catch (fetchErr) {
-                 console.error(`[ContactUpdate] Failed to fetch lead via webhook:`, fetchErr.message);
-             }
-         }
+          } else {
+            console.warn(`[ContactUpdate] Webhook response did not contain lead._id`);
+          }
+        } catch (fetchErr) {
+          console.error(`[ContactUpdate] Failed to fetch lead via webhook:`, fetchErr.message);
+        }
+      }
     }
 
     if (!effectiveLeadId) {
-        console.warn(`[ContactUpdate] Warning: No lead_id found even after fallback fetch. External sync will fail.`);
+      console.warn(`[ContactUpdate] Warning: No lead_id found even after fallback fetch. External sync will fail.`);
     }
 
     await db.query(
@@ -149,82 +149,82 @@ router.put('/:conversationId/contact', auth.requireRole('admin','agent','supervi
     );
 
     if (course) {
-       if (effectiveLeadId) {
-           console.log(`[ContactUpdate] Syncing course '${course}' to Starforze Lead ${effectiveLeadId}...`);
-           try {
-             // Retrieve token if available (using a global or fetched token)
-             // Since we don't have the user's external token stored, we might need a system token or API key.
-             // The error "Authentication required" suggests we need a Bearer token.
-             // We can check if 'req.headers.authorization' is passed from frontend (which has the user's token).
-             
-             const headers = {};
-             // Pass through the user's token from the frontend request if present
-             if (req.headers.authorization) {
-                 headers['Authorization'] = req.headers.authorization;
-             } else if (process.env.STARFORZE_API_KEY) {
-                 // Fallback to system key if available
-                 headers['Authorization'] = `Bearer ${process.env.STARFORZE_API_KEY}`;
-             }
+      if (effectiveLeadId) {
+        console.log(`[ContactUpdate] Syncing course '${course}' to Starforze Lead ${effectiveLeadId}...`);
+        try {
+          // Retrieve token if available (using a global or fetched token)
+          // Since we don't have the user's external token stored, we might need a system token or API key.
+          // The error "Authentication required" suggests we need a Bearer token.
+          // We can check if 'req.headers.authorization' is passed from frontend (which has the user's token).
 
-             // The user reported "Cannot POST /api/leads/:id/course", implying 404 or method not allowed.
-             // Usually updates to a resource use PUT.
-             // Let's try PUT instead of POST for the course update endpoint.
-             // Reverting to POST as user says "Cannot PUT /api/leads/.../course" which means PUT is also wrong.
-             // Maybe the endpoint is wrong?
-             // Let's try PUT /api/leads/:id instead of /course suffix, passing course in body.
-             // Common REST pattern: PUT /resource/:id { field: value }
-             
-             console.log(`[ContactUpdate] Trying PATCH /api/leads/${effectiveLeadId} with courseName...`);
-             const resp = await axios.patch(`https://api.starforze.com/api/leads/${effectiveLeadId}`, {
-               courseName: course
-             }, { headers });
-             
-             console.log(`[ContactUpdate] Sync success. Response status: ${resp.status}`);
-             
-             // Update lead_id in conversation if it was missing and now we used one
-             if (!leadId) {
-                 await db.query('UPDATE conversations SET lead_id = $1 WHERE id = $2', [effectiveLeadId, conversationId]);
-             }
+          const headers = {};
+          // Pass through the user's token from the frontend request if present
+          if (req.headers.authorization) {
+            headers['Authorization'] = req.headers.authorization;
+          } else if (process.env.STARFORZE_API_KEY) {
+            // Fallback to system key if available
+            headers['Authorization'] = `Bearer ${process.env.STARFORZE_API_KEY}`;
+          }
 
-             const leadData = resp.data && resp.data.data ? resp.data.data : null;
-             const assignedTo = leadData && leadData.assignedTo ? leadData.assignedTo : null;
-             const io = require('../realtime/io').getIO();
+          // The user reported "Cannot POST /api/leads/:id/course", implying 404 or method not allowed.
+          // Usually updates to a resource use PUT.
+          // Let's try PUT instead of POST for the course update endpoint.
+          // Reverting to POST as user says "Cannot PUT /api/leads/.../course" which means PUT is also wrong.
+          // Maybe the endpoint is wrong?
+          // Let's try PUT /api/leads/:id instead of /course suffix, passing course in body.
+          // Common REST pattern: PUT /resource/:id { field: value }
 
-             if (assignedTo && (assignedTo._id || assignedTo.id || assignedTo.email)) {
-               const userId = assignedTo._id || assignedTo.id;
-               const teamId = leadData.teamId || null;
- 
-               if (userId) {
-                 const checkRes = await db.query(
-                   'SELECT 1 FROM conversation_assignments WHERE conversation_id = $1 AND released_at IS NULL',
-                   [conversationId]
-                 );
- 
-                 if (checkRes.rowCount === 0) {
-                   await db.query(
-                     `INSERT INTO conversation_assignments (id, conversation_id, team_id, assignee_user_id, claimed_at)
+          console.log(`[ContactUpdate] Trying PATCH /api/leads/${effectiveLeadId} with courseName...`);
+          const resp = await axios.patch(`https://api.starforze.com/api/leads/${effectiveLeadId}`, {
+            courseName: course
+          }, { headers });
+
+          console.log(`[ContactUpdate] Sync success. Response status: ${resp.status}`);
+
+          // Update lead_id in conversation if it was missing and now we used one
+          if (!leadId) {
+            await db.query('UPDATE conversations SET lead_id = $1 WHERE id = $2', [effectiveLeadId, conversationId]);
+          }
+
+          const leadData = resp.data && resp.data.data ? resp.data.data : null;
+          const assignedTo = leadData && leadData.assignedTo ? leadData.assignedTo : null;
+          const io = require('../realtime/io').getIO();
+
+          if (assignedTo && (assignedTo._id || assignedTo.id || assignedTo.email)) {
+            const userId = assignedTo._id || assignedTo.id;
+            const teamId = leadData.teamId || null;
+
+            if (userId) {
+              const checkRes = await db.query(
+                'SELECT 1 FROM conversation_assignments WHERE conversation_id = $1 AND released_at IS NULL',
+                [conversationId]
+              );
+
+              if (checkRes.rowCount === 0) {
+                await db.query(
+                  `INSERT INTO conversation_assignments (id, conversation_id, team_id, assignee_user_id, claimed_at)
                       VALUES (gen_random_uuid(), $1, $2, $3, NOW())`,
-                     [conversationId, teamId, userId]
-                   );
-                   console.log(`[ContactUpdate] Auto-assigned conversation to ${userId}`);
- 
-                   if (io) {
-                     io.to(`conversation:${conversationId}`).emit('assignment:claimed', { conversationId, userId });
-                     io.emit('assignment:claimed', { conversationId, userId });
-                   }
-                 }
-               }
-             }
-           } catch (e) {
-             console.error('[ContactUpdate] Failed to sync course/assignment with Starforze:', e.message);
-             if (e.response) {
-                 console.error('[ContactUpdate] Response data:', e.response.data);
-             }
-           }
-       } else {
-           console.warn('[ContactUpdate] Skipping external sync: lead_id is missing.');
-       }
-     }
+                  [conversationId, teamId, userId]
+                );
+                console.log(`[ContactUpdate] Auto-assigned conversation to ${userId}`);
+
+                if (io) {
+                  io.to(`conversation:${conversationId}`).emit('assignment:claimed', { conversationId, userId });
+                  io.emit('assignment:claimed', { conversationId, userId });
+                }
+              }
+            }
+          }
+        } catch (e) {
+          console.error('[ContactUpdate] Failed to sync course/assignment with Starforze:', e.message);
+          if (e.response) {
+            console.error('[ContactUpdate] Response data:', e.response.data);
+          }
+        }
+      } else {
+        console.warn('[ContactUpdate] Skipping external sync: lead_id is missing.');
+      }
+    }
 
     res.json({ success: true });
   } catch (err) {
@@ -241,7 +241,7 @@ router.put('/:conversationId/contact', auth.requireRole('admin','agent','supervi
  * - If already assigned to same user, returns idempotent success.
  * - If assigned to another user, returns 409.
  */
-router.post('/claim', auth.requireRole('admin','agent','supervisor'), async (req, res, next) => {
+router.post('/claim', auth.requireRole('admin', 'super_admin', 'quality_manager', 'agent', 'supervisor'), async (req, res, next) => {
   try {
     const { conversationId, teamId, userId } = req.body || {};
     if (!conversationId || !teamId) {
@@ -265,7 +265,7 @@ router.post('/claim', auth.requireRole('admin','agent','supervisor'), async (req
  * - Releases current active assignment (if any).
  * - Inserts new active assignment for provided user.
  */
-router.post('/reassign', auth.requireRole('admin'), async (req, res, next) => {
+router.post('/reassign', auth.requireRole('admin', 'super_admin', 'quality_manager'), async (req, res, next) => {
   try {
     const { conversationId, teamId, newAssigneeUserId } = req.body || {};
     if (!conversationId || !teamId || !newAssigneeUserId) {
@@ -281,7 +281,7 @@ router.post('/reassign', auth.requireRole('admin'), async (req, res, next) => {
   }
 });
 
-router.post('/release', auth.requireRole('admin','agent','supervisor'), async (req, res, next) => {
+router.post('/release', auth.requireRole('admin', 'super_admin', 'quality_manager', 'agent', 'supervisor'), async (req, res, next) => {
   try {
     const { conversationId } = req.body || {};
     if (!conversationId) {
@@ -297,11 +297,11 @@ router.post('/release', auth.requireRole('admin','agent','supervisor'), async (r
   }
 });
 
-router.post('/:conversationId/pin', auth.requireRole('admin','agent','supervisor'), async (req, res, next) => {
+router.post('/:conversationId/pin', auth.requireRole('admin', 'super_admin', 'quality_manager', 'agent', 'supervisor'), async (req, res, next) => {
   try {
     const { conversationId } = req.params;
     const userId = req.user.id;
-    
+
     const check = await db.query('SELECT 1 FROM pinned_conversations WHERE user_id = $1 AND conversation_id = $2', [userId, conversationId]);
     if (check.rowCount > 0) {
       await db.query('DELETE FROM pinned_conversations WHERE user_id = $1 AND conversation_id = $2', [userId, conversationId]);
@@ -315,18 +315,18 @@ router.post('/:conversationId/pin', auth.requireRole('admin','agent','supervisor
   }
 });
 
-router.post('/:conversationId/status', auth.requireRole('admin','agent','supervisor'), async (req, res, next) => {
+router.post('/:conversationId/status', auth.requireRole('admin', 'super_admin', 'quality_manager', 'agent', 'supervisor'), async (req, res, next) => {
   try {
     const { conversationId } = req.params;
     const { status } = req.body;
-    
+
     let dbStatus = status;
     if (status === 'resolved') dbStatus = 'closed';
-    
+
     if (!['open', 'closed', 'snoozed'].includes(dbStatus)) {
       return res.status(400).json({ error: 'Invalid status' });
     }
-    
+
     await db.query('UPDATE conversations SET status = $1 WHERE id = $2', [dbStatus, conversationId]);
     res.json({ success: true, status: dbStatus });
   } catch (err) {
@@ -334,7 +334,7 @@ router.post('/:conversationId/status', auth.requireRole('admin','agent','supervi
   }
 });
 
-router.post('/:conversationId/block', auth.requireRole('admin','agent','supervisor'), async (req, res, next) => {
+router.post('/:conversationId/block', auth.requireRole('admin', 'super_admin', 'quality_manager', 'agent', 'supervisor'), async (req, res, next) => {
   try {
     const { conversationId } = req.params;
     const conv = await db.query(
@@ -369,7 +369,7 @@ router.post('/:conversationId/block', auth.requireRole('admin','agent','supervis
   }
 });
 
-router.post('/:conversationId/unblock', auth.requireRole('admin','agent','supervisor'), async (req, res, next) => {
+router.post('/:conversationId/unblock', auth.requireRole('admin', 'super_admin', 'quality_manager', 'agent', 'supervisor'), async (req, res, next) => {
   try {
     const { conversationId } = req.params;
     const conv = await db.query(
@@ -399,7 +399,7 @@ router.post('/:conversationId/unblock', auth.requireRole('admin','agent','superv
   }
 });
 
-router.delete('/:conversationId', auth.requireRole('admin','agent','supervisor'), async (req, res, next) => {
+router.delete('/:conversationId', auth.requireRole('admin', 'super_admin', 'quality_manager', 'agent', 'supervisor'), async (req, res, next) => {
   try {
     const { conversationId } = req.params;
     if (!conversationId) {

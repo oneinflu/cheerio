@@ -4,7 +4,7 @@ const router = express.Router();
 const svc = require('../services/inbox');
 const auth = require('../middlewares/auth');
 
-router.get('/inbox', auth.requireRole('admin','agent','supervisor'), async (req, res, next) => {
+router.get('/inbox', auth.requireRole('admin', 'super_admin', 'quality_manager', 'agent', 'supervisor'), async (req, res, next) => {
   try {
     const teamId = (req.query && req.query.teamId) || (req.user.teamIds && req.user.teamIds[0]) || null;
     const filter = req.query.filter || 'open';
@@ -16,7 +16,7 @@ router.get('/inbox', auth.requireRole('admin','agent','supervisor'), async (req,
   }
 });
 
-router.get('/inbox/counts', auth.requireRole('admin','agent','supervisor'), async (req, res, next) => {
+router.get('/inbox/counts', auth.requireRole('admin', 'super_admin', 'quality_manager', 'agent', 'supervisor'), async (req, res, next) => {
   try {
     const teamId = (req.query && req.query.teamId) || (req.user.teamIds && req.user.teamIds[0]) || null;
     const counts = await svc.getInboxCounts(teamId, req.user.id);

@@ -25,7 +25,7 @@ function requireAuth(req, res, next) {
     try {
       const token = authHeader.split(' ')[1];
       let decoded;
-      
+
       try {
         // Try standard verification
         decoded = jwt.verify(token, JWT_SECRET);
@@ -41,11 +41,12 @@ function requireAuth(req, res, next) {
 
         // Normalize role
         if (typeof role === 'string') {
-            const r = role.toLowerCase();
-            if (r === 'super_admin' || r === 'superadmin') role = 'admin';
-            if (r === 'team_lead' || r === 'teamlead') role = 'supervisor';
+          const r = role.toLowerCase().replace(/[\s-]/g, '_');
+          if (r === 'super_admin' || r === 'superadmin') role = 'super_admin';
+          if (r === 'team_lead' || r === 'teamlead') role = 'supervisor';
+          if (r === 'quality_manager' || r === 'qualitymanager') role = 'quality_manager';
         }
-        
+
         // Handle teamIds
         let teamIds = decoded.team_ids || [];
         if (!teamIds.length && decoded.teamId) {
@@ -53,7 +54,7 @@ function requireAuth(req, res, next) {
         }
         // If still empty, maybe default to the dev teamId so they see data?
         if (!teamIds.length && process.env.NODE_ENV !== 'production') {
-           teamIds = ['b0eebc99-9c0b-4ef8-bb6d-6bb9bd380b22'];
+          teamIds = ['b0eebc99-9c0b-4ef8-bb6d-6bb9bd380b22'];
         }
 
         req.user = {
@@ -101,7 +102,11 @@ function requireRole(...roles) {
   };
 }
 
+// Roles that can see ALL conversations (not just their own)
+const PRIVILEGED_ROLES = new Set(['admin', 'super_admin', 'quality_manager']);
+
 module.exports = {
   requireAuth,
   requireRole,
+  PRIVILEGED_ROLES,
 };

@@ -5,7 +5,7 @@ const svc = require('../services/messages');
 const notesSvc = require('../services/staffNotes');
 const auth = require('../middlewares/auth');
 
-router.get('/conversations/:conversationId/messages', auth.requireRole('admin','agent','supervisor'), async (req, res, next) => {
+router.get('/conversations/:conversationId/messages', auth.requireRole('admin', 'super_admin', 'quality_manager', 'agent', 'supervisor'), async (req, res, next) => {
   try {
     const conversationId = req.params.conversationId;
     const messages = await svc.listMessages(conversationId);
@@ -15,7 +15,7 @@ router.get('/conversations/:conversationId/messages', auth.requireRole('admin','
   }
 });
 
-router.post('/conversations/:conversationId/read', auth.requireRole('admin','agent','supervisor'), async (req, res, next) => {
+router.post('/conversations/:conversationId/read', auth.requireRole('admin', 'super_admin', 'quality_manager', 'agent', 'supervisor'), async (req, res, next) => {
   try {
     const conversationId = req.params.conversationId;
     await svc.markAsRead(conversationId);
@@ -25,7 +25,7 @@ router.post('/conversations/:conversationId/read', auth.requireRole('admin','age
   }
 });
 
-router.get('/conversations/:conversationId/notes', auth.requireRole('admin','agent','supervisor'), async (req, res, next) => {
+router.get('/conversations/:conversationId/notes', auth.requireRole('admin', 'super_admin', 'quality_manager', 'agent', 'supervisor'), async (req, res, next) => {
   try {
     const conversationId = req.params.conversationId;
     const notes = await notesSvc.listNotes(conversationId, req.user.role);

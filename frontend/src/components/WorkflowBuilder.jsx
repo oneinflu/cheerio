@@ -257,6 +257,30 @@ const IncomingWebhookNode = ({ data, selected }) => {
   );
 };
 
+const NEW_CONTACT_FIELDS = [
+  { key: 'contact_name', label: 'Name', defaultVar: 'name' },
+  { key: 'contact_phone', label: 'Phone', defaultVar: 'phone' },
+  { key: 'contact_email', label: 'Email', defaultVar: 'email' },
+  { key: 'contact_tags', label: 'Tags', defaultVar: 'tags' },
+  { key: 'contact_source', label: 'Source', defaultVar: 'source' },
+  { key: 'contact_id', label: 'Contact ID', defaultVar: 'contact_id' },
+];
+
+const NewContactCreatedNode = ({ data, selected }) => {
+  const mappedCount = data.fieldMapping
+    ? Object.values(data.fieldMapping).filter(Boolean).length
+    : NEW_CONTACT_FIELDS.length;
+  return (
+    <NodeWrapper selected={selected} title="New Contact Created" icon={UserCheck} colorClass="bg-emerald-600">
+      <div className="text-xs text-slate-500 mb-1">Trigger: contact is created</div>
+      <div className="text-[11px] bg-emerald-50 border border-emerald-100 rounded px-2 py-1 text-emerald-700">
+        {mappedCount} field{mappedCount !== 1 ? 's' : ''} mapped
+      </div>
+      <Handle type="source" position={Position.Bottom} className="w-3 h-3 bg-slate-400" />
+    </NodeWrapper>
+  );
+};
+
 // ─── Proper component so hooks are called at top level (fixes Rules of Hooks) ──
 function WebhookNodeConfig({ node, workflowId, updateNodeFields }) {
   const baseUrl = window.location.origin;
@@ -437,6 +461,7 @@ const nodeTypes = {
   campaign_trigger: CampaignTriggerNode,
   campaign_condition: CampaignConditionNode,
   incoming_webhook: IncomingWebhookNode,
+  new_contact: NewContactCreatedNode,
 };
 
 // --- Helper Functions ---
@@ -993,6 +1018,25 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
     };
     setNodes(nds => [...nds, webhookNode]);
     setSelectedNode(webhookNode);
+  }, [setNodes]);
+
+  // Drop a new_contact trigger node with default field mapping pre-filled
+  const handleAddNewContactTrigger = useCallback(() => {
+    const nodeId = getId();
+    const defaultMapping = {};
+    NEW_CONTACT_FIELDS.forEach(f => { defaultMapping[f.key] = f.defaultVar; });
+    const newContactNode = {
+      id: nodeId,
+      type: 'new_contact',
+      position: { x: 0, y: 0 },
+      data: {
+        label: 'New Contact Created',
+        triggerType: 'new_contact_created',
+        fieldMapping: defaultMapping,
+      },
+    };
+    setNodes(nds => [...nds, newContactNode]);
+    setSelectedNode(newContactNode);
   }, [setNodes]);
 
   const updateNodeData = (key, value) => {
@@ -1573,6 +1617,21 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 </div>
               </div>
             )}
+            {viewMode === 'canvas' && (
+              <div
+                className="flex items-center gap-2 p-2 rounded-md bg-emerald-50 border border-emerald-200 cursor-pointer hover:bg-emerald-100 transition-colors"
+                onClick={handleAddNewContactTrigger}
+                title="Triggers when a new contact is created"
+              >
+                <div className="w-7 h-7 rounded-md bg-emerald-600 flex items-center justify-center shrink-0">
+                  <UserCheck size={14} className="text-white" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold text-emerald-800">New Contact Created</div>
+                  <div className="text-[10px] text-emerald-500">Contact added → workflow</div>
+                </div>
+              </div>
+            )}
             {/*
             {viewMode === 'canvas' && (
               <DraggableBlock
@@ -2119,6 +2178,66 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                   updateNodeFields={updateNodeFields}
                 />
               )}
+
+              {selectedNode.type === 'new_contact' && (() => {
+                const fieldMapping = selectedNode.data.fieldMapping || {};
+                return (
+                  <div className="space-y-5">
+                    {/* Info banner */}
+                    <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-3">
+                      <div className="flex items-center gap-2 mb-1">
+                        <UserCheck size={14} className="text-emerald-600" />
+                        <span className="text-xs font-semibold text-emerald-800">New Contact Created Trigger</span>
+                      </div>
+                      <p className="text-[11px] text-emerald-600 leading-relaxed">
+                        This workflow fires automatically whenever a new contact is created.
+                        The fields below are pre-mapped and available as <code className="bg-white border border-emerald-200 rounded px-1">{'{{'}<em>variable</em>{'}}'}</code> in all subsequent nodes.
+                      </p>
+                    </div>
+
+                    {/* Field Mapping */}
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Field Mapping</label>
+                      <p className="text-[10px] text-slate-400 mb-3">
+                        Each contact field is mapped to a variable name. Rename any variable — it will be available as <code className="bg-slate-100 px-1 rounded">{'{{'}<em>variable</em>{'}}'}</code> in later steps.
+                      </p>
+                      <div className="space-y-2">
+                        {NEW_CONTACT_FIELDS.map(field => (
+                          <div key={field.key} className="flex items-center gap-2">
+                            <div className="flex-1 bg-slate-100 border border-slate-200 rounded-md px-2 py-1.5 text-xs font-mono text-slate-600 truncate">
+                              {field.label}
+                            </div>
+                            <span className="text-slate-400 text-xs shrink-0">→</span>
+                            <input
+                              type="text"
+                              className="flex-1 border border-slate-300 rounded-md px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                              placeholder={field.defaultVar}
+                              value={fieldMapping[field.key] || ''}
+                              onChange={e => {
+                                const next = { ...fieldMapping, [field.key]: e.target.value };
+                                updateNodeFields(selectedNode.id, { fieldMapping: next });
+                              }}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Usage guide */}
+                    {Object.keys(fieldMapping).length > 0 && (
+                      <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-3 space-y-1">
+                        <div className="text-xs font-semibold text-emerald-800 mb-1.5">How to use in later nodes</div>
+                        {NEW_CONTACT_FIELDS.filter(f => fieldMapping[f.key]).map(f => (
+                          <div key={f.key} className="flex items-center gap-2 text-[11px]">
+                            <code className="bg-white border border-emerald-200 rounded px-1.5 py-0.5 text-emerald-700 font-mono">{`{{${fieldMapping[f.key]}}}`}</code>
+                            <span className="text-slate-400">← contact.{f.key.replace('contact_', '')}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {selectedNode.type === 'campaign_condition' && (() => {
                 const conditions = selectedNode.data.conditions || [
