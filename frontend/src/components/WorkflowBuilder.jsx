@@ -559,6 +559,8 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
   const [isVoiceProcessing, setIsVoiceProcessing] = useState(false);
   const [voiceError, setVoiceError] = useState('');
   const [isRecording, setIsRecording] = useState(false);
+  // Tracks which XOLOX payload variable input is focused (for chip-click-to-insert)
+  const [focusedVarIdx, setFocusedVarIdx] = useState(null);
   const recognitionRef = useRef(null);
 
   React.useEffect(() => {
@@ -1636,7 +1638,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
             onClick={handleManualSave}
             disabled={saveStatus === 'saving'}
             className={`flex items-center gap-2 transition-colors ${saveStatus === 'saved' ? 'bg-green-600 hover:bg-green-700' :
-                saveStatus === 'error' ? 'bg-red-600 hover:bg-red-700' : ''
+              saveStatus === 'error' ? 'bg-red-600 hover:bg-red-700' : ''
               }`}
           >
             {saveStatus === 'saving' ? <Loader2 size={16} className="animate-spin" /> :
@@ -2426,7 +2428,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                       )}
                       <div className="space-y-2">
                         {payloadFields.map((f, idx) => (
-                          <div key={idx} className="flex items-center gap-1.5">
+                          <div key={idx} className={`flex items-center gap-1.5 rounded p-0.5 transition-colors ${focusedVarIdx === idx ? 'bg-orange-50 ring-1 ring-orange-200' : ''}`}>
                             <input
                               type="text"
                               className="flex-1 border border-slate-300 rounded-md px-2 py-1.5 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-orange-300"
@@ -2437,10 +2439,12 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                             <span className="text-slate-400 text-xs shrink-0">→</span>
                             <input
                               type="text"
-                              className="flex-1 border border-slate-300 rounded-md px-2 py-1.5 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-orange-300"
+                              className={`flex-1 border rounded-md px-2 py-1.5 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-orange-300 transition-colors ${focusedVarIdx === idx ? 'border-orange-400 bg-orange-50' : 'border-slate-300'}`}
                               placeholder="{{variable}}"
                               value={f.variable}
                               onChange={e => updateField(idx, 'variable', e.target.value)}
+                              onFocus={() => setFocusedVarIdx(idx)}
+                              onBlur={() => { setTimeout(() => setFocusedVarIdx(null), 200); }}
                             />
                             <button
                               type="button"
@@ -2454,21 +2458,103 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                       </div>
                     </div>
 
-                    {/* Available variables hint */}
-                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
-                      <div className="text-[11px] font-semibold text-slate-600 mb-1.5">Available variables from earlier nodes</div>
-                      <div className="flex flex-wrap gap-1">
-                        {['{{name}}', '{{phone}}', '{{email}}', '{{tags}}', '{{source}}', '{{contact_id}}'].map(v => (
-                          <code
-                            key={v}
-                            className="text-[10px] bg-white border border-slate-200 text-slate-600 rounded px-1.5 py-0.5 cursor-pointer hover:border-orange-300 hover:text-orange-700 transition-colors"
-                            title="Click to copy"
-                            onClick={() => navigator.clipboard?.writeText(v)}
-                          >{v}</code>
-                        ))}
-                      </div>
-                      <p className="text-[9px] text-slate-400 mt-1.5">Click any tag to copy · Add your own <code>{'{{variable}}'}</code> names from other nodes</p>
-                    </div>
+                    {/* Available variables hint — dynamically computed from upstream nodes */}
+                    {(() => {
+                      // Walk backward through edges to find all variables exposed by upstream nodes
+                      const upstreamVars = (() => {
+                        const vars = [];
+                        const visited = new Set();
+                        const queue = [selectedNode.id];
+                        while (queue.length > 0) {
+                          const nid = queue.shift();
+                          if (visited.has(nid)) continue;
+                          visited.add(nid);
+                          const incomingEdges = edges.filter(e => e.target === nid);
+                          for (const edge of incomingEdges) {
+                            const srcNode = nodes.find(n => n.id === edge.source);
+                            if (!srcNode) continue;
+                            if (srcNode.type === 'new_contact') {
+                              // Collect mapped variable names from fieldMapping
+                              const fm = srcNode.data.fieldMapping || {};
+                              Object.values(fm).forEach(varName => {
+                                if (varName && !vars.includes(`{{${varName}}}`)) {
+                                  vars.push(`{{${varName}}}`);
+                                }
+                              });
+                              // Always expose defaults if not already listed
+                              ['name', 'phone', 'email', 'tags', 'source', 'contact_id'].forEach(def => {
+                                if (!vars.includes(`{{${def}}}`)) vars.push(`{{${def}}}`);
+                              });
+                            } else if (srcNode.type === 'incoming_webhook') {
+                              // Collect variable names from paramMapping
+                              const pm = srcNode.data.paramMapping || {};
+                              Object.values(pm).forEach(varName => {
+                                if (varName && !vars.includes(`{{${varName}}}`)) {
+                                  vars.push(`{{${varName}}}`);
+                                }
+                              });
+                            }
+                            queue.push(edge.source);
+                          }
+                        }
+                        // If nothing found upstream, show sensible defaults
+                        if (vars.length === 0) {
+                          ['{{name}}', '{{phone}}', '{{email}}', '{{tags}}', '{{source}}', '{{contact_id}}'].forEach(v => vars.push(v));
+                        }
+                        return vars;
+                      })();
+
+                      return (
+                        <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                          <div className="flex items-center justify-between mb-1.5">
+                            <div className="text-[11px] font-semibold text-slate-600">
+                              Variables from upstream nodes
+                              <span className="ml-1 text-[10px] font-normal text-slate-400">
+                                ({upstreamVars.length} found)
+                              </span>
+                            </div>
+                            {focusedVarIdx !== null && (
+                              <span className="text-[10px] text-orange-500 font-medium">
+                                → clicking inserts into field #{focusedVarIdx + 1}
+                              </span>
+                            )}
+                          </div>
+                          {upstreamVars.length === 0 ? (
+                            <p className="text-[10px] text-slate-400 italic">
+                              No upstream nodes with mapped variables found. Connect a <strong>New Contact Created</strong> or <strong>Incoming Webhook</strong> trigger above this node.
+                            </p>
+                          ) : (
+                            <div className="flex flex-wrap gap-1">
+                              {upstreamVars.map(v => (
+                                <code
+                                  key={v}
+                                  className={`text-[10px] rounded px-1.5 py-0.5 cursor-pointer transition-colors font-mono select-none
+                                    ${focusedVarIdx !== null
+                                      ? 'bg-orange-50 border border-orange-300 text-orange-700 hover:bg-orange-100'
+                                      : 'bg-white border border-slate-200 text-slate-600 hover:border-orange-300 hover:text-orange-700'
+                                    }`}
+                                  title={focusedVarIdx !== null ? `Insert ${v} into field #${focusedVarIdx + 1}` : 'Focus a variable field first, then click to insert'}
+                                  onClick={() => {
+                                    if (focusedVarIdx !== null) {
+                                      // Insert into the focused right-side variable input
+                                      updateField(focusedVarIdx, 'variable', v);
+                                    } else {
+                                      // No field focused — copy to clipboard as fallback
+                                      navigator.clipboard?.writeText(v);
+                                    }
+                                  }}
+                                >{v}</code>
+                              ))}
+                            </div>
+                          )}
+                          <p className="text-[9px] text-slate-400 mt-1.5">
+                            {focusedVarIdx !== null
+                              ? `Click a variable to insert it into the field #${focusedVarIdx + 1} variable input`
+                              : 'Click any variable field on the right → then click a chip to insert it there'}
+                          </p>
+                        </div>
+                      );
+                    })()}
 
                     {/* Divider */}
                     <div className="border-t border-slate-100" />
