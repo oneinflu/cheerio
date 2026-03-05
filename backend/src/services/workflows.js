@@ -496,13 +496,13 @@ async function runWorkflow(id, phoneNumber, context = {}) {
           // Send Interactive CTA URL Button
           const interactive = {
             type: 'cta_url',
-            header: { type: 'text', text: 'Checkout Securely' },
+            header: { type: 'text', text: d.headerText || 'Checkout Securely' },
             body: { text: messageBody },
-            footer: { text: 'Click below to pay' },
+            footer: { text: d.footerText || 'Click below to pay' },
             action: {
               name: 'cta_url',
               parameters: {
-                display_text: 'Pay Now',
+                display_text: d.buttonText || 'Pay Now',
                 url: payLink.short_url
               }
             }

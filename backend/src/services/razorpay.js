@@ -40,9 +40,12 @@ async function createPaymentLink({ amount, description, contact, email, notes })
 
     try {
         const response = await axios.post('https://api.razorpay.com/v1/payment_links', payload, {
+            auth: {
+                username: RAZORPAY_KEY_ID,
+                password: RAZORPAY_KEY_SECRET
+            },
             headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Basic ${auth}`
+                'Content-Type': 'application/json'
             }
         });
 
@@ -53,7 +56,14 @@ async function createPaymentLink({ amount, description, contact, email, notes })
         };
     } catch (err) {
         const errorData = err.response?.data?.error || {};
-        console.error('[Razorpay] Failed to create link:', errorData);
+        const statusCode = err.response?.status;
+        console.error(`[Razorpay] API Error (${statusCode}):`, JSON.stringify(errorData, null, 2));
+
+        // If it's a 401, return a clear authentication error
+        if (statusCode === 401) {
+            throw new Error('Razorpay Authentication failed: Invalid Key ID or Secret');
+        }
+
         throw new Error(errorData.description || err.message || 'Razorpay link creation failed');
     }
 }
