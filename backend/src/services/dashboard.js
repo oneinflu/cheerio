@@ -141,7 +141,7 @@ async function getWorkflowStats(teamId) {
     const res = await db.query(`
       SELECT 
         COUNT(*) AS total_workflows,
-        COUNT(*) FILTER (WHERE is_active = true) AS active_workflows
+        COUNT(*) FILTER (WHERE status = 'active') AS active_workflows
       FROM workflows
     `);
     const r = res.rows[0];
@@ -154,6 +154,33 @@ async function getWorkflowStats(teamId) {
   }
 }
 
+async function getCSATMetrics(teamId) {
+  try {
+    const res = await db.query(`
+      SELECT 
+        COUNT(*) as total_responses,
+        AVG(score) as average_score,
+        COUNT(*) FILTER (WHERE score >= 4) as positive_responses
+      FROM csat_scores
+    `);
+    const row = res.rows[0];
+    const total = parseInt(row.total_responses, 10) || 0;
+    const positive = parseInt(row.positive_responses, 10) || 0;
+    const average = parseFloat(row.average_score || 0).toFixed(1);
+    const score = total > 0 ? Math.round((positive / total) * 100) : 0;
+
+    return {
+      total,
+      average,
+      score: score + '%',
+      scoreRaw: score
+    };
+  } catch (err) {
+    console.error('[dashboardService] getCSATMetrics error:', err.message);
+    return { total: 0, average: '0', score: '0%', scoreRaw: 0 };
+  }
+}
+
 module.exports = {
   getStats,
   getVolume,
@@ -161,5 +188,6 @@ module.exports = {
   getRevenueImpact,
   getChannelInsights,
   getTemplateStats,
-  getWorkflowStats
+  getWorkflowStats,
+  getCSATMetrics
 };

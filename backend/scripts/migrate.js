@@ -282,6 +282,24 @@ async function runMigrations() {
           console.log('[migrate] webhook_events.workflow_id is already TEXT. OK.');
         }
 
+        // 0015 – csat_scores table
+        const csatTableRes = await client.query(`
+          SELECT EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE  table_schema = 'public'
+            AND    table_name   = 'csat_scores'
+          );
+        `);
+        if (!csatTableRes.rows[0].exists) {
+          console.log('[migrate] Adding csat_scores table...');
+          await client.query('BEGIN');
+          await runSQLFile(client, path.join(__dirname, '..', 'db', 'migrations', '0015_csat_scores.sql'));
+          await client.query('COMMIT');
+          console.log('[migrate] Applied 0015_csat_scores migration.');
+        } else {
+          console.log('[migrate] csat_scores table already exists.');
+        }
+
         return;
 
 

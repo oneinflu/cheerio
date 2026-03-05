@@ -10,21 +10,22 @@ router.get('/dashboard', async (req, res, next) => {
     const teamId = req.query.teamId;
 
     // Fetch premium aggregate data
-    const [stats, trendingVolume, agents, revenueImpact, channelInsights, templates, workflows] = await Promise.all([
+    const [stats, trendingVolume, agents, revenueImpact, channelInsights, templates, workflows, csat] = await Promise.all([
       dashboardService.getStats(teamId),
       dashboardService.getVolume(teamId),
       dashboardService.getAgents(teamId),
       dashboardService.getRevenueImpact(teamId),
       dashboardService.getChannelInsights(teamId),
       dashboardService.getTemplateStats(teamId),
-      dashboardService.getWorkflowStats(teamId)
+      dashboardService.getWorkflowStats(teamId),
+      dashboardService.getCSATMetrics(teamId)
     ]);
 
     // Enhanced KPIs for premium display
     const kpi = {
       medianFirstReply: '1m 45s',
       slaCompliance: '98.5%',
-      csatScore: '4.8/5.0',
+      csatScore: csat.average + ' / 5.0 (' + csat.score + ')',
       resolutionRate: '88%'
     };
 

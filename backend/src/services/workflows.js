@@ -324,6 +324,125 @@ async function runWorkflow(id, phoneNumber, context = {}) {
             console.error(`[WorkflowRunner] Failed to send text message: ${err.message}`);
           }
         }
+
+      } else if (currentNode.type === 'response_message' || currentNode.type === 'feedback') {
+        const isFeedback = currentNode.type === 'feedback';
+        const d = currentNode.data || {};
+        const text = isFeedback ? (d.question || 'Your feedback matters! Please rate this chat on scale of 1-5') : d.message;
+        const buttonsData = isFeedback ? [1, 2, 3, 4, 5] : (d.buttons || []);
+        const style = d.buttonStyle || 'numbers';
+
+        const getDisplay = (val) => {
+          if (!isFeedback) return val;
+          if (style === 'emojis') {
+             const emojis = ['😠', '🙁', '😐', '🙂', '😄'];
+             return emojis[val - 1] || `${val}`;
+          }
+          if (style === 'stars') return `${val} ⭐`;
+          return `${val}`;
+        };
+
+        const buttonLabels = buttonsData.map(v => getDisplay(v));
+
+        try {
+          const conversationId = await ensureConversation(phoneNumber);
+          
+          let interactivePayload;
+          if (buttonLabels.length > 0 && buttonLabels.length <= 3) {
+            interactivePayload = {
+              type: 'button',
+              body: { text: text },
+              action: {
+                buttons: buttonLabels.map((lbl, idx) => ({
+                  type: 'reply',
+                  reply: { id: `btn_${idx}`, title: lbl.length > 20 ? lbl.slice(0, 17) + '...' : lbl }
+                }))
+              }
+            };
+          } else if (buttonLabels.length > 3) {
+            interactivePayload = {
+              type: 'list',
+              header: { type: 'text', text: isFeedback ? 'Feedback' : 'Select Option' },
+              body: { text: resolvePlaceholders(text, context) },
+              action: {
+                button: isFeedback ? 'Rate' : 'Select',
+                sections: [{
+                  title: isFeedback ? 'Ratings' : 'Options',
+                  rows: buttonLabels.map((lbl, idx) => ({
+                    id: `row_${idx}`,
+                    title: lbl.length > 24 ? lbl.slice(0, 21) + '...' : lbl,
+                  }))
+                }]
+              }
+            };
+          } else {
+            const resolvedText = resolvePlaceholders(text, context);
+            await outboundWhatsApp.sendText(conversationId, resolvedText);
+            interactivePayload = null;
+          }
+
+          if (interactivePayload) {
+            await outboundWhatsApp.sendInteractive(conversationId, interactivePayload);
+            const sentAt = new Date();
+            
+            let matchedValue = null;
+            const waitStart = Date.now();
+            const timeout = isFeedback ? 120000 : 300000; // 2 or 5 mins
+
+            while (Date.now() - waitStart < timeout) {
+              const replies = await checkUserReply(phoneNumber, sentAt);
+              if (replies.length > 0) {
+                const lastReply = replies[0].content.trim();
+                for (let i = 0; i < buttonLabels.length; i++) {
+                  if (lastReply.toLowerCase() === buttonLabels[i].toLowerCase() || lastReply === String(i + 1)) {
+                    matchedValue = isFeedback ? (i + 1) : buttonLabels[i];
+                    break;
+                  }
+                }
+              }
+              if (matchedValue !== null) break;
+              if (!isFeedback && d.skipReply) break;
+              await sleep(3000);
+            }
+
+            if (matchedValue !== null) {
+              if (isFeedback) {
+                const convRes = await db.query('SELECT contact_id FROM conversations WHERE id = $1', [conversationId]);
+                const contactId = convRes.rows[0]?.contact_id;
+                await db.query(`
+                  INSERT INTO csat_scores (workflow_id, contact_id, conversation_id, score)
+                  VALUES ($1, $2, $3, $4)
+                `, [id, contactId, conversationId, matchedValue]);
+              } else if (d.saveVariable) {
+                const varName = d.saveVariable.replace(/[{}]/g, '');
+                context[varName] = matchedValue;
+                const contactRes = await db.query('SELECT id FROM contacts WHERE external_id = $1', [phoneNumber]);
+                if (contactRes.rowCount > 0) {
+                  await db.query(`
+                    UPDATE contacts 
+                    SET profile = jsonb_set(
+                        COALESCE(profile, '{}'::jsonb), 
+                        '{attributes}', 
+                        (COALESCE(profile->'attributes', '{}'::jsonb) || jsonb_build_object($1::text, $2::text))
+                    )
+                    WHERE id = $3
+                  `, [varName, matchedValue, contactRes.rows[0].id]);
+                }
+              }
+
+              if (!isFeedback && currentNode.routes) {
+                const matchedKey = Object.keys(currentNode.routes).find(k => k.toLowerCase() === String(matchedValue).toLowerCase());
+                if (matchedKey) {
+                  currentNode = nodes.find(n => n.id === currentNode.routes[matchedKey]);
+                  continue;
+                }
+              }
+            }
+          }
+        } catch (err) {
+          console.error(`[WorkflowRunner] Feedback/Response node failed: ${err.message}`);
+        }
+
       } else if (currentNode.type === 'custom_code') {
         console.log(`[WorkflowRunner] Executing custom code (mock): ${currentNode.data.code}`);
         // In a real system, use vm2 or isolated sandbox

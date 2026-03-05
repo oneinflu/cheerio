@@ -14,7 +14,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { Button } from './ui/Button';
-import { Save, ArrowLeft, Plus, Clock, MessageSquare, GitBranch, Zap, StopCircle, Loader2, Play, MessageCircle, Code, UserCheck, Tag, Mic, Workflow as WorkflowIcon, Megaphone, Filter, Link, Copy, Check, RefreshCw, Trash2, Globe, Send, ChevronDown, ChevronUp, Image, Video, FileText as FileIcon, Upload, X } from 'lucide-react';
+import { Save, ArrowLeft, Plus, Clock, MessageSquare, GitBranch, Zap, StopCircle, Loader2, Play, MessageCircle, Code, UserCheck, Tag, Mic, Workflow as WorkflowIcon, Megaphone, Filter, Link, Copy, Check, RefreshCw, Trash2, Globe, Send, ChevronDown, ChevronUp, Image, Video, FileText as FileIcon, Upload, X, Star } from 'lucide-react';
 import { getTemplates, runWorkflow, aiGenerateWorkflow, getWorkflows, getCampaigns, getWebhookEvents, clearWebhookEvents, fetchMediaLibrary, uploadFlowMedia } from '../api';
 import { GallerySelectModal } from './GallerySelectModal';
 
@@ -210,6 +210,38 @@ const ResponseMessageNode = ({ data, selected }) => {
       ) : (
         <Handle type="source" position={Position.Bottom} id="default" className="w-3 h-3 bg-slate-400" />
       )}
+    </NodeWrapper>
+  );
+};
+
+const FeedbackNode = ({ data, selected }) => {
+  const style = data.buttonStyle || 'numbers'; // 'numbers' | 'emojis' | 'stars'
+
+  const getDisplay = (val) => {
+    if (style === 'emojis') {
+      const emojis = ['😠', '🙁', '😐', '🙂', '😄'];
+      return emojis[val - 1] || val;
+    }
+    if (style === 'stars') {
+      return `${val} ⭐`;
+    }
+    return val;
+  };
+
+  return (
+    <NodeWrapper selected={selected} title="Feedback" icon={Star} colorClass="bg-yellow-600">
+      <div className="text-[10px] text-slate-600 mb-2 italic line-clamp-2">
+        "{data.question || 'Your feedback matters! Please rate this chat on scale of 1-5'}"
+      </div>
+      <div className="flex gap-1 overflow-x-auto pb-1 no-scrollbar">
+        {[1, 2, 3, 4, 5].map(v => (
+          <div key={v} className="bg-yellow-50 border border-yellow-200 rounded px-1.5 py-1 text-[10px] text-yellow-700 whitespace-nowrap min-w-[28px] text-center font-bold">
+            {getDisplay(v)}
+          </div>
+        ))}
+      </div>
+      <Handle type="target" position={Position.Top} className="w-3 h-3 bg-slate-400" />
+      <Handle type="source" position={Position.Bottom} className="w-3 h-3 bg-slate-400" />
     </NodeWrapper>
   );
 };
@@ -563,6 +595,7 @@ const nodeTypes = {
   action: ActionNode,
   end: EndNode,
   response_message: ResponseMessageNode,
+  feedback: FeedbackNode,
   campaign_trigger: CampaignTriggerNode,
   campaign_condition: CampaignConditionNode,
   incoming_webhook: IncomingWebhookNode,
@@ -1279,6 +1312,22 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
     setSelectedNode(node);
   }, [setNodes]);
 
+  const handleAddFeedbackAction = useCallback(() => {
+    const nodeId = getId();
+    const node = {
+      id: nodeId,
+      type: 'feedback',
+      position: { x: 0, y: 200 },
+      data: {
+        label: 'Feedback Collection',
+        question: 'Your feedback matters! Please rate this chat on scale of 1-5',
+        buttonStyle: 'numbers', // 'numbers', 'emojis', 'stars'
+      },
+    };
+    setNodes(nds => [...nds, node]);
+    setSelectedNode(node);
+  }, [setNodes]);
+
   // Load gallery and open the picker modal
   const openGallery = useCallback(async () => {
     setShowGalleryModal(true);
@@ -1961,6 +2010,23 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 <div className="min-w-0">
                   <div className="text-xs font-semibold text-teal-800">Response Message</div>
                   <div className="text-[10px] text-teal-600">Direct message + Quick replies</div>
+                </div>
+              </div>
+            )}
+
+            {/* Feedback Collection action */}
+            {viewMode === 'canvas' && (
+              <div
+                className="flex items-center gap-2 p-2 rounded-md bg-yellow-50 border border-yellow-200 cursor-pointer hover:bg-yellow-100 transition-colors"
+                onClick={handleAddFeedbackAction}
+                title="Collect CSAT feedback from customers at the end of a flow"
+              >
+                <div className="w-7 h-7 rounded-md bg-yellow-600 flex items-center justify-center shrink-0">
+                  <Star size={14} className="text-white" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold text-yellow-800">Feedback Collection</div>
+                  <div className="text-[10px] text-yellow-600">Track customer CSAT</div>
                 </div>
               </div>
             )}
@@ -3421,6 +3487,69 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                   </div>
                 );
               })()}
+
+
+              {selectedNode.type === 'feedback' && (
+                <div className="space-y-4">
+                  <div className="bg-yellow-50 border border-yellow-100 rounded-lg p-3">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Star size={14} className="text-yellow-600" />
+                      <span className="text-xs font-semibold text-yellow-800 uppercase tracking-tight">Feedback Collection</span>
+                    </div>
+                    <p className="text-[11px] text-yellow-600 leading-relaxed">
+                      Collect Customer Satisfaction (CSAT) scores. <b>Buttons 1-5</b> will be sent to the user.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-700">Question* (Mandatory)</label>
+                    <textarea
+                      className="w-full border border-slate-300 rounded-md p-2.5 text-sm min-h-[80px] focus:ring-2 focus:ring-yellow-300 focus:outline-none focus:border-yellow-400"
+                      placeholder="e.g. Rate your experience with us"
+                      value={selectedNode.data.question || ''}
+                      onChange={(e) => updateNodeData('question', e.target.value)}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-700">Button Display Style</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { key: 'numbers', label: 'Numbers', sub: '1, 2, 3, 4, 5', icon: '🔢' },
+                        { key: 'emojis',  label: 'Emojis',  sub: '😠, 🙁, 😐, 🙂, 😄', icon: '😄' },
+                        { key: 'stars',   label: 'Stars',   sub: '1⭐, 2⭐...', icon: '⭐' },
+                      ].map(style => (
+                        <button
+                          key={style.key}
+                          type="button"
+                          onClick={() => updateNodeData('buttonStyle', style.key)}
+                          className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all ${
+                            (selectedNode.data.buttonStyle || 'numbers') === style.key
+                              ? 'border-yellow-500 bg-yellow-50 shadow-sm scale-[1.02]'
+                              : 'border-slate-100 bg-white hover:border-yellow-200'
+                          }`}
+                        >
+                          <span className="text-xl mb-1">{style.icon}</span>
+                          <span className={`text-[11px] font-bold ${
+                            (selectedNode.data.buttonStyle || 'numbers') === style.key ? 'text-yellow-800' : 'text-slate-700'
+                          }`}>{style.label}</span>
+                          <span className="text-[8px] text-slate-400 font-medium uppercase mt-0.5">{style.sub.split(',')[0]}...</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="pt-4 mt-6 border-t border-slate-100 bg-slate-50/50 -mx-6 px-6 py-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <RefreshCw size={12} className="text-slate-400" />
+                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">CSAT Metrics Integration</span>
+                    </div>
+                    <p className="text-[10px] text-slate-500 leading-relaxed italic">
+                      "Responses are automatically calculated in the backend. CSAT = (Promoters / Total) × 100"
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {selectedNode.type === 'delay' && (
                 <div className="space-y-3">
