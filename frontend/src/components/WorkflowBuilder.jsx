@@ -2426,20 +2426,20 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                           No fields yet — click <strong>Add Field</strong> to define the payload
                         </div>
                       )}
-                      <div className="space-y-2">
+                       <div className="space-y-1.5">
                         {payloadFields.map((f, idx) => (
-                          <div key={idx} className={`flex items-center gap-1.5 rounded p-0.5 transition-colors ${focusedVarIdx === idx ? 'bg-orange-50 ring-1 ring-orange-200' : ''}`}>
+                          <div key={idx} className={`flex items-center gap-1 min-w-0 rounded p-0.5 transition-colors ${focusedVarIdx === idx ? 'bg-orange-50 ring-1 ring-orange-200' : ''}`}>
                             <input
                               type="text"
-                              className="flex-1 border border-slate-300 rounded-md px-2 py-1.5 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-orange-300"
-                              placeholder="fieldKey"
+                              className="w-[90px] min-w-0 shrink-0 border border-slate-300 rounded px-2 py-1.5 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-orange-300"
+                              placeholder="key"
                               value={f.field}
                               onChange={e => updateField(idx, 'field', e.target.value)}
                             />
-                            <span className="text-slate-400 text-xs shrink-0">→</span>
+                            <span className="text-slate-400 text-[10px] shrink-0">→</span>
                             <input
                               type="text"
-                              className={`flex-1 border rounded-md px-2 py-1.5 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-orange-300 transition-colors ${focusedVarIdx === idx ? 'border-orange-400 bg-orange-50' : 'border-slate-300'}`}
+                              className={`flex-1 min-w-0 border rounded px-2 py-1.5 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-orange-300 transition-colors ${focusedVarIdx === idx ? 'border-orange-400 bg-orange-50' : 'border-slate-300'}`}
                               placeholder="{{variable}}"
                               value={f.variable}
                               onChange={e => updateField(idx, 'variable', e.target.value)}
@@ -2449,9 +2449,10 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                             <button
                               type="button"
                               onClick={() => removeField(idx)}
-                              className="shrink-0 text-red-400 hover:text-red-600 transition-colors"
+                              className="shrink-0 p-0.5 text-red-400 hover:text-red-600 transition-colors"
+                              title="Remove field"
                             >
-                              <Trash2 size={13} />
+                              <Trash2 size={12} />
                             </button>
                           </div>
                         ))}
