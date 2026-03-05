@@ -16,6 +16,7 @@ import '@xyflow/react/dist/style.css';
 import { Button } from './ui/Button';
 import { Save, ArrowLeft, Plus, Clock, MessageSquare, GitBranch, Zap, StopCircle, Loader2, Play, MessageCircle, Code, UserCheck, Tag, Mic, Workflow as WorkflowIcon, Megaphone, Filter, Link, Copy, Check, RefreshCw, Trash2, Globe, Send, ChevronDown, ChevronUp, Image, Video, FileText as FileIcon, Upload, X } from 'lucide-react';
 import { getTemplates, runWorkflow, aiGenerateWorkflow, getWorkflows, getCampaigns, getWebhookEvents, clearWebhookEvents, fetchMediaLibrary, uploadFlowMedia } from '../api';
+import { GallerySelectModal } from './GallerySelectModal';
 
 // --- Custom Node Components ---
 
@@ -562,8 +563,6 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
   // Tracks which XOLOX payload variable input is focused (for chip-click-to-insert)
   const [focusedVarIdx, setFocusedVarIdx] = useState(null);
   // Template media gallery state
-  const [galleryItems, setGalleryItems] = useState([]);
-  const [galleryLoading, setGalleryLoading] = useState(false);
   const [showGalleryModal, setShowGalleryModal] = useState(false);
   const [galleryTarget, setGalleryTarget] = useState(null); // 'header' | null
   const [templateFocusedVarKey, setTemplateFocusedVarKey] = useState(null);
@@ -1125,15 +1124,6 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
   // Load gallery and open the picker modal
   const openGallery = useCallback(async () => {
     setShowGalleryModal(true);
-    setGalleryLoading(true);
-    try {
-      const res = await fetchMediaLibrary(50);
-      setGalleryItems(Array.isArray(res) ? res : (res.media || res.data || []));
-    } catch (e) {
-      console.error('Failed to load gallery', e);
-    } finally {
-      setGalleryLoading(false);
-    }
   }, []);
 
   const updateNodeData = (key, value) => {
@@ -2903,7 +2893,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                       if (src.type === 'new_contact') {
                         const fm = src.data.fieldMapping || {};
                         Object.values(fm).forEach(v => { if (v && !result.includes(`{{${v}}}`)) result.push(`{{${v}}}`); });
-                        ['name','phone','email','tags','source','contact_id'].forEach(def => {
+                        ['name', 'phone', 'email', 'tags', 'source', 'contact_id'].forEach(def => {
                           if (!result.includes(`{{${def}}}`)) result.push(`{{${def}}}`);
                         });
                       } else if (src.type === 'incoming_webhook') {
@@ -2914,7 +2904,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                     });
                   }
                   if (result.length === 0) {
-                    ['{{name}}','{{phone}}','{{email}}','{{tags}}','{{source}}','{{contact_id}}'].forEach(v => result.push(v));
+                    ['{{name}}', '{{phone}}', '{{email}}', '{{tags}}', '{{source}}', '{{contact_id}}'].forEach(v => result.push(v));
                   }
                   return result;
                 })();
@@ -2975,20 +2965,19 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                         {/* Type selector */}
                         <div className="flex gap-1.5">
                           {[
-                            { key: 'none',     label: 'None',     icon: null },
-                            { key: 'image',    label: 'Image',    icon: Image },
-                            { key: 'video',    label: 'Video',    icon: Video },
+                            { key: 'none', label: 'None', icon: null },
+                            { key: 'image', label: 'Image', icon: Image },
+                            { key: 'video', label: 'Video', icon: Video },
                             { key: 'document', label: 'Document', icon: FileIcon },
                           ].map(({ key, label, icon: Icon }) => (
                             <button
                               key={key}
                               type="button"
                               onClick={() => setHeader({ headerType: key, headerUrl: '', headerFileName: '' })}
-                              className={`flex-1 flex flex-col items-center gap-0.5 py-1.5 rounded border text-[10px] font-medium transition-colors ${
-                                headerType === key
+                              className={`flex-1 flex flex-col items-center gap-0.5 py-1.5 rounded border text-[10px] font-medium transition-colors ${headerType === key
                                   ? 'bg-green-50 border-green-400 text-green-700'
                                   : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
-                              }`}
+                                }`}
                             >
                               {Icon && <Icon size={13} />}
                               {label}
@@ -3002,7 +2991,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                             {d.headerUrl && (
                               <div className="flex items-center gap-2 bg-slate-50 rounded px-2 py-1.5 border border-slate-200">
                                 {headerType === 'image' && (
-                                  <img src={d.headerUrl} alt="header" className="w-10 h-10 object-cover rounded" onError={e => { e.target.style.display='none'; }} />
+                                  <img src={d.headerUrl} alt="header" className="w-10 h-10 object-cover rounded" onError={e => { e.target.style.display = 'none'; }} />
                                 )}
                                 {headerType === 'video' && <Video size={20} className="text-slate-400 shrink-0" />}
                                 {headerType === 'document' && <FileIcon size={20} className="text-slate-400 shrink-0" />}
@@ -3023,8 +3012,8 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                                   className="sr-only"
                                   accept={
                                     headerType === 'image' ? 'image/*' :
-                                    headerType === 'video' ? 'video/*' :
-                                    'application/pdf,.doc,.docx,.xlsx,.pptx'
+                                      headerType === 'video' ? 'video/*' :
+                                        'application/pdf,.doc,.docx,.xlsx,.pptx'
                                   }
                                   onChange={async (e) => {
                                     const file = e.target.files && e.target.files[0];
@@ -3084,9 +3073,8 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                             <div key={k} className={`rounded p-1 transition-colors ${templateFocusedVarKey === k ? 'bg-green-50 ring-1 ring-green-200' : ''}`}>
                               <div className="text-[11px] text-slate-500 font-mono mb-0.5">{'{{' + k + '}}'}</div>
                               <input
-                                className={`w-full border rounded px-2 py-1.5 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-green-300 transition-colors ${
-                                  templateFocusedVarKey === k ? 'border-green-400 bg-green-50' : 'border-slate-300'
-                                }`}
+                                className={`w-full border rounded px-2 py-1.5 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-green-300 transition-colors ${templateFocusedVarKey === k ? 'border-green-400 bg-green-50' : 'border-slate-300'
+                                  }`}
                                 placeholder={`Value or {{variable}}`}
                                 value={vars[k] || ''}
                                 onChange={(e) => {
@@ -3114,11 +3102,10 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                           {upstreamVars.map(v => (
                             <code
                               key={v}
-                              className={`text-[10px] rounded px-1.5 py-0.5 cursor-pointer font-mono select-none transition-colors ${
-                                templateFocusedVarKey
+                              className={`text-[10px] rounded px-1.5 py-0.5 cursor-pointer font-mono select-none transition-colors ${templateFocusedVarKey
                                   ? 'bg-green-50 border border-green-300 text-green-700 hover:bg-green-100'
                                   : 'bg-white border border-slate-200 text-slate-500 hover:border-green-300 hover:text-green-700'
-                              }`}
+                                }`}
                               title={templateFocusedVarKey ? `Insert ${v} into {{${templateFocusedVarKey}}}` : 'Focus a variable input first'}
                               onClick={() => {
                                 if (templateFocusedVarKey) {
@@ -3362,65 +3349,23 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
           </div>
         )}
 
-      {/* ── Gallery Picker Modal ────────────────────────────────────── */}
-      {showGalleryModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setShowGalleryModal(false)}>
-          <div className="bg-white rounded-xl shadow-2xl w-[600px] max-h-[75vh] flex flex-col" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
-              <h3 className="font-semibold text-slate-800">Select from Media Library</h3>
-              <button type="button" onClick={() => setShowGalleryModal(false)} className="text-slate-400 hover:text-slate-700">
-                <X size={18} />
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4">
-              {galleryLoading ? (
-                <div className="flex items-center justify-center h-40">
-                  <Loader2 size={24} className="animate-spin text-slate-400" />
-                </div>
-              ) : galleryItems.length === 0 ? (
-                <p className="text-center text-slate-400 text-sm py-12">No media files found in library.</p>
-              ) : (
-                <div className="grid grid-cols-4 gap-3">
-                  {galleryItems.map((item, i) => {
-                    const url = item.url || item.media_url || item.link || '';
-                    const name = item.name || item.original_name || item.filename || '';
-                    const type = (item.type || item.media_type || '').toLowerCase();
-                    const isImage = type.includes('image') || /\.(png|jpg|jpeg|gif|webp)$/i.test(url);
-                    const isVideo = type.includes('video') || /\.(mp4|mov|webm)$/i.test(url);
-                    return (
-                      <button
-                        key={i}
-                        type="button"
-                        title={name}
-                        className="group relative aspect-square border-2 border-transparent rounded-lg overflow-hidden hover:border-green-400 transition-all bg-slate-100"
-                        onClick={() => {
-                          updateNodeFields(selectedNode?.id, { headerUrl: url, headerFileName: name, headerType: isVideo ? 'video' : isImage ? 'image' : 'document' });
-                          setShowGalleryModal(false);
-                        }}
-                      >
-                        {isImage ? (
-                          <img src={url} alt={name} className="w-full h-full object-cover" />
-                        ) : isVideo ? (
-                          <div className="w-full h-full flex flex-col items-center justify-center gap-1 text-slate-500">
-                            <Video size={24} />
-                            <span className="text-[9px] truncate max-w-full px-1">{name}</span>
-                          </div>
-                        ) : (
-                          <div className="w-full h-full flex flex-col items-center justify-center gap-1 text-slate-500">
-                            <FileIcon size={24} />
-                            <span className="text-[9px] truncate max-w-full px-1">{name}</span>
-                          </div>
-                        )}
-                        <div className="absolute inset-0 bg-green-500/0 group-hover:bg-green-500/10 transition-colors" />
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+        {/* ── Gallery Picker Modal ────────────────────────────────────── */}
+        <GallerySelectModal
+          isOpen={showGalleryModal}
+          onClose={() => setShowGalleryModal(false)}
+          onSelect={(url) => {
+            // Identify if it's image or video from url
+            const isVideo = /\.(mp4|mov|webm)$/i.test(url);
+            const isImage = /\.(png|jpg|jpeg|gif|webp)$/i.test(url);
+            updateNodeFields(selectedNode?.id, {
+              headerUrl: url,
+              headerFileName: url.split('/').pop(),
+              headerType: isVideo ? 'video' : isImage ? 'image' : 'document'
+            });
+            setShowGalleryModal(false);
+          }}
+          resourceType={selectedNode?.data?.headerType === 'video' ? 'video' : selectedNode?.data?.headerType === 'document' ? 'raw' : 'image'}
+        />
       </div>
     </div>
   );
