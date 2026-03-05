@@ -20,6 +20,7 @@ import LoginPage from './components/LoginPage.jsx';
 import GuestChat from './components/GuestChat.jsx';
 import InstagramPage from './components/InstagramPage.jsx';
 import GalleryPage from './components/GalleryPage.jsx';
+import LandingPage from './components/LandingPage.jsx';
 import { connectSocket } from './socket.js';
 import { getInbox, getMessages, claimConversation, reassignConversation, forceReassignConversation, releaseConversation, markAsRead, resolveConversation, deleteConversation, blockConversation, unblockConversation, pinConversation, updateWorkflow, getTeamUser, getTeamUsers, reassignExternalLead } from './api.js';
 import { LayoutDashboard, MessageSquare, Users, Megaphone, Settings, LogOut, Search, Bell, FileText, Workflow, Shield, ChevronsUpDown, Check, Zap, GitBranch, Instagram, ChevronDown, ChevronRight } from 'lucide-react';
@@ -44,10 +45,20 @@ export default function App() {
   const [activePage, setActivePage] = useState(() => {
     const fullPath = window.location.pathname.substring(1);
     const path = fullPath.split('/')[0];
+
+    // If we're not logged in and at root, we don't have an active app page yet
+    if (!storedUser && !path) {
+      return 'landing';
+    }
+
     if (path && validPages.includes(path)) {
       return path;
     }
     return localStorage.getItem('activePage') || 'inbox';
+  });
+
+  const [isLoginView, setIsLoginView] = useState(() => {
+    return window.location.pathname === '/login';
   });
 
   const [isContactsMenuOpen, setIsContactsMenuOpen] = useState(() => {
@@ -76,6 +87,15 @@ export default function App() {
   });
 
   useEffect(() => {
+    if (!isLoggedIn) {
+      if (isLoginView) {
+        window.history.pushState(null, '', '/login');
+      } else {
+        window.history.pushState(null, '', '/');
+      }
+      return;
+    }
+
     localStorage.setItem('activePage', activePage);
     let path = `/${activePage === 'inbox' ? '' : activePage}`;
     if (activePage === 'workflows' && editingWorkflow) {
@@ -84,7 +104,7 @@ export default function App() {
       path = `/workflows/${identifier}`;
     }
     window.history.pushState(null, '', path);
-  }, [activePage, editingWorkflow]);
+  }, [activePage, editingWorkflow, isLoggedIn, isLoginView]);
 
   useEffect(() => {
     const handlePopState = () => {
@@ -92,12 +112,16 @@ export default function App() {
       const pathParts = fullPath.split('/');
       const path = pathParts[0];
 
+      if (!isLoggedIn) {
+        setIsLoginView(window.location.pathname === '/login');
+        return;
+      }
+
       if (path && validPages.includes(path)) {
         setActivePage(path);
       } else if (!path) {
         setActivePage('inbox');
       }
-
       if (path === 'workflows') {
         if (pathParts[1]) {
           setEditingWorkflow((prev) => {
@@ -573,7 +597,10 @@ export default function App() {
   }, [selectedConversation?.assigneeUserId, isAssigned, agents, teamMembers]);
 
   if (!isLoggedIn) {
-    return <LoginPage onLogin={handleLogin} />;
+    if (isLoginView) {
+      return <LoginPage onLogin={handleLogin} />;
+    }
+    return <LandingPage onLoginClick={() => setIsLoginView(true)} />;
   }
 
   return (
