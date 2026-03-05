@@ -201,7 +201,9 @@ export default function RulesPage() {
                   const thenText =
                     rule.action_type === 'send_message'
                       ? `Send message: ${cfg.message || cfg.text || ''}`
-                      : `Start workflow`;
+                      : rule.action_type === 'notify_admin'
+                        ? `Notify Admin: ${cfg.message || cfg.text || ''}`
+                        : `Start workflow`;
                   const wf =
                     rule.action_type === 'start_workflow' &&
                     workflows.find((w) => String(w.id) === String(cfg.workflow_id));
@@ -353,14 +355,15 @@ export default function RulesPage() {
                 }
               >
                 <option value="send_message">Send message</option>
+                <option value="notify_admin">Notify Admin</option>
                 <option value="start_workflow">Start workflow</option>
               </select>
             </div>
 
-            {formData.action_type === 'send_message' ? (
+            {formData.action_type === 'send_message' || formData.action_type === 'notify_admin' ? (
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-700">
-                  Message to send
+                  {formData.action_type === 'send_message' ? 'Message to send' : 'Notification message'}
                 </label>
                 <textarea
                   className="flex min-h-[80px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2"
@@ -371,7 +374,7 @@ export default function RulesPage() {
                       message: e.target.value,
                     })
                   }
-                  placeholder="Type the reply message"
+                  placeholder={formData.action_type === 'send_message' ? "Type the reply message" : "Type the admin alert message"}
                 />
               </div>
             ) : (

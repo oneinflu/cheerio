@@ -190,6 +190,40 @@ async function evaluateCourseRules(phoneNumber, courseValue) {
   return matched;
 }
 
+async function evaluatePaymentRules(phoneNumber, paymentData) {
+  if (!phoneNumber) return [];
+
+  const res = await db.query(
+    `
+    SELECT *
+    FROM automation_rules
+    WHERE is_active = TRUE
+      AND event_type = 'payment_received'
+    `
+  );
+
+  const rules = res.rows || [];
+  const matched = [];
+
+  for (const rule of rules) {
+    const matchValue = (rule.match_value || '').toLowerCase();
+    const coursePaid = (paymentData.details?.course || '').toLowerCase();
+
+    let hit = true;
+    if (matchValue && coursePaid) {
+      const tokens = matchValue.split(',').map(v => v.trim()).filter(Boolean);
+      hit = tokens.some(t => coursePaid.includes(t));
+    }
+
+    if (hit) {
+      matched.push(rule);
+      await performRuleAction(rule, phoneNumber);
+    }
+  }
+
+  return matched;
+}
+
 async function performRuleAction(rule, phoneNumber) {
   const actionType = rule.action_type;
   const cfg = rule.action_config || {};
@@ -212,6 +246,20 @@ async function performRuleAction(rule, phoneNumber) {
       await runWorkflow(workflowId, phoneNumber);
     } catch (err) {
       console.error('[Rules] Failed to start workflow for rule', rule.id, err);
+    }
+  } else if (actionType === 'notify_admin') {
+    const text = cfg.message || cfg.text || `Notification from rule: ${rule.name}`;
+    const { getIO } = require('../realtime/io');
+    const io = getIO();
+    if (io) {
+      io.emit('staff:notification', {
+        type: 'rule_alert',
+        title: rule.name,
+        message: text,
+        phoneNumber,
+        ruleId: rule.id
+      });
+      console.log(`[Rules] Admin notified for rule ${rule.id}`);
     }
   }
 }
@@ -299,4 +347,5 @@ module.exports = {
   deleteRule,
   evaluateMessageRules,
   evaluateCourseRules,
+  evaluatePaymentRules,
 };

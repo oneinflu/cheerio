@@ -2,6 +2,7 @@
 const db = require('../../db');
 const whatsappClient = require('../integrations/meta/whatsappClient');
 const outboundWhatsApp = require('./outboundWhatsApp');
+const razorpay = require('./razorpay');
 const axios = require('axios');
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -335,8 +336,8 @@ async function runWorkflow(id, phoneNumber, context = {}) {
         const getDisplay = (val) => {
           if (!isFeedback) return val;
           if (style === 'emojis') {
-             const emojis = ['😠', '🙁', '😐', '🙂', '😄'];
-             return emojis[val - 1] || `${val}`;
+            const emojis = ['😠', '🙁', '😐', '🙂', '😄'];
+            return emojis[val - 1] || `${val}`;
           }
           if (style === 'stars') return `${val} ⭐`;
           return `${val}`;
@@ -346,7 +347,7 @@ async function runWorkflow(id, phoneNumber, context = {}) {
 
         try {
           const conversationId = await ensureConversation(phoneNumber);
-          
+
           let interactivePayload;
           if (buttonLabels.length > 0 && buttonLabels.length <= 3) {
             interactivePayload = {
@@ -384,7 +385,7 @@ async function runWorkflow(id, phoneNumber, context = {}) {
           if (interactivePayload) {
             await outboundWhatsApp.sendInteractive(conversationId, interactivePayload);
             const sentAt = new Date();
-            
+
             let matchedValue = null;
             const waitStart = Date.now();
             const timeout = isFeedback ? 120000 : 300000; // 2 or 5 mins
@@ -441,6 +442,135 @@ async function runWorkflow(id, phoneNumber, context = {}) {
           }
         } catch (err) {
           console.error(`[WorkflowRunner] Feedback/Response node failed: ${err.message}`);
+        }
+
+
+      } else if (currentNode.type === 'payment_request') {
+        const d = currentNode.data || {};
+        const amount = parseFloat(d.amount || '0');
+        const type = d.requestType || 'course';
+        const course = d.course || '';
+        const webinar = d.webinarName || '';
+        const papers = Array.isArray(d.papers) ? d.papers.join(', ') : '';
+        const summary = d.paymentSummary || '';
+
+        let displayTitle = (type === 'course') ? `Course: ${course}` : `Webinar: ${webinar}`;
+        let messageBody = `💳 *Payment Request*\n\n`;
+        if (type === 'course') {
+          messageBody += `*Course:* ${course}\n`;
+          if (papers) messageBody += `*Papers:* ${papers}\n`;
+          if (d.packageName) messageBody += `*Package:* ${d.packageName}\n`;
+        } else {
+          messageBody += `*Webinar:* ${webinar}\n`;
+        }
+        messageBody += `*Amount:* ₹${amount}\n`;
+        if (summary) messageBody += `\n*Summary:* ${summary}`;
+
+        try {
+          const conversationId = await ensureConversation(phoneNumber);
+          const contactRes = await db.query('SELECT id, external_id, profile FROM contacts WHERE external_id = $1', [phoneNumber]);
+          const contact = contactRes.rows[0] || {};
+          const contactId = contact.id;
+
+          // Generate Razorpay Link
+          console.log(`[WorkflowRunner] Creating Razorpay link for ₹${amount}...`);
+          const payLink = await razorpay.createPaymentLink({
+            amount,
+            description: displayTitle,
+            contact: phoneNumber.replace(/\+/g, ''),
+            email: contact.profile?.email || '',
+            notes: {
+              workflow_id: id,
+              contact_id: contactId,
+              conversation_id: conversationId,
+              request_type: type
+            }
+          });
+
+          // Save to DB
+          await db.query(`
+            INSERT INTO payment_requests (workflow_id, contact_id, conversation_id, amount, request_type, details, status, external_reference)
+            VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7)
+          `, [id, contactId, conversationId, amount, type, JSON.stringify(d), payLink.id]);
+
+          // Send Interactive CTA URL Button
+          const interactive = {
+            type: 'cta_url',
+            header: { type: 'text', text: 'Checkout Securely' },
+            body: { text: messageBody },
+            footer: { text: 'Click below to pay' },
+            action: {
+              name: 'cta_url',
+              parameters: {
+                display_text: 'Pay Now',
+                url: payLink.short_url
+              }
+            }
+          };
+
+          await outboundWhatsApp.sendInteractive(conversationId, interactive);
+          console.log(`[WorkflowRunner] Payment request CTA sent. Link: ${payLink.short_url}`);
+        } catch (err) {
+          console.error(`[WorkflowRunner] Payment request node failed: ${err.message}`);
+          try {
+            const conversationId = await ensureConversation(phoneNumber);
+            await outboundWhatsApp.sendText(conversationId, `⚠️ Payment link generation failed. Error: ${err.message}`);
+          } catch (e) { }
+        }
+
+      } else if (currentNode.type === 'payment_reminder') {
+        const d = currentNode.data || {};
+        const duration = parseInt(d.duration || '24', 10);
+        const unit = d.unit || 'hours';
+
+        let waitMs = duration * 60 * 60 * 1000; // default hours
+        if (unit === 'minutes') waitMs = duration * 60 * 1000;
+        if (unit === 'days') waitMs = duration * 24 * 60 * 60 * 1000;
+
+        console.log(`[WorkflowRunner] Payment reminder: waiting ${duration} ${unit}...`);
+        await sleep(waitMs);
+
+        try {
+          const conversationId = await ensureConversation(phoneNumber);
+          const paymentRes = await db.query(`
+            SELECT status FROM payment_requests 
+            WHERE conversation_id = $1 
+            ORDER BY created_at DESC LIMIT 1
+          `, [conversationId]);
+
+          const status = paymentRes.rows[0]?.status || 'unpaid';
+          const branch = (status === 'paid') ? 'paid' : 'unpaid';
+
+          if (currentNode.routes && currentNode.routes[branch]) {
+            currentNode = nodes.find(n => n.id === currentNode.routes[branch]);
+            continue;
+          } else {
+            console.log(`[WorkflowRunner] No route found for branch: ${branch}`);
+          }
+        } catch (err) {
+          console.error(`[WorkflowRunner] Payment reminder node failed: ${err.message}`);
+        }
+
+      } else if (currentNode.type === 'notification') {
+        const d = currentNode.data || {};
+        const message = d.message || 'Workflow notification alert';
+
+        try {
+          const { getIO } = require('../realtime/io');
+          const io = getIO();
+          if (io) {
+            io.emit('staff:notification', {
+              type: 'workflow_alert',
+              title: 'Workflow Alert',
+              message: message,
+              phoneNumber: phoneNumber,
+              workflowId: id,
+              nodeId: currentNode.id
+            });
+            console.log(`[WorkflowRunner] Notification sent for node ${currentNode.id}`);
+          }
+        } catch (err) {
+          console.error(`[WorkflowRunner] Notification node failed: ${err.message}`);
         }
 
       } else if (currentNode.type === 'custom_code') {

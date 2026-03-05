@@ -300,6 +300,24 @@ async function runMigrations() {
           console.log('[migrate] csat_scores table already exists.');
         }
 
+        // 0016 – payment_requests table
+        const paymentTableRes = await client.query(`
+          SELECT EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE  table_schema = 'public'
+            AND    table_name   = 'payment_requests'
+          );
+        `);
+        if (!paymentTableRes.rows[0].exists) {
+          console.log('[migrate] Adding payment_requests table...');
+          await client.query('BEGIN');
+          await runSQLFile(client, path.join(__dirname, '..', 'db', 'migrations', '0016_payment_requests.sql'));
+          await client.query('COMMIT');
+          console.log('[migrate] Applied 0016_payment_requests migration.');
+        } else {
+          console.log('[migrate] payment_requests table already exists.');
+        }
+
         return;
 
 

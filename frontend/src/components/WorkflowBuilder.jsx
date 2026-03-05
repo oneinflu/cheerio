@@ -14,7 +14,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { Button } from './ui/Button';
-import { Save, ArrowLeft, Plus, Clock, MessageSquare, GitBranch, Zap, StopCircle, Loader2, Play, MessageCircle, Code, UserCheck, Tag, Mic, Workflow as WorkflowIcon, Megaphone, Filter, Link, Copy, Check, RefreshCw, Trash2, Globe, Send, ChevronDown, ChevronUp, Image, Video, FileText as FileIcon, Upload, X, Star } from 'lucide-react';
+import { Save, ArrowLeft, Plus, Clock, MessageSquare, GitBranch, Zap, StopCircle, Loader2, Play, MessageCircle, Code, UserCheck, Tag, Mic, Workflow as WorkflowIcon, Megaphone, Filter, Link, Copy, Check, RefreshCw, Trash2, Globe, Send, ChevronDown, ChevronUp, Image, Video, FileText as FileIcon, Upload, X, Star, CreditCard, BellRing, Bell } from 'lucide-react';
 import { getTemplates, runWorkflow, aiGenerateWorkflow, getWorkflows, getCampaigns, getWebhookEvents, clearWebhookEvents, fetchMediaLibrary, uploadFlowMedia } from '../api';
 import { GallerySelectModal } from './GallerySelectModal';
 
@@ -240,11 +240,62 @@ const FeedbackNode = ({ data, selected }) => {
           </div>
         ))}
       </div>
-      <Handle type="target" position={Position.Top} className="w-3 h-3 bg-slate-400" />
-      <Handle type="source" position={Position.Bottom} className="w-3 h-3 bg-slate-400" />
+      <Handle type="target" position={Position.Top} />
+      <Handle type="source" position={Position.Bottom} />
     </NodeWrapper>
   );
 };
+
+const PaymentRequestNode = ({ data, selected }) => {
+  const type = data.requestType || 'course';
+  return (
+    <NodeWrapper selected={selected} title="Payment Request" icon={CreditCard} colorClass="bg-indigo-600">
+      <div className="space-y-1">
+        <div className="flex justify-between items-center text-[10px]">
+          <span className="font-bold text-slate-600 uppercase tracking-tight">{type === 'webinar' ? 'WEBINAR' : 'COURSE'}</span>
+          <span className="text-indigo-600 font-bold">₹{data.amount || '0'}</span>
+        </div>
+        <div className="text-[11px] font-medium text-slate-800 line-clamp-1">
+          {type === 'webinar' ? (data.webinarName || 'No Webinar Selected') : (data.course || 'No Course Selected')}
+        </div>
+        {type === 'course' && data.papers && data.papers.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-1">
+            {data.papers.map(p => (
+              <span key={p} className="text-[8px] px-1 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded leading-none">
+                {p}
+              </span>
+            ))}
+          </div>
+        )}
+        <div className="text-[9px] text-slate-400 italic mt-1 line-clamp-1 border-t border-slate-50 pt-1">
+          {data.paymentSummary || 'No summary...'}
+        </div>
+      </div>
+      <Handle type="target" position={Position.Top} />
+      <Handle type="source" position={Position.Bottom} />
+    </NodeWrapper>
+  );
+};
+
+const PaymentReminderNode = ({ data, selected }) => (
+  <NodeWrapper selected={selected} title="Payment Reminder" icon={BellRing} colorClass="bg-orange-500">
+    <div className="space-y-1">
+      <div className="text-[10px] text-slate-500 flex items-center gap-1">
+        <Clock size={10} />
+        <span>Wait: {data.duration || '24'} {data.unit || 'hours'}</span>
+      </div>
+      <div className="text-[11px] font-bold text-slate-800">Branch on: Paid/Unpaid</div>
+      <div className="grid grid-cols-2 gap-2 mt-2">
+        <div className="h-6 rounded bg-emerald-50 border border-emerald-100 flex items-center justify-center text-[8px] font-bold text-emerald-600 uppercase">PAID</div>
+        <div className="h-6 rounded bg-red-50 border border-red-100 flex items-center justify-center text-[8px] font-bold text-red-600 uppercase">UNPAID</div>
+      </div>
+    </div>
+    <Handle type="target" position={Position.Top} />
+    <Handle type="source" position={Position.Bottom} id="paid" style={{ left: '25%' }} />
+    <Handle type="source" position={Position.Bottom} id="unpaid" style={{ left: '75%' }} />
+  </NodeWrapper>
+);
+
 
 const CustomCodeNode = ({ data, selected }) => {
   return (
@@ -293,6 +344,18 @@ const ActionNode = ({ data, selected }) => {
             : isStatus
               ? data.actionValue || 'open'
               : data.actionValue || 'Configure...'}
+      </div>
+      <Handle type="target" position={Position.Top} className="w-3 h-3 bg-slate-400" />
+      <Handle type="source" position={Position.Bottom} className="w-3 h-3 bg-slate-400" />
+    </NodeWrapper>
+  );
+};
+
+const NotificationNode = ({ data, selected }) => {
+  return (
+    <NodeWrapper selected={selected} title="Internal Alert" icon={Bell} colorClass="bg-orange-500">
+      <div className="text-xs text-slate-500 font-medium mb-1 truncate max-w-[180px]">
+        {data.message || 'Configure internal alert...'}
       </div>
       <Handle type="target" position={Position.Top} className="w-3 h-3 bg-slate-400" />
       <Handle type="source" position={Position.Bottom} className="w-3 h-3 bg-slate-400" />
@@ -596,11 +659,14 @@ const nodeTypes = {
   end: EndNode,
   response_message: ResponseMessageNode,
   feedback: FeedbackNode,
+  payment_request: PaymentRequestNode,
+  payment_reminder: PaymentReminderNode,
   campaign_trigger: CampaignTriggerNode,
   campaign_condition: CampaignConditionNode,
   incoming_webhook: IncomingWebhookNode,
   new_contact: NewContactCreatedNode,
   xolox_event: XoloxEventNode,
+  notification: NotificationNode,
 };
 
 // --- Helper Functions ---
@@ -813,6 +879,16 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
       .then(res => { if (res.success) setAvailableCampaigns(res.campaigns || []); })
       .catch(console.error);
   }, []);
+
+  const handleAddNotificationAction = useCallback(() => {
+    const newNode = {
+      id: `notification_${Math.random().toString(36).substr(2, 9)}`,
+      type: 'notification',
+      position: { x: 500, y: 300 },
+      data: { message: 'Alert team!' },
+    };
+    setNodes((nds) => nds.concat(newNode));
+  }, [setNodes]);
 
   const onConnect = useCallback(
     (params) => setEdges((eds) => addEdge(params, eds)),
@@ -1328,6 +1404,43 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
     setSelectedNode(node);
   }, [setNodes]);
 
+  const handleAddPaymentRequestAction = useCallback(() => {
+    const nodeId = getId();
+    const node = {
+      id: nodeId,
+      type: 'payment_request',
+      position: { x: 0, y: 300 },
+      data: {
+        label: 'Payment Request',
+        requestType: 'course',
+        amount: '15000',
+        course: 'CPA US',
+        papers: ['FAR'],
+        packageName: 'Full Course',
+        validityTerms: '12 Months',
+        paymentSummary: 'Standard course enrollment fee'
+      },
+    };
+    setNodes(nds => [...nds, node]);
+    setSelectedNode(node);
+  }, [setNodes]);
+
+  const handleAddPaymentReminderAction = useCallback(() => {
+    const nodeId = getId();
+    const node = {
+      id: nodeId,
+      type: 'payment_reminder',
+      position: { x: 0, y: 400 },
+      data: {
+        label: 'Payment Reminder',
+        duration: '24',
+        unit: 'hours'
+      },
+    };
+    setNodes(nds => [...nds, node]);
+    setSelectedNode(node);
+  }, [setNodes]);
+
   // Load gallery and open the picker modal
   const openGallery = useCallback(async () => {
     setShowGalleryModal(true);
@@ -1427,6 +1540,12 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
         const failEdge = edges.find(e => e.source === node.id && e.sourceHandle === 'fail');
         if (successEdge) nodeDef.onSuccess = successEdge.target;
         if (failEdge) nodeDef.onFail = failEdge.target;
+      } else if (node.type === 'payment_reminder') {
+        const paidEdge = edges.find(e => e.source === node.id && e.sourceHandle === 'paid');
+        const unpaidEdge = edges.find(e => e.source === node.id && e.sourceHandle === 'unpaid');
+        nodeDef.routes = {};
+        if (paidEdge) nodeDef.routes.paid = paidEdge.target;
+        if (unpaidEdge) nodeDef.routes.unpaid = unpaidEdge.target;
       } else {
         const edge = edges.find(e => e.source === node.id);
         if (edge) nodeDef.next = edge.target;
@@ -2027,6 +2146,57 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 <div className="min-w-0">
                   <div className="text-xs font-semibold text-yellow-800">Feedback Collection</div>
                   <div className="text-[10px] text-yellow-600">Track customer CSAT</div>
+                </div>
+              </div>
+            )}
+
+            {/* Payment Request action */}
+            {viewMode === 'canvas' && (
+              <div
+                className="flex items-center gap-2 p-2 rounded-md bg-indigo-50 border border-indigo-200 cursor-pointer hover:bg-indigo-100 transition-colors"
+                onClick={handleAddPaymentRequestAction}
+                title="Send a payment request for courses or webinars"
+              >
+                <div className="w-7 h-7 rounded-md bg-indigo-600 flex items-center justify-center shrink-0">
+                  <CreditCard size={14} className="text-white" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold text-indigo-800">Payment Request</div>
+                  <div className="text-[10px] text-indigo-600">Course & webinar fees</div>
+                </div>
+              </div>
+            )}
+
+            {/* Payment Reminder action */}
+            {viewMode === 'canvas' && (
+              <div
+                className="flex items-center gap-2 p-2 rounded-md bg-orange-50 border border-orange-200 cursor-pointer hover:bg-orange-100 transition-colors"
+                onClick={handleAddPaymentReminderAction}
+                title="Follow up on pending payments with specific conditions"
+              >
+                <div className="w-7 h-7 rounded-md bg-orange-600 flex items-center justify-center shrink-0">
+                  <BellRing size={14} className="text-white" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold text-orange-800">Payment Reminder</div>
+                  <div className="text-[10px] text-orange-600">Follow up on unpaid</div>
+                </div>
+              </div>
+            )}
+
+            {/* Internal Alert action */}
+            {viewMode === 'canvas' && (
+              <div
+                className="flex items-center gap-2 p-2 rounded-md bg-orange-50 border border-orange-200 cursor-pointer hover:bg-orange-100 transition-colors"
+                onClick={handleAddNotificationAction}
+                title="Send an internal alert to agents when this point is reached"
+              >
+                <div className="w-7 h-7 rounded-md bg-orange-500 flex items-center justify-center shrink-0">
+                  <Bell size={14} className="text-white" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold text-orange-800">Internal Alert</div>
+                  <div className="text-[10px] text-orange-600">Notify your team</div>
                 </div>
               </div>
             )}
@@ -3491,62 +3661,309 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
 
               {selectedNode.type === 'feedback' && (
                 <div className="space-y-4">
-                  <div className="bg-yellow-50 border border-yellow-100 rounded-lg p-3">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Star size={14} className="text-yellow-600" />
+                  <div className="bg-yellow-50 border border-yellow-100 rounded-lg p-4 flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-yellow-600 flex items-center justify-center text-white shadow-sm">
+                      <Star size={20} />
+                    </div>
+                    <div>
                       <span className="text-xs font-semibold text-yellow-800 uppercase tracking-tight">Feedback Collection</span>
+                      <h3 className="text-sm font-bold text-slate-800">Customer CSAT Tracking</h3>
                     </div>
-                    <p className="text-[11px] text-yellow-600 leading-relaxed">
-                      Collect Customer Satisfaction (CSAT) scores. <b>Buttons 1-5</b> will be sent to the user.
-                    </p>
                   </div>
 
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700">Question* (Mandatory)</label>
-                    <textarea
-                      className="w-full border border-slate-300 rounded-md p-2.5 text-sm min-h-[80px] focus:ring-2 focus:ring-yellow-300 focus:outline-none focus:border-yellow-400"
-                      placeholder="e.g. Rate your experience with us"
-                      value={selectedNode.data.question || ''}
-                      onChange={(e) => updateNodeData('question', e.target.value)}
-                    />
+                  <div className="space-y-4 px-1">
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-slate-500 uppercase">Feedback Question</label>
+                      <textarea
+                        className="w-full text-sm p-3 border border-slate-300 rounded-lg h-24 focus:ring-2 focus:ring-yellow-500/20 focus:outline-none"
+                        value={selectedNode.data.question || ''}
+                        onChange={(e) => updateNodeData('question', e.target.value)}
+                        placeholder="e.g. Your feedback matters! Please rate this chat on scale of 1-5"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-slate-500 uppercase">Button Display Style</label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {[
+                          { key: 'numbers', label: 'Numbers', icon: '🔢' },
+                          { key: 'emojis', label: 'Emojis', icon: '😄' },
+                          { key: 'stars', label: 'Stars', icon: '⭐' },
+                        ].map((style) => (
+                          <button
+                            key={style.key}
+                            type="button"
+                            onClick={() => updateNodeData('buttonStyle', style.key)}
+                            className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all ${(selectedNode.data.buttonStyle || 'numbers') === style.key
+                              ? 'border-yellow-500 bg-yellow-50 shadow-sm'
+                              : 'bg-white border-slate-100 text-slate-600 hover:border-yellow-200'
+                              }`}
+                          >
+                            <span className="text-xl mb-1">{style.icon}</span>
+                            <span className="text-[10px] font-bold">{style.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 mt-6 group">
+                      <div className="flex items-center gap-3 mb-2">
+                        <div className="p-2 bg-white rounded-lg border border-slate-200 text-indigo-500 transition-colors group-hover:border-indigo-200">
+                          <RefreshCw size={14} className="animate-spin-slow" />
+                        </div>
+                        <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Analytics Integration</h4>
+                      </div>
+                      <p className="text-[10px] text-slate-500 leading-relaxed italic">
+                        Responses are automatically captured and calculated as <b>CSAT = (Promoters / Total) × 100</b>. View live metrics in your dashboard.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {selectedNode.type === 'payment_request' && (
+                <div className="space-y-6">
+                  <div className="p-4 bg-indigo-50 rounded-lg border border-indigo-100 flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center text-white shadow-sm">
+                      <CreditCard size={20} />
+                    </div>
+                    <div>
+                      <span className="text-xs font-semibold text-indigo-800 uppercase tracking-tight">Payment Request</span>
+                      <h3 className="text-sm font-bold text-slate-800">Generate Transction Link</h3>
+                    </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700">Button Display Style</label>
-                    <div className="grid grid-cols-3 gap-2">
-                      {[
-                        { key: 'numbers', label: 'Numbers', sub: '1, 2, 3, 4, 5', icon: '🔢' },
-                        { key: 'emojis',  label: 'Emojis',  sub: '😠, 🙁, 😐, 🙂, 😄', icon: '😄' },
-                        { key: 'stars',   label: 'Stars',   sub: '1⭐, 2⭐...', icon: '⭐' },
-                      ].map(style => (
-                        <button
-                          key={style.key}
-                          type="button"
-                          onClick={() => updateNodeData('buttonStyle', style.key)}
-                          className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all ${
-                            (selectedNode.data.buttonStyle || 'numbers') === style.key
-                              ? 'border-yellow-500 bg-yellow-50 shadow-sm scale-[1.02]'
-                              : 'border-slate-100 bg-white hover:border-yellow-200'
-                          }`}
+                  <div className="space-y-4 px-1 pb-10">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase">Request Type</label>
+                        <select
+                          className="w-full text-sm p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:outline-none bg-white"
+                          value={selectedNode.data.requestType || 'course'}
+                          onChange={(e) => updateNodeData('requestType', e.target.value)}
                         >
-                          <span className="text-xl mb-1">{style.icon}</span>
-                          <span className={`text-[11px] font-bold ${
-                            (selectedNode.data.buttonStyle || 'numbers') === style.key ? 'text-yellow-800' : 'text-slate-700'
-                          }`}>{style.label}</span>
-                          <span className="text-[8px] text-slate-400 font-medium uppercase mt-0.5">{style.sub.split(',')[0]}...</span>
-                        </button>
-                      ))}
+                          <option value="course">Course Payment</option>
+                          <option value="webinar">Webinar Enrollment</option>
+                        </select>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase">Amount (₹)</label>
+                        <input
+                          type="number"
+                          className="w-full text-sm p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:outline-none"
+                          value={selectedNode.data.amount || ''}
+                          onChange={(e) => updateNodeData('amount', e.target.value)}
+                          placeholder="0.00"
+                        />
+                      </div>
+                    </div>
+
+                    {selectedNode.data.requestType === 'webinar' ? (
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase">Webinar Name</label>
+                        <input
+                          type="text"
+                          className="w-full text-sm p-2 border border-slate-300 rounded-lg"
+                          value={selectedNode.data.webinarName || ''}
+                          onChange={(e) => updateNodeData('webinarName', e.target.value)}
+                          placeholder="Enter webinar title..."
+                        />
+                      </div>
+                    ) : (
+                      <>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-slate-500 uppercase">Selected Course</label>
+                          <select
+                            className="w-full text-sm p-2 border border-slate-300 rounded-lg bg-white"
+                            value={selectedNode.data.course || ''}
+                            onChange={(e) => {
+                              updateNodeData('course', e.target.value);
+                              updateNodeData('papers', []);
+                            }}
+                          >
+                            <option value="CPA US">CPA US</option>
+                            <option value="CMA US">CMA US</option>
+                            <option value="ACCA">ACCA</option>
+                            <option value="EA">EA (Enrolled Agent)</option>
+                          </select>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-slate-500 uppercase">Select Papers Included</label>
+                          <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 p-3 bg-slate-50 rounded-lg border border-slate-200 max-h-[160px] overflow-y-auto no-scrollbar">
+                            {(() => {
+                              const course = selectedNode.data.course;
+                              let pList = [];
+                              if (course === 'CPA US') pList = ['FAR', 'REG', 'BEC', 'AUD', 'IEC', 'TCP'];
+                              else if (course === 'CMA US') pList = ['Paper 1', 'Paper 2'];
+                              else if (course === 'ACCA') {
+                                pList = [
+                                  'Level 1 - Paper 1', 'Level 1 - Paper 2', 'Level 1 - Paper 3', 'Level 1 - Paper 4',
+                                  'Level 2 - Paper 1', 'Level 2 - Paper 2', 'Level 2 - Paper 3', 'Level 2 - Paper 4',
+                                  'Level 3 - Paper 1', 'Level 3 - Paper 2', 'Level 3 - Paper 3', 'Level 3 - Paper 4'
+                                ];
+                              }
+                              else if (course === 'EA') pList = ['Part 1', 'Part 2', 'Part 3'];
+
+                              return pList.map(p => (
+                                <label key={p} className="flex items-center gap-2 text-[10px] text-slate-700 cursor-pointer hover:text-indigo-600 transition-colors">
+                                  <input
+                                    type="checkbox"
+                                    className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-3 w-3"
+                                    checked={(selectedNode.data.papers || []).includes(p)}
+                                    onChange={(e) => {
+                                      const current = selectedNode.data.papers || [];
+                                      const next = e.target.checked
+                                        ? [...current, p]
+                                        : current.filter(item => item !== p);
+                                      updateNodeData('papers', next);
+                                    }}
+                                  />
+                                  <span className="truncate">{p}</span>
+                                </label>
+                              ));
+                            })()}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-slate-500 uppercase">Package Name</label>
+                            <input
+                              type="text"
+                              className="w-full text-sm p-2 border border-slate-300 rounded-lg"
+                              value={selectedNode.data.packageName || ''}
+                              onChange={(e) => updateNodeData('packageName', e.target.value)}
+                              placeholder="e.g. Platinum Plus"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-slate-500 uppercase">Validity Terms</label>
+                            <input
+                              type="text"
+                              className="w-full text-sm p-2 border border-slate-300 rounded-lg"
+                              value={selectedNode.data.validityTerms || ''}
+                              onChange={(e) => updateNodeData('validityTerms', e.target.value)}
+                              placeholder="e.g. 18 Months"
+                            />
+                          </div>
+                        </div>
+                      </>
+                    )}
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-500 uppercase">Payment Summary / Remarks</label>
+                      <textarea
+                        className="w-full text-sm p-2 border border-slate-300 rounded-lg h-16 resize-none"
+                        value={selectedNode.data.paymentSummary || ''}
+                        onChange={(e) => updateNodeData('paymentSummary', e.target.value)}
+                        placeholder="e.g. Advance payment for full course enrollment..."
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {selectedNode.type === 'payment_reminder' && (
+                <div className="space-y-6">
+                  <div className="p-4 bg-orange-50 rounded-lg border border-orange-100 flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-orange-500 flex items-center justify-center text-white shadow-sm">
+                      <BellRing size={20} />
+                    </div>
+                    <div>
+                      <span className="text-xs font-semibold text-orange-800 uppercase tracking-tight">Payment Reminder</span>
+                      <h3 className="text-sm font-bold text-slate-800">Smart Follow-up</h3>
                     </div>
                   </div>
 
-                  <div className="pt-4 mt-6 border-t border-slate-100 bg-slate-50/50 -mx-6 px-6 py-4">
-                    <div className="flex items-center gap-2 mb-2">
-                      <RefreshCw size={12} className="text-slate-400" />
-                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">CSAT Metrics Integration</span>
+                  <div className="space-y-4 px-1 pb-10">
+                    <div className="p-3 bg-blue-50 rounded-xl border border-blue-100 mb-2">
+                      <div className="flex items-start gap-2">
+                        <Clock size={14} className="text-blue-600 mt-0.5" />
+                        <p className="text-[10px] text-blue-700 leading-normal font-medium">
+                          Wait for the selected time, then branch based on payment completion.
+                        </p>
+                      </div>
                     </div>
-                    <p className="text-[10px] text-slate-500 leading-relaxed italic">
-                      "Responses are automatically calculated in the backend. CSAT = (Promoters / Total) × 100"
-                    </p>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase">Wait Duration</label>
+                        <input
+                          type="number"
+                          className="w-full text-sm p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500/20 focus:outline-none"
+                          value={selectedNode.data.duration || '24'}
+                          onChange={(e) => updateNodeData('duration', e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase">Unit</label>
+                        <select
+                          className="w-full text-sm p-2 border border-slate-300 rounded-lg bg-white"
+                          value={selectedNode.data.unit || 'hours'}
+                          onChange={(e) => updateNodeData('unit', e.target.value)}
+                        >
+                          <option value="minutes">Minutes</option>
+                          <option value="hours">Hours</option>
+                          <option value="days">Days</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="pt-4 border-t border-slate-200">
+                      <h4 className="text-[10px] font-bold text-slate-500 uppercase mb-3 tracking-widest">Automation Branches</h4>
+                      <div className="space-y-2">
+                        <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-100 flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-sm" />
+                            <span className="text-xs font-bold text-emerald-800">PAID</span>
+                          </div>
+                          <span className="text-[9px] text-emerald-600 font-medium">Exit ID: paid</span>
+                        </div>
+                        <div className="p-3 bg-red-50 rounded-lg border border-red-100 flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-red-500 shadow-sm" />
+                            <span className="text-xs font-bold text-red-800">UNPAID</span>
+                          </div>
+                          <span className="text-[9px] text-red-600 font-medium">Exit ID: unpaid</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {selectedNode.type === 'notification' && (
+                <div className="space-y-6">
+                  <div className="p-4 bg-orange-50 rounded-lg border border-orange-100 flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-orange-500 flex items-center justify-center text-white shadow-sm">
+                      <Bell size={20} />
+                    </div>
+                    <div>
+                      <span className="text-xs font-semibold text-orange-800 uppercase tracking-tight">Internal Alert</span>
+                      <h3 className="text-sm font-bold text-slate-800">Team Notification</h3>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4 px-1 pb-10">
+                    <div className="p-3 bg-blue-50 rounded-xl border border-blue-100 mb-2">
+                      <div className="flex items-start gap-2">
+                        <Megaphone size={14} className="text-blue-600 mt-0.5" />
+                        <p className="text-[10px] text-blue-700 leading-normal font-medium">
+                          This sends an instant alert to all active agents via the dashboard.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-500 uppercase">Alert Message</label>
+                      <textarea
+                        className="w-full text-sm p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-orange-500/20 focus:outline-none min-h-[120px]"
+                        value={selectedNode.data.message || 'Alert team!'}
+                        onChange={(e) => updateNodeData('message', e.target.value)}
+                        placeholder="e.g. User reached payment step"
+                      />
+                    </div>
                   </div>
                 </div>
               )}

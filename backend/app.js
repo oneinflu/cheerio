@@ -114,6 +114,7 @@ function createApp() {
   app.use('/webhooks/shopify', require('./src/webhooks/shopify/index'));
   app.use('/webhooks/incoming', require('./src/webhooks/generic/incoming'));
   app.use('/webhooks/kylas', require('./src/webhooks/generic/kylas'));
+  app.use('/webhooks/razorpay', require('./src/webhooks/razorpay'));
   app.use('/api/auth', authRouter); // Login
   app.use('/api/auth', instagramAuthRouter); // Instagram Callback
   app.use('/api/team-users', teamRouter); // Team Users
