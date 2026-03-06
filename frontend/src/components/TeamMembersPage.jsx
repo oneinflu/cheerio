@@ -1,16 +1,25 @@
 'use strict';
 import React, { useEffect, useState, useMemo } from 'react';
-import { Loader2, Shield, Mail, Search, ChevronLeft, ChevronRight, Filter, X } from 'lucide-react';
-import { getTeamUsers } from '../api';
+import { Loader2, Shield, Mail, Search, ChevronLeft, ChevronRight, Filter, X, Edit2, Check, User } from 'lucide-react';
+import { getTeamUsers, updateTeamUser } from '../api';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
 import { Badge } from './ui/Badge';
 import { Input } from './ui/Input';
 import { Button } from './ui/Button';
+import { Modal } from './ui/Modal';
 
 export default function TeamMembersPage() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // Edit State
+  const [editingUser, setEditingUser] = useState(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editFormData, setEditFormData] = useState({
+    course: '',
+    language: ''
+  });
 
   // Filter & Search States
   const [searchTerm, setSearchTerm] = useState('');
@@ -84,6 +93,38 @@ export default function TeamMembersPage() {
     const roles = new Set(users.map(u => u.role).filter(Boolean));
     return Array.from(roles);
   }, [users]);
+
+  const handleEditClick = (user) => {
+    const attrs = user.attributes || {};
+    setEditingUser(user);
+    setEditFormData({
+        course: attrs.course || '',
+        language: attrs.language || ''
+    });
+    setIsEditModalOpen(true);
+  };
+
+  const handleSaveAttributes = async () => {
+    if (!editingUser) return;
+    try {
+        const attributes = {
+            course: editFormData.course,
+            language: editFormData.language
+        };
+        const res = await updateTeamUser(editingUser.id, { attributes });
+        if (res.success) {
+            // Update local state
+            setUsers(users.map(u => u.id === editingUser.id ? { ...u, attributes } : u));
+            setIsEditModalOpen(false);
+            setEditingUser(null);
+        } else {
+            alert('Failed to update user attributes');
+        }
+    } catch (err) {
+        console.error('Failed to update user:', err);
+        alert('Error updating user');
+    }
+  };
 
   if (loading) {
     return (
@@ -184,6 +225,7 @@ export default function TeamMembersPage() {
                   <tr className="text-left text-xs text-slate-500 border-b border-slate-100 bg-slate-50/50">
                     <th className="py-3 px-4 font-medium rounded-tl-lg">User</th>
                     <th className="py-3 px-4 font-medium">Role</th>
+                    <th className="py-3 px-4 font-medium">Skills</th>
                     <th className="py-3 px-4 font-medium">Status</th>
                     <th className="py-3 px-4 font-medium rounded-tr-lg">Joined</th>
                   </tr>
@@ -243,6 +285,34 @@ export default function TeamMembersPage() {
                                         {user.department}
                                     </span>
                                 )}
+                            </div>
+                        </td>
+                        <td className="py-3 px-4">
+                            <div className="flex flex-col gap-1 items-start">
+                                {user.attributes && (user.attributes.course || user.attributes.language) ? (
+                                    <div className="flex flex-wrap gap-1">
+                                        {user.attributes.course && (
+                                            <Badge variant="outline" className="text-[10px] py-0 h-5 border-blue-200 bg-blue-50 text-blue-700">
+                                                {user.attributes.course}
+                                            </Badge>
+                                        )}
+                                        {user.attributes.language && (
+                                            <Badge variant="outline" className="text-[10px] py-0 h-5 border-purple-200 bg-purple-50 text-purple-700">
+                                                {user.attributes.language}
+                                            </Badge>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <span className="text-xs text-slate-400 italic">No skills set</span>
+                                )}
+                                <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    className="h-6 px-2 text-[10px] text-slate-400 hover:text-blue-600 -ml-2"
+                                    onClick={() => handleEditClick(user)}
+                                >
+                                    <Edit2 className="h-3 w-3 mr-1" /> Edit
+                                </Button>
                             </div>
                         </td>
                         <td className="py-3 px-4">
@@ -330,6 +400,40 @@ export default function TeamMembersPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} title="Edit Agent Skills">
+        <div className="space-y-4">
+            <div className="bg-slate-50 p-3 rounded-md text-sm text-slate-600 mb-4">
+                Assign skills to <strong>{editingUser?.name}</strong>. These attributes are used by automation rules for "Round Robin" assignment.
+            </div>
+            
+            <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">Course</label>
+                <Input 
+                    placeholder="e.g. CPA, CMA, ACCA" 
+                    value={editFormData.course}
+                    onChange={(e) => setEditFormData({...editFormData, course: e.target.value})}
+                />
+            </div>
+            
+            <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">Language</label>
+                <Input 
+                    placeholder="e.g. English, Spanish, Hindi" 
+                    value={editFormData.language}
+                    onChange={(e) => setEditFormData({...editFormData, language: e.target.value})}
+                />
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4">
+                <Button variant="ghost" onClick={() => setIsEditModalOpen(false)}>Cancel</Button>
+                <Button onClick={handleSaveAttributes}>
+                    <Check className="h-4 w-4 mr-2" />
+                    Save Changes
+                </Button>
+            </div>
+        </div>
+      </Modal>
     </div>
   );
 }

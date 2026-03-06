@@ -357,6 +357,17 @@ export async function getTeamUsers() {
   return res.json();
 }
 
+export async function updateTeamUser(id, data) {
+  const headers = getAuthHeaders();
+  // Using local API instead of external since we just implemented it locally
+  const res = await fetch(`/api/team-users/${id}`, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
 export async function getWorkflows() {
   const headers = getAuthHeaders();
   const res = await fetch('/api/workflows', { headers });

@@ -2,6 +2,8 @@
 const db = require('../../db');
 const { runWorkflow } = require('./workflows');
 const outboundWhatsApp = require('./outboundWhatsApp');
+const { findAgentForAssignment } = require('./agentAssignment');
+const { claimConversation } = require('./conversationClaim'); // Or reuse logic here
 
 async function listRules() {
   const res = await db.query(
@@ -260,6 +262,38 @@ async function performRuleAction(rule, phoneNumber) {
         ruleId: rule.id
       });
       console.log(`[Rules] Admin notified for rule ${rule.id}`);
+    }
+  } else if (actionType === 'assign_agent') {
+    const conditions = {
+      course: cfg.course,
+      language: cfg.language
+    };
+    
+    try {
+      const agentId = await findAgentForAssignment(conditions);
+      if (agentId) {
+        const conversationId = await ensureConversationForRule(phoneNumber);
+        if (conversationId) {
+          // Find team for user
+          const teamRes = await db.query('SELECT team_id FROM team_members WHERE user_id = $1 LIMIT 1', [agentId]);
+          const teamId = teamRes.rows[0]?.team_id;
+          
+          // Assign using claim logic or direct insert
+          // We'll use direct insert for simplicity as system override
+          await db.query(`
+            INSERT INTO conversation_assignments (conversation_id, team_id, assignee_user_id, claimed_at)
+            VALUES ($1, $2, $3, NOW())
+            ON CONFLICT (conversation_id) WHERE released_at IS NULL
+            DO UPDATE SET assignee_user_id = EXCLUDED.assignee_user_id, team_id = EXCLUDED.team_id, claimed_at = NOW()
+          `, [conversationId, teamId, agentId]);
+          
+          console.log(`[Rules] Assigned conversation ${conversationId} to agent ${agentId} based on conditions`, conditions);
+        }
+      } else {
+        console.warn(`[Rules] No agent found matching conditions`, conditions);
+      }
+    } catch (err) {
+      console.error('[Rules] Failed to assign agent for rule', rule.id, err);
     }
   }
 }

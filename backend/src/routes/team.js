@@ -70,7 +70,7 @@ router.get('/:id', auth.requireAuth, async (req, res, next) => {
 // GET /api/team-users
 router.get('/', auth.requireAuth, async (req, res, next) => {
   try {
-    const result = await db.query('SELECT id, name, email, role, active, created_at FROM users ORDER BY name ASC');
+    const result = await db.query('SELECT id, name, email, role, active, created_at, attributes FROM users ORDER BY name ASC');
     
     const users = result.rows.map(u => {
       const parts = u.name.split(' ');
@@ -83,11 +83,36 @@ router.get('/', auth.requireAuth, async (req, res, next) => {
         email: u.email,
         role: u.role,
         status: u.active ? 'active' : 'logout',
-        createdAt: u.created_at
+        createdAt: u.created_at,
+        attributes: u.attributes || {}
       };
     });
 
     res.json({ data: users });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PUT /api/team-users/:id - Update user details (e.g. attributes)
+router.put('/:id', auth.requireRole('admin', 'super_admin'), async (req, res, next) => {
+  const { id } = req.params;
+  const { attributes } = req.body;
+  
+  try {
+    // Only allow updating attributes for now
+    if (attributes) {
+      const result = await db.query(
+        'UPDATE users SET attributes = $1 WHERE id = $2 RETURNING id, attributes',
+        [attributes, id]
+      );
+      if (result.rowCount === 0) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      return res.json({ success: true, data: result.rows[0] });
+    }
+    
+    res.status(400).json({ error: 'No updateable fields provided' });
   } catch (err) {
     next(err);
   }

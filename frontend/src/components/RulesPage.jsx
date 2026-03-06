@@ -80,6 +80,8 @@ export default function RulesPage() {
         action_type: rule.action_type,
         message: cfg.message || cfg.text || '',
         workflow_id: cfg.workflow_id || '',
+        course: cfg.course || '',
+        language: cfg.language || ''
       });
     } else {
       setEditingRule(null);
@@ -92,6 +94,8 @@ export default function RulesPage() {
         action_type: 'send_message',
         message: '',
         workflow_id: '',
+        course: '',
+        language: ''
       });
     }
     setIsModalOpen(true);
@@ -112,9 +116,11 @@ export default function RulesPage() {
       match_value: formData.match_value,
       action_type: formData.action_type,
       action_config:
-        formData.action_type === 'send_message'
+        formData.action_type === 'send_message' || formData.action_type === 'notify_admin'
           ? { message: formData.message }
-          : { workflow_id: formData.workflow_id },
+          : formData.action_type === 'assign_agent'
+            ? { course: formData.course, language: formData.language }
+            : { workflow_id: formData.workflow_id },
     };
 
     try {
@@ -203,7 +209,9 @@ export default function RulesPage() {
                       ? `Send message: ${cfg.message || cfg.text || ''}`
                       : rule.action_type === 'notify_admin'
                         ? `Notify Admin: ${cfg.message || cfg.text || ''}`
-                        : `Start workflow`;
+                        : rule.action_type === 'assign_agent'
+                          ? `Assign Agent (Course: ${cfg.course || 'Any'}, Lang: ${cfg.language || 'Any'})`
+                          : `Start workflow`;
                   const wf =
                     rule.action_type === 'start_workflow' &&
                     workflows.find((w) => String(w.id) === String(cfg.workflow_id));
@@ -357,6 +365,7 @@ export default function RulesPage() {
                 <option value="send_message">Send message</option>
                 <option value="notify_admin">Notify Admin</option>
                 <option value="start_workflow">Start workflow</option>
+                <option value="assign_agent">Assign Agent</option>
               </select>
             </div>
 
@@ -376,6 +385,27 @@ export default function RulesPage() {
                   }
                   placeholder={formData.action_type === 'send_message' ? "Type the reply message" : "Type the admin alert message"}
                 />
+              </div>
+            ) : formData.action_type === 'assign_agent' ? (
+              <div className="space-y-2">
+                 <label className="text-sm font-medium text-slate-700">Assignment Conditions (Optional)</label>
+                 <div className="grid grid-cols-2 gap-2">
+                    <input 
+                      className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
+                      placeholder="Course (e.g. CPA)"
+                      value={formData.course || ''} // We need to add course/language to formData state
+                      onChange={(e) => setFormData({...formData, course: e.target.value})}
+                    />
+                    <input 
+                      className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
+                      placeholder="Language (e.g. English)"
+                      value={formData.language || ''}
+                      onChange={(e) => setFormData({...formData, language: e.target.value})}
+                    />
+                 </div>
+                 <p className="text-[10px] text-slate-500">
+                   Assigns to available agent via Round Robin. Leave blank to match any.
+                 </p>
               </div>
             ) : (
               <div className="space-y-2">

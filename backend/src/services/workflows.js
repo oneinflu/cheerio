@@ -3,6 +3,7 @@ const db = require('../../db');
 const whatsappClient = require('../integrations/meta/whatsappClient');
 const outboundWhatsApp = require('./outboundWhatsApp');
 const razorpay = require('./razorpay');
+const { findAgentForAssignment } = require('./agentAssignment');
 const axios = require('axios');
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -660,19 +661,43 @@ async function runWorkflow(id, phoneNumber, context = {}) {
               }
             }
           } else if (actionType === 'assign_agent') {
-            // Find user by email (assuming actionValue is email)
-            const userRes = await db.query('SELECT id FROM users WHERE email = $1', [actionValue]);
-            if (userRes.rowCount > 0) {
-              const userId = userRes.rows[0].id;
-              // Find a team for this user
-              const teamRes = await db.query('SELECT team_id FROM team_members WHERE user_id = $1 LIMIT 1', [userId]);
-              if (teamRes.rowCount > 0) {
-                const teamId = teamRes.rows[0].team_id;
-                // Upsert assignment (close old one implicitly by constraint? No, constraint is partial unique index)
-                // We need to release old assignment first if exists, or update it?
-                // The index is: UNIQUE (conversation_id) WHERE released_at IS NULL
-                // So we can update the existing active assignment or insert new one.
+            let assignedUserId = null;
+            let teamId = null;
 
+            // Check if actionValue is a conditions object (Round Robin) or direct email assignment
+            let conditions = {};
+            if (typeof actionValue === 'object' && actionValue !== null) {
+                 conditions = actionValue;
+            } else if (typeof actionValue === 'string' && actionValue.trim().startsWith('{')) {
+                 try { conditions = JSON.parse(actionValue); } catch (e) {
+                   // Not JSON, assume email
+                 }
+            }
+
+            if (Object.keys(conditions).length > 0) {
+                // Round Robin Assignment based on conditions
+                console.log(`[WorkflowRunner] Attempting Round Robin assignment with conditions:`, conditions);
+                assignedUserId = await findAgentForAssignment(conditions);
+                if (assignedUserId) {
+                     // Get team
+                     const teamRes = await db.query('SELECT team_id FROM team_members WHERE user_id = $1 LIMIT 1', [assignedUserId]);
+                     teamId = teamRes.rows[0]?.team_id;
+                } else {
+                     console.log(`[WorkflowRunner] No agent found matching conditions`);
+                }
+            } else {
+                // Direct Email Assignment (Legacy support)
+                const userRes = await db.query('SELECT id FROM users WHERE email = $1', [actionValue]);
+                if (userRes.rowCount > 0) {
+                  assignedUserId = userRes.rows[0].id;
+                  const teamRes = await db.query('SELECT team_id FROM team_members WHERE user_id = $1 LIMIT 1', [assignedUserId]);
+                  teamId = teamRes.rows[0]?.team_id;
+                } else {
+                  console.log(`[WorkflowRunner] User ${actionValue} not found`);
+                }
+            }
+
+            if (assignedUserId) {
                 // Check for existing active assignment
                 const existing = await db.query(
                   'SELECT id FROM conversation_assignments WHERE conversation_id = $1 AND released_at IS NULL',
@@ -680,25 +705,20 @@ async function runWorkflow(id, phoneNumber, context = {}) {
                 );
 
                 if (existing.rowCount > 0) {
-                  // Release it or Update it? Update is cleaner for transfer.
+                  // Update existing
                   await db.query(`
                                 UPDATE conversation_assignments
                                 SET assignee_user_id = $1, team_id = $2, claimed_at = NOW()
                                 WHERE id = $3
-                            `, [userId, teamId, existing.rows[0].id]);
+                            `, [assignedUserId, teamId, existing.rows[0].id]);
                 } else {
                   // Insert new
                   await db.query(`
-                                INSERT INTO conversation_assignments (conversation_id, team_id, assignee_user_id)
-                                VALUES ($1, $2, $3)
-                            `, [conversationId, teamId, userId]);
+                                INSERT INTO conversation_assignments (conversation_id, team_id, assignee_user_id, claimed_at)
+                                VALUES ($1, $2, $3, NOW())
+                            `, [conversationId, teamId, assignedUserId]);
                 }
-                console.log(`[WorkflowRunner] Assigned conversation to ${actionValue}`);
-              } else {
-                console.log(`[WorkflowRunner] User ${actionValue} is not in any team`);
-              }
-            } else {
-              console.log(`[WorkflowRunner] User ${actionValue} not found`);
+                console.log(`[WorkflowRunner] Assigned conversation to user ${assignedUserId}`);
             }
           } else if (actionType === 'update_chat_status') {
             const newStatus = actionValue; // 'closed', 'open', 'snoozed'

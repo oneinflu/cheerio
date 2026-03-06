@@ -4303,14 +4303,86 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                   </select>
 
                   {selectedNode.data.actionType === 'assign_agent' ? (
-                    <div className="space-y-1">
-                      <label className="text-xs text-slate-500">Agent Email or ID</label>
-                      <input
-                        placeholder="agent@example.com"
-                        className="w-full border border-slate-300 rounded-md p-2 text-sm"
-                        value={selectedNode.data.actionValue || ''}
-                        onChange={(e) => updateNodeData('actionValue', e.target.value)}
-                      />
+                    <div className="space-y-3">
+                      <div className="space-y-1">
+                         <label className="text-xs text-slate-500">Assignment Mode</label>
+                         <select 
+                           className="w-full border border-slate-300 rounded-md p-2 text-sm"
+                           value={selectedNode.data.assignMode || (selectedNode.data.actionValue?.includes('{') ? 'round_robin' : 'direct')}
+                           onChange={(e) => {
+                             const mode = e.target.value;
+                             // Update local state for UI toggle
+                             const newData = { ...selectedNode.data, assignMode: mode };
+                             
+                             if (mode === 'direct') {
+                               newData.actionValue = '';
+                             } else {
+                               newData.actionValue = JSON.stringify({ course: '', language: '' });
+                             }
+                             
+                             // We need to update the node in the parent state
+                             // Since updateNodeData only updates one field, we might need a helper or just rely on react flow state
+                             // But here updateNodeData is a local helper in this component.
+                             // Let's check updateNodeData implementation.
+                             // It calls setNodes...
+                             // We can call it for assignMode first.
+                             updateNodeFields(selectedNode.id, newData);
+                           }}
+                         >
+                           <option value="direct">Direct Email</option>
+                           <option value="round_robin">Round Robin (Conditions)</option>
+                         </select>
+                      </div>
+
+                      {(selectedNode.data.assignMode === 'round_robin' || (selectedNode.data.actionValue && selectedNode.data.actionValue.includes('{'))) ? (
+                        <div className="space-y-2 border-l-2 border-slate-200 pl-2">
+                           {(() => {
+                              let cond = {};
+                              try { cond = JSON.parse(selectedNode.data.actionValue || '{}'); } catch(e){}
+                              
+                              const updateCond = (key, val) => {
+                                 const newCond = { ...cond, [key]: val };
+                                 updateNodeData('actionValue', JSON.stringify(newCond));
+                              };
+
+                              return (
+                                <>
+                                  <div className="space-y-1">
+                                    <label className="text-xs text-slate-500">Course</label>
+                                    <input
+                                      placeholder="e.g. CPA"
+                                      className="w-full border border-slate-300 rounded-md p-2 text-sm"
+                                      value={cond.course || ''}
+                                      onChange={(e) => updateCond('course', e.target.value)}
+                                    />
+                                  </div>
+                                  <div className="space-y-1">
+                                    <label className="text-xs text-slate-500">Language</label>
+                                    <input
+                                      placeholder="e.g. English"
+                                      className="w-full border border-slate-300 rounded-md p-2 text-sm"
+                                      value={cond.language || ''}
+                                      onChange={(e) => updateCond('language', e.target.value)}
+                                    />
+                                  </div>
+                                  <p className="text-[10px] text-slate-500">
+                                    Assigns to available agent via Round Robin logic (Least Recently Assigned).
+                                  </p>
+                                </>
+                              );
+                           })()}
+                        </div>
+                      ) : (
+                        <div className="space-y-1">
+                          <label className="text-xs text-slate-500">Agent Email</label>
+                          <input
+                            placeholder="agent@example.com"
+                            className="w-full border border-slate-300 rounded-md p-2 text-sm"
+                            value={selectedNode.data.actionValue || ''}
+                            onChange={(e) => updateNodeData('actionValue', e.target.value)}
+                          />
+                        </div>
+                      )}
                     </div>
                   ) : selectedNode.data.actionType === 'set_variable' ? (
                     <div className="space-y-2">
