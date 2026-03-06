@@ -8,7 +8,7 @@ const whatsappClient = require('../src/integrations/meta/whatsappClient');
 const WABA_ID = process.env.WHATSAPP_BUSINESS_ACCOUNT_ID;
 
 // Media paths
-const FILES_DIR = path.join(__dirname, '..', '..', 'files');
+const FILES_DIR = path.join(__dirname, '..', 'files');
 const DOC_PATH = path.join(FILES_DIR, 'document.pdf');
 const IMG_PATH = path.join(FILES_DIR, 'image.png');
 const VID_PATH = path.join(FILES_DIR, 'video.mp4');
