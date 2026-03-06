@@ -2257,43 +2257,40 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 </div>
               </div>
             )}
-            {/*
-            {viewMode === 'canvas' && (
-              <DraggableBlock
-                type="trigger"
-                label="Trigger"
-                icon={Zap}
-                color="bg-purple-600"
-                onAdd={handleAddNodeFromPalette}
-                disabledDrag={false}
-              />
-            )}
-            <DraggableBlock
-              type="send_template"
-              label="Send Template"
-              icon={MessageSquare}
-              color="bg-green-600"
-              onAdd={handleAddNodeFromPalette}
-              disabledDrag={viewMode !== 'canvas'}
-            />
-            <DraggableBlock
-              type="send_message"
-              label="Send Message"
-              icon={MessageCircle}
-              color="bg-teal-500"
-              onAdd={handleAddNodeFromPalette}
-              disabledDrag={viewMode !== 'canvas'}
-            />
-            <DraggableBlock
-              type="condition"
-              label="Condition"
-              icon={GitBranch}
-              color="bg-blue-600"
-              onAdd={handleAddNodeFromPalette}
-              disabledDrag={viewMode !== 'canvas'}
-            />
             {viewMode === 'canvas' && (
               <>
+                <DraggableBlock
+                  type="trigger"
+                  label="Trigger"
+                  icon={Zap}
+                  color="bg-purple-600"
+                  onAdd={handleAddNodeFromPalette}
+                  disabledDrag={false}
+                />
+                <DraggableBlock
+                  type="send_template"
+                  label="Send Template"
+                  icon={MessageSquare}
+                  color="bg-green-600"
+                  onAdd={handleAddNodeFromPalette}
+                  disabledDrag={viewMode !== 'canvas'}
+                />
+                <DraggableBlock
+                  type="send_message"
+                  label="Send Message"
+                  icon={MessageCircle}
+                  color="bg-teal-500"
+                  onAdd={handleAddNodeFromPalette}
+                  disabledDrag={viewMode !== 'canvas'}
+                />
+                <DraggableBlock
+                  type="condition"
+                  label="Condition"
+                  icon={GitBranch}
+                  color="bg-blue-600"
+                  onAdd={handleAddNodeFromPalette}
+                  disabledDrag={viewMode !== 'canvas'}
+                />
                 <DraggableBlock
                   type="delay"
                   label="Delay"
@@ -2356,7 +2353,6 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 />
               </>
             )}
-            */}
           </div>
         </div>
 
