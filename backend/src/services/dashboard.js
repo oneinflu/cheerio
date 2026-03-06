@@ -2,192 +2,302 @@
 
 const db = require('../../db');
 
-async function getStats(teamId) {
-  const statsQuery = `
+function toISODate(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function toLabel(d) {
+  return d.toLocaleDateString('en-US', { month: 'short', day: '2-digit' });
+}
+
+async function getConversationStats() {
+  const res = await db.query(`
     SELECT
-      COUNT(*) FILTER (WHERE status = 'open') AS open_count,
-      COUNT(*) FILTER (WHERE status = 'snoozed') AS snoozed_count,
-      COUNT(*) FILTER (WHERE status = 'closed') AS closed_count,
-      COUNT(*) FILTER (WHERE status = 'open' AND ca.assignee_user_id IS NOT NULL) AS assigned_count,
-      COUNT(*) FILTER (WHERE status = 'open' AND ca.assignee_user_id IS NULL) AS unassigned_count
+      COUNT(*)::int AS total,
+      COUNT(*) FILTER (WHERE c.status = 'open')::int AS open,
+      COUNT(*) FILTER (WHERE c.status = 'snoozed')::int AS snoozed,
+      COUNT(*) FILTER (WHERE c.status = 'closed')::int AS closed,
+      COUNT(*) FILTER (
+        WHERE c.status = 'open' AND ca.assignee_user_id IS NOT NULL
+      )::int AS assigned_open,
+      COUNT(*) FILTER (
+        WHERE c.status = 'open' AND ca.assignee_user_id IS NULL
+      )::int AS unassigned_open
     FROM conversations c
     LEFT JOIN conversation_assignments ca
       ON ca.conversation_id = c.id AND ca.released_at IS NULL
-    WHERE 1=1
-  `;
-
-  try {
-    const res = await db.query(statsQuery);
-    const row = res.rows[0];
-
-    return {
-      total: parseInt(row.open_count, 10) + parseInt(row.snoozed_count, 10),
-      open: parseInt(row.open_count, 10),
-      snoozed: parseInt(row.snoozed_count, 10),
-      closed: parseInt(row.closed_count, 10),
-      assigned: parseInt(row.assigned_count, 10),
-      unassigned: parseInt(row.unassigned_count, 10)
-    };
-  } catch (e) {
-    return { total: 142, open: 34, snoozed: 12, closed: 840, assigned: 20, unassigned: 14 };
-  }
+  `);
+  return res.rows[0];
 }
 
-async function getVolume(teamId) {
-  // Enhanced Weekly Volume mapped for Line/Area Charts including dual-axis
-  // Generates 7 days with both Inbound and Outbound mock/real counts
-  const volumeQuery = `
+async function getContactStats() {
+  const res = await db.query(`
     SELECT
-      to_char(created_at, 'Mon DD') as day_label,
-      COUNT(*) FILTER (WHERE direction = 'inbound') as inbound_count,
-      COUNT(*) FILTER (WHERE direction = 'outbound') as outbound_count
-    FROM messages
-    WHERE created_at >= NOW() - INTERVAL '7 days'
-    GROUP BY 1, DATE(created_at)
-    ORDER BY DATE(created_at) ASC
-  `;
+      COUNT(*)::int AS total,
+      COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days')::int AS new_7d
+    FROM contacts
+  `);
+  return res.rows[0];
+}
 
-  try {
-    const res = await db.query(volumeQuery);
-    if (res.rows.length === 0) {
-      // Return Premium Mock Data if empty
-      return [
-        { label: 'Mon', inbound: 120, outbound: 300 },
-        { label: 'Tue', inbound: 180, outbound: 420 },
-        { label: 'Wed', inbound: 150, outbound: 350 },
-        { label: 'Thu', inbound: 210, outbound: 500 },
-        { label: 'Fri', inbound: 190, outbound: 480 },
-        { label: 'Sat', inbound: 90, outbound: 200 },
-        { label: 'Sun', inbound: 70, outbound: 150 }
-      ];
-    }
-    return res.rows.map(r => ({
-      label: r.day_label,
-      inbound: parseInt(r.inbound_count, 10),
-      outbound: parseInt(r.outbound_count, 10)
-    }));
-  } catch (e) {
-    return [];
+async function getMessageVolume(days) {
+  const res = await db.query(
+    `
+      SELECT
+        DATE(created_at) AS day,
+        COUNT(*) FILTER (WHERE direction='inbound')::int AS inbound,
+        COUNT(*) FILTER (WHERE direction='outbound')::int AS outbound
+      FROM messages
+      WHERE created_at >= NOW() - ($1::text || ' days')::interval
+      GROUP BY 1
+      ORDER BY 1 ASC
+    `,
+    [days]
+  );
+
+  const byDay = new Map();
+  res.rows.forEach((r) => {
+    const key = toISODate(new Date(r.day));
+    byDay.set(key, { inbound: r.inbound || 0, outbound: r.outbound || 0 });
+  });
+
+  const out = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() - i);
+    const key = toISODate(d);
+    const v = byDay.get(key) || { inbound: 0, outbound: 0 };
+    out.push({ date: key, label: toLabel(d), inbound: v.inbound, outbound: v.outbound });
   }
+  return out;
 }
 
-async function getAgents(teamId) {
-  try {
-    const res = await db.query(`SELECT id, name, role, email FROM users ORDER BY name ASC LIMIT 5`);
-    if (res.rows.length > 0) {
-      return res.rows.map(u => ({
-        id: u.id,
-        name: u.name,
-        role: u.role,
-        initials: (u.name || 'User').split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2),
-        score: Math.floor(Math.random() * (99 - 85 + 1)) + 85, // Premium demo score
-        tickets: Math.floor(Math.random() * 50) + 10
-      }));
-    }
-  } catch (err) { }
-
-  return [
-    { id: '1', name: 'Alice Smith', role: 'admin', initials: 'AS', score: 98, tickets: 45 },
-    { id: '2', name: 'Bob Johnson', role: 'agent', initials: 'BJ', score: 92, tickets: 32 },
-    { id: '3', name: 'Charlie Davis', role: 'agent', initials: 'CD', score: 88, tickets: 28 }
-  ];
+async function getMessageTotals(days) {
+  const res = await db.query(
+    `
+      SELECT
+        COUNT(*) FILTER (WHERE direction='inbound')::int AS inbound,
+        COUNT(*) FILTER (WHERE direction='outbound')::int AS outbound
+      FROM messages
+      WHERE created_at >= NOW() - ($1::text || ' days')::interval
+    `,
+    [days]
+  );
+  return res.rows[0];
 }
 
-async function getRevenueImpact(teamId) {
-  // Return structured data for a playful Revenue widget
+async function getChannelBreakdown(days) {
+  const res = await db.query(
+    `
+      SELECT ch.type::text AS channel_type, COUNT(*)::int AS count
+      FROM messages m
+      JOIN channels ch ON ch.id = m.channel_id
+      WHERE m.created_at >= NOW() - ($1::text || ' days')::interval
+      GROUP BY 1
+      ORDER BY count DESC
+    `,
+    [days]
+  );
+  return res.rows;
+}
+
+async function getAgents(days) {
+  const res = await db.query(
+    `
+      SELECT
+        u.id,
+        u.name,
+        u.role::text AS role,
+        (SELECT COUNT(*)::int
+         FROM conversation_assignments ca
+         JOIN conversations c ON c.id = ca.conversation_id
+         WHERE ca.assignee_user_id = u.id
+           AND ca.released_at IS NULL
+           AND c.status = 'open') AS open_assigned,
+        (SELECT COUNT(*)::int
+         FROM messages m
+         WHERE m.author_user_id = u.id
+           AND m.direction = 'outbound'
+           AND m.created_at >= NOW() - ($1::text || ' days')::interval) AS outbound_sent
+      FROM users u
+      ORDER BY open_assigned DESC, outbound_sent DESC, u.name ASC
+      LIMIT 10
+    `,
+    [days]
+  );
+  return res.rows.map((u) => ({
+    id: u.id,
+    name: u.name,
+    role: u.role,
+    initials: String(u.name || 'U')
+      .split(' ')
+      .filter(Boolean)
+      .map((n) => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2),
+    openAssigned: u.open_assigned || 0,
+    outboundSent: u.outbound_sent || 0,
+  }));
+}
+
+async function getCampaignSummary() {
+  const res = await db.query(`
+    SELECT
+      COUNT(*)::int AS total,
+      COUNT(*) FILTER (WHERE status='draft')::int AS draft,
+      COUNT(*) FILTER (WHERE status='scheduled')::int AS scheduled,
+      COUNT(*) FILTER (WHERE status='running')::int AS running,
+      COUNT(*) FILTER (WHERE status='completed')::int AS completed,
+      COUNT(*) FILTER (WHERE status='stopped')::int AS stopped
+    FROM campaigns
+  `);
+  return res.rows[0];
+}
+
+async function getRecentCampaigns(limit) {
+  const res = await db.query(
+    `
+      SELECT id, name, channel_type, status, total_contacts, sent_count, delivered_count, created_at, scheduled_at, started_at, completed_at
+      FROM campaigns
+      ORDER BY created_at DESC
+      LIMIT $1
+    `,
+    [limit]
+  );
+  return res.rows;
+}
+
+async function getPaymentSummary() {
+  const res = await db.query(`
+    SELECT
+      COUNT(*)::int AS total,
+      COUNT(*) FILTER (WHERE status='pending')::int AS pending,
+      COUNT(*) FILTER (WHERE status='paid')::int AS paid,
+      COUNT(*) FILTER (WHERE status='expired')::int AS expired,
+      COALESCE(SUM(amount) FILTER (WHERE status='pending'), 0)::float AS pending_amount,
+      COALESCE(SUM(amount) FILTER (WHERE status='paid'), 0)::float AS paid_amount
+    FROM payment_requests
+  `);
+  return res.rows[0];
+}
+
+async function getRecentPayments(limit) {
+  const res = await db.query(
+    `
+      SELECT id, amount, currency, request_type, status, created_at, updated_at
+      FROM payment_requests
+      ORDER BY created_at DESC
+      LIMIT $1
+    `,
+    [limit]
+  );
+  return res.rows;
+}
+
+async function getAutomationSummary() {
+  const res = await db.query(`
+    SELECT
+      (SELECT COUNT(*)::int FROM workflows) AS workflows_total,
+      (SELECT COUNT(*)::int FROM workflows WHERE status='active') AS workflows_active,
+      (SELECT COUNT(*)::int FROM whatsapp_flows) AS whatsapp_flows_total,
+      (SELECT COUNT(*)::int FROM automation_rules) AS rules_total,
+      (SELECT COUNT(*)::int FROM automation_rules WHERE is_active = TRUE) AS rules_active,
+      (SELECT COUNT(*)::int FROM email_templates) AS email_templates_total,
+      (SELECT COUNT(*)::int FROM media_assets) AS media_assets_total
+  `);
+  return res.rows[0];
+}
+
+async function getCSAT() {
+  const res = await db.query(`
+    SELECT
+      COUNT(*)::int AS total,
+      AVG(score)::float AS average,
+      COUNT(*) FILTER (WHERE score >= 4)::int AS positive
+    FROM csat_scores
+  `);
+  const row = res.rows[0];
+  const total = row.total || 0;
+  const positive = row.positive || 0;
+  const average = total > 0 ? Number(row.average || 0).toFixed(1) : '0.0';
+  const positiveRate = total > 0 ? Math.round((positive / total) * 100) : 0;
+  return { total, average, positive, positiveRate };
+}
+
+async function getRecentConversations(limit) {
+  const res = await db.query(
+    `
+      SELECT
+        c.id,
+        c.status::text AS status,
+        c.last_message_at,
+        c.created_at,
+        ch.type::text AS channel_type,
+        ch.name AS channel_name,
+        ct.display_name,
+        ct.external_id,
+        ca.assignee_user_id,
+        u.name AS assignee_name
+      FROM conversations c
+      JOIN contacts ct ON ct.id = c.contact_id
+      JOIN channels ch ON ch.id = c.channel_id
+      LEFT JOIN conversation_assignments ca
+        ON ca.conversation_id = c.id AND ca.released_at IS NULL
+      LEFT JOIN users u ON u.id = ca.assignee_user_id
+      ORDER BY COALESCE(c.last_message_at, c.created_at) DESC
+      LIMIT $1
+    `,
+    [limit]
+  );
+  return res.rows;
+}
+
+async function getDashboard(teamId) {
+  const days = 14;
+  const [conversations, contacts, messageTotals, volume, channels, agents, campaigns, recentCampaigns, payments, recentPayments, automations, csat, recentConversations] =
+    await Promise.all([
+      getConversationStats(teamId),
+      getContactStats(teamId),
+      getMessageTotals(days),
+      getMessageVolume(days),
+      getChannelBreakdown(days),
+      getAgents(7),
+      getCampaignSummary(),
+      getRecentCampaigns(8),
+      getPaymentSummary(),
+      getRecentPayments(8),
+      getAutomationSummary(),
+      getCSAT(),
+      getRecentConversations(12),
+    ]);
+
   return {
-    amount: "$24,500",
-    growth: "+14.5%",
-    campaignsRun: 12,
-    roas: "3.2x"
+    conversations,
+    contacts,
+    messages: {
+      days,
+      totals: messageTotals,
+      volume,
+      channels,
+    },
+    agents,
+    campaigns: {
+      summary: campaigns,
+      recent: recentCampaigns,
+    },
+    payments: {
+      summary: payments,
+      recent: recentPayments,
+    },
+    automations,
+    csat,
+    recentConversations,
   };
 }
 
-async function getChannelInsights(teamId) {
-  // Data pie chart formatting
-  return [
-    { name: 'WhatsApp', value: 65, color: '#10B981' }, // emerald
-    { name: 'Instagram', value: 25, color: '#EC4899' }, // pink
-    { name: 'Widget / Web', value: 10, color: '#3B82F6' } // blue
-  ];
-}
-
-async function getTemplateStats(teamId) {
-  try {
-    const res = await db.query(`
-      SELECT 
-        COUNT(*) AS total_templates,
-        COUNT(*) FILTER (WHERE status = 'APPROVED') AS approved_templates,
-        COUNT(*) FILTER (WHERE status = 'PENDING') AS pending_templates,
-        COUNT(*) FILTER (WHERE status = 'REJECTED') AS rejected_templates
-      FROM templates
-    `);
-    const r = res.rows[0];
-    return {
-      total: parseInt(r.total_templates, 10) || 0,
-      approved: parseInt(r.approved_templates, 10) || 0,
-      pending: parseInt(r.pending_templates, 10) || 0,
-      rejected: parseInt(r.rejected_templates, 10) || 0
-    };
-  } catch (err) {
-    // Fallback if no templates table or error
-    return { total: 42, approved: 38, pending: 3, rejected: 1 };
-  }
-}
-
-async function getWorkflowStats(teamId) {
-  try {
-    // Attempting query on workflow tables (e.g. workflows or flows)
-    const res = await db.query(`
-      SELECT 
-        COUNT(*) AS total_workflows,
-        COUNT(*) FILTER (WHERE status = 'active') AS active_workflows
-      FROM workflows
-    `);
-    const r = res.rows[0];
-    return {
-      total: parseInt(r.total_workflows, 10) || 0,
-      active: parseInt(r.active_workflows, 10) || 0
-    };
-  } catch (err) {
-    return { total: 15, active: 8 };
-  }
-}
-
-async function getCSATMetrics(teamId) {
-  try {
-    const res = await db.query(`
-      SELECT 
-        COUNT(*) as total_responses,
-        AVG(score) as average_score,
-        COUNT(*) FILTER (WHERE score >= 4) as positive_responses
-      FROM csat_scores
-    `);
-    const row = res.rows[0];
-    const total = parseInt(row.total_responses, 10) || 0;
-    const positive = parseInt(row.positive_responses, 10) || 0;
-    const average = parseFloat(row.average_score || 0).toFixed(1);
-    const score = total > 0 ? Math.round((positive / total) * 100) : 0;
-
-    return {
-      total,
-      average,
-      score: score + '%',
-      scoreRaw: score
-    };
-  } catch (err) {
-    console.error('[dashboardService] getCSATMetrics error:', err.message);
-    return { total: 0, average: '0', score: '0%', scoreRaw: 0 };
-  }
-}
-
-module.exports = {
-  getStats,
-  getVolume,
-  getAgents,
-  getRevenueImpact,
-  getChannelInsights,
-  getTemplateStats,
-  getWorkflowStats,
-  getCSATMetrics
-};
+module.exports = { getDashboard };
