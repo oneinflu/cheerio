@@ -217,6 +217,11 @@ export default function App() {
   const handleLogin = (user) => {
     setStoredUser(user);
     setIsLoggedIn(true);
+    setIsLoginView(false);
+    setActivePage('dashboard');
+    try {
+      localStorage.setItem('activePage', 'dashboard');
+    } catch (e) { }
   };
 
   const handleLogout = () => {
