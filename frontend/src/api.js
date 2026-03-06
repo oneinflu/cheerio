@@ -657,6 +657,11 @@ export async function getLabels() {
   return res.json();
 }
 
+export async function getEmailTemplates() {
+  const res = await fetch(`/api/email-templates`, { headers: getAuthHeaders() });
+  return res.json();
+}
+
 export async function createLabel(name) {
   const res = await fetch(`/api/labels`, {
     method: "POST",

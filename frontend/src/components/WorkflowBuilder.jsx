@@ -14,8 +14,8 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { Button } from './ui/Button';
-import { Save, ArrowLeft, Plus, Clock, MessageSquare, GitBranch, Zap, StopCircle, Loader2, Play, MessageCircle, Code, UserCheck, Tag, Mic, Workflow as WorkflowIcon, Megaphone, Filter, Link, Copy, Check, RefreshCw, Trash2, Globe, Send, ChevronDown, ChevronUp, Image, Video, FileText as FileIcon, Upload, X, Star, CreditCard, BellRing, Bell } from 'lucide-react';
-import { getTemplates, runWorkflow, aiGenerateWorkflow, getWorkflows, getCampaigns, getWebhookEvents, clearWebhookEvents, fetchMediaLibrary, uploadFlowMedia, createPaymentLink, getLabels } from '../api';
+import { Save, ArrowLeft, Plus, Clock, MessageSquare, GitBranch, Zap, StopCircle, Loader2, Play, MessageCircle, Code, UserCheck, Tag, Mic, Workflow as WorkflowIcon, Megaphone, Filter, Link, Copy, Check, RefreshCw, Trash2, Globe, Send, ChevronDown, ChevronUp, Image, Video, FileText as FileIcon, Upload, X, Star, CreditCard, BellRing, Bell, Mail } from 'lucide-react';
+import { getTemplates, runWorkflow, aiGenerateWorkflow, getWorkflows, getCampaigns, getWebhookEvents, clearWebhookEvents, fetchMediaLibrary, uploadFlowMedia, createPaymentLink, getLabels, getEmailTemplates } from '../api';
 import { GallerySelectModal } from './GallerySelectModal';
 
 // --- Custom Node Components ---
@@ -914,6 +914,8 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
   const [selectedNode, setSelectedNode] = useState(null);
   const [templates, setTemplates] = useState([]);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
+  const [emailTemplates, setEmailTemplates] = useState([]);
+  const [loadingEmailTemplates, setLoadingEmailTemplates] = useState(false);
   const [availableWorkflows, setAvailableWorkflows] = useState([]);
   const [loadingWorkflows, setLoadingWorkflows] = useState(false);
   const [availableCampaigns, setAvailableCampaigns] = useState([]);
@@ -1037,6 +1039,23 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
     fetchLabels();
   }, []);
 
+  React.useEffect(() => {
+    const fetchEmailTemplates = async () => {
+      setLoadingEmailTemplates(true);
+      try {
+        const res = await getEmailTemplates();
+        if (res && res.success) setEmailTemplates(res.templates || []);
+        else setEmailTemplates([]);
+      } catch (e) {
+        console.error('Failed to load email templates:', e);
+        setEmailTemplates([]);
+      } finally {
+        setLoadingEmailTemplates(false);
+      }
+    };
+    fetchEmailTemplates();
+  }, []);
+
   const handleAddNotificationAction = useCallback(() => {
     const newNode = {
       id: `notification_${Math.random().toString(36).substr(2, 9)}`,
@@ -1088,6 +1107,12 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
         }
         if (actionType === 'add_to_label') {
           newNode.data.actionValue = '';
+        }
+        if (actionType === 'send_email') {
+          newNode.data.actionValue = '';
+          newNode.data.emailTemplateId = '';
+          newNode.data.variableMapping = {};
+          newNode.data.toVarKey = 'email';
         }
       }
       if (type === 'delay') {
@@ -1387,6 +1412,12 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
           }
           if (actionType === 'add_to_label') {
             data.actionValue = '';
+          }
+          if (actionType === 'send_email') {
+            data.actionValue = '';
+            data.emailTemplateId = '';
+            data.variableMapping = {};
+            data.toVarKey = 'email';
           }
         }
         if (type === 'delay') {
@@ -2341,6 +2372,28 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 <div className="min-w-0">
                   <div className="text-xs font-semibold text-teal-800">Response Message</div>
                   <div className="text-[10px] text-teal-600">Direct message + Quick replies</div>
+                </div>
+              </div>
+            )}
+
+            {viewMode === 'canvas' && (
+              <div
+                className="flex items-center gap-2 p-2 rounded-md bg-blue-50 border border-blue-200 cursor-pointer hover:bg-blue-100 transition-colors"
+                draggable
+                onDragStart={(e) => {
+                    e.dataTransfer.setData('application/reactflow', 'action');
+                    e.dataTransfer.setData('application/actiontype', 'send_email');
+                    e.dataTransfer.effectAllowed = 'move';
+                }}
+                onClick={() => handleAddNodeFromPalette('action', 'send_email')}
+                title="Send an email using a selected template"
+              >
+                <div className="w-7 h-7 rounded-md bg-blue-600 flex items-center justify-center shrink-0">
+                  <Mail size={14} className="text-white" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold text-blue-800">Send Email</div>
+                  <div className="text-[10px] text-blue-600">ZeptoMail template</div>
                 </div>
               </div>
             )}
@@ -4689,18 +4742,21 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
               {selectedNode.type === 'action' && (
                 <div className="space-y-3">
                   {/* Hide redundant dropdown if actionType is already specific */}
-                  {['assign_agent', 'update_chat_status', 'add_to_label'].includes(selectedNode.data.actionType) ? (
+                  {['assign_agent', 'update_chat_status', 'add_to_label', 'send_email'].includes(selectedNode.data.actionType) ? (
                     <div className="space-y-1 pb-2 border-b border-slate-100">
                       <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide">Action Type</label>
                       <div className="text-sm font-semibold text-slate-800 flex items-center gap-2">
                         {selectedNode.data.actionType === 'assign_agent' && <UserCheck size={16} className="text-orange-500" />}
                         {selectedNode.data.actionType === 'update_chat_status' && <MessageCircle size={16} className="text-cyan-500" />}
                         {selectedNode.data.actionType === 'add_to_label' && <Tag size={16} className="text-emerald-600" />}
+                        {selectedNode.data.actionType === 'send_email' && <Mail size={16} className="text-blue-600" />}
                         {selectedNode.data.actionType === 'assign_agent'
                           ? 'Assign Agent'
                           : selectedNode.data.actionType === 'update_chat_status'
                             ? 'Update Chat Status'
-                            : 'Add To Label'}
+                            : selectedNode.data.actionType === 'add_to_label'
+                              ? 'Add To Label'
+                              : 'Send Email'}
                       </div>
                     </div>
                   ) : (
@@ -4711,13 +4767,19 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                         value={selectedNode.data.actionType || 'add_tag'}
                         onChange={(e) => {
                           const type = e.target.value;
-                          updateNodeFields(selectedNode.id, {
+                          const base = {
                             actionType: type,
                             actionValue: '',
                             variableName: '',
                             variableValue: '',
                             targetWorkflowName: '',
-                          });
+                            emailTemplateId: '',
+                            emailTemplateName: '',
+                            variableMapping: {},
+                            toVarKey: 'email',
+                          };
+                          if (type === 'update_chat_status') base.actionValue = 'open';
+                          updateNodeFields(selectedNode.id, base);
                         }}
                       >
                         <option value="add_tag">Add to Label</option>
@@ -4726,6 +4788,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                         <option value="set_variable">Update Attribute</option>
                         <option value="start_workflow">Start Workflow</option>
                         <option value="add_to_label">Add To Label</option>
+                        <option value="send_email">Send Email</option>
                         <option value="update_chat_status">Update Chat Status</option>
                       </select>
                     </>
@@ -4880,6 +4943,116 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                       {loadingLabels && (
                         <p className="text-[10px] text-slate-400">Loading labels...</p>
                       )}
+                    </div>
+                  ) : selectedNode.data.actionType === 'send_email' ? (
+                    <div className="space-y-3">
+                      <div className="space-y-1">
+                        <label className="text-xs text-slate-500">Email Template</label>
+                        <select
+                          className="w-full border border-slate-300 rounded-md p-2 text-sm"
+                          value={selectedNode.data.emailTemplateId || selectedNode.data.actionValue || ''}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            const tmpl = emailTemplates.find((t) => String(t.id) === String(value));
+                            updateNodeFields(selectedNode.id, {
+                              emailTemplateId: value,
+                              actionValue: value,
+                              emailTemplateName: tmpl ? tmpl.name : '',
+                              variableMapping: {},
+                            });
+                          }}
+                        >
+                          <option value="">Select template...</option>
+                          {emailTemplates.map((t) => (
+                            <option key={t.id} value={t.id}>
+                              {t.name}
+                            </option>
+                          ))}
+                        </select>
+                        {loadingEmailTemplates && (
+                          <p className="text-[10px] text-slate-400">Loading email templates...</p>
+                        )}
+                      </div>
+
+                      {(() => {
+                        const upstreamVars = getUpstreamVariables(selectedNode.id, nodes, edges);
+                        const allVars = getAllDefinedVariables(nodes);
+                        const toKeys = Array.from(
+                          new Set(
+                            [...upstreamVars, ...allVars]
+                              .map((v) => String(v).replace(/[{}]/g, '').trim())
+                              .filter(Boolean)
+                          )
+                        );
+                        const selectedTemplateId = selectedNode.data.emailTemplateId || selectedNode.data.actionValue || '';
+                        const tmpl = emailTemplates.find((t) => String(t.id) === String(selectedTemplateId));
+                        const vars = Array.isArray(tmpl?.variables) ? tmpl.variables : [];
+                        const mapping = selectedNode.data.variableMapping || {};
+
+                        return (
+                          <>
+                            <div className="space-y-1">
+                              <label className="text-xs text-slate-500">To Email Variable</label>
+                              <select
+                                className="w-full border border-slate-300 rounded-md p-2 text-sm bg-white"
+                                value={selectedNode.data.toVarKey || 'email'}
+                                onChange={(e) => updateNodeData('toVarKey', e.target.value)}
+                              >
+                                {toKeys.map((k) => (
+                                  <option key={k} value={k}>
+                                    {k}
+                                  </option>
+                                ))}
+                                {!toKeys.includes(selectedNode.data.toVarKey || 'email') && (
+                                  <option value={selectedNode.data.toVarKey || 'email'}>
+                                    {selectedNode.data.toVarKey || 'email'}
+                                  </option>
+                                )}
+                              </select>
+                              {toKeys.length === 0 && (
+                                <p className="text-[10px] text-slate-400">No variables found in this workflow.</p>
+                              )}
+                            </div>
+
+                            {vars.length > 0 && (
+                              <div className="space-y-2">
+                                <div className="text-xs font-semibold text-slate-700">Template Variables</div>
+                                <div className="space-y-2">
+                                  {vars.map((v) => (
+                                    <div key={v} className="grid grid-cols-2 gap-2 items-center">
+                                      <div className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-md px-2 py-2 font-mono truncate">
+                                        {v}
+                                      </div>
+                                      <select
+                                        className="w-full border border-slate-300 rounded-md p-2 text-sm bg-white"
+                                        value={mapping[v] || ''}
+                                        onChange={(e) => {
+                                          const next = { ...(mapping || {}) };
+                                          const val = e.target.value;
+                                          if (!val) delete next[v];
+                                          else next[v] = val;
+                                          updateNodeData('variableMapping', next);
+                                        }}
+                                      >
+                                        <option value="">Select value...</option>
+                                        {toKeys.map((k) => (
+                                          <option key={k} value={k}>
+                                            {k}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {selectedTemplateId && vars.length === 0 && (
+                              <p className="text-[10px] text-slate-400">This template has no variables.</p>
+                            )}
+                          </>
+                        );
+                      })()}
                     </div>
                   ) : selectedNode.data.actionType === 'update_chat_status' ? (
                     <div className="space-y-1">

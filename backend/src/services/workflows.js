@@ -5,6 +5,7 @@ const outboundWhatsApp = require('./outboundWhatsApp');
 const razorpay = require('./razorpay');
 const { findAgentForAssignment } = require('./agentAssignment');
 const axios = require('axios');
+const zeptoMail = require('./zeptoMail');
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const WABA_ID = process.env.WHATSAPP_BUSINESS_ACCOUNT_ID || '';
@@ -719,6 +720,70 @@ async function runWorkflow(id, phoneNumber, context = {}) {
                   `INSERT INTO contact_label_maps (label_id, contact_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
                   [labelId, contactId]
                 );
+              }
+            }
+          } else if (actionType === 'send_email') {
+            const templateId = currentNode.data.emailTemplateId || actionValue;
+            const toVarKey = currentNode.data.toVarKey || 'email';
+            const variableMapping = currentNode.data.variableMapping || {};
+
+            let contactName = '';
+            let baseAttrs = {};
+            try {
+              const convRes = await db.query('SELECT contact_id FROM conversations WHERE id = $1', [conversationId]);
+              const contactId = convRes.rows[0]?.contact_id;
+              if (contactId) {
+                const contactRes = await db.query(
+                  `SELECT display_name, profile FROM contacts WHERE id = $1`,
+                  [contactId]
+                );
+                contactName = contactRes.rows[0]?.display_name || '';
+                baseAttrs = contactRes.rows[0]?.profile?.attributes || {};
+                if (!baseAttrs || typeof baseAttrs !== 'object') baseAttrs = {};
+                if (contactRes.rows[0]?.profile?.email && !baseAttrs.email) {
+                  baseAttrs.email = contactRes.rows[0].profile.email;
+                }
+              }
+            } catch (e) {
+              baseAttrs = {};
+            }
+
+            const localContext = { ...(baseAttrs || {}), ...(context || {}) };
+
+            Object.entries(variableMapping || {}).forEach(([tplVar, srcVar]) => {
+              const key = String(srcVar || '').replace(/[{}]/g, '').trim();
+              if (!tplVar) return;
+              if (!key) return;
+              if (Object.prototype.hasOwnProperty.call(localContext, key)) {
+                localContext[tplVar] = localContext[key];
+              }
+            });
+
+            const toKey = String(toVarKey || '').replace(/[{}]/g, '').trim();
+            const toEmail = localContext[toKey] || localContext.email || baseAttrs.email || '';
+            if (!toEmail) {
+              console.log('[WorkflowRunner] send_email skipped: no recipient email found');
+            } else if (!templateId) {
+              console.log('[WorkflowRunner] send_email skipped: no emailTemplateId configured');
+            } else {
+              const tmplRes = await db.query(
+                `SELECT id, name, subject, html_body, text_body, variables FROM email_templates WHERE id = $1`,
+                [templateId]
+              );
+              if (tmplRes.rowCount === 0) {
+                console.log('[WorkflowRunner] send_email skipped: template not found');
+              } else {
+                const tmpl = tmplRes.rows[0];
+                const subject = resolvePlaceholders(String(tmpl.subject || ''), localContext);
+                const htmlbody = resolvePlaceholders(String(tmpl.html_body || ''), localContext);
+                const textbody = resolvePlaceholders(String(tmpl.text_body || ''), localContext);
+                await zeptoMail.sendEmail({
+                  toEmail: String(toEmail),
+                  toName: contactName ? String(contactName) : undefined,
+                  subject,
+                  htmlbody: htmlbody || undefined,
+                  textbody: textbody || undefined,
+                });
               }
             }
           } else if (actionType === 'remove_tag') {

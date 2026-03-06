@@ -16,6 +16,7 @@ import TeamMembersPage from './components/TeamMembersPage.jsx';
 import ContactsPage from './components/ContactsPage.jsx';
 import LabelsPage from './components/LabelsPage.jsx';
 import CampaignsPage from './components/CampaignsPage.jsx';
+import EmailTemplatesPage from './components/EmailTemplatesPage.jsx';
 import LoginPage from './components/LoginPage.jsx';
 import GuestChat from './components/GuestChat.jsx';
 import InstagramPage from './components/InstagramPage.jsx';
@@ -23,7 +24,7 @@ import GalleryPage from './components/GalleryPage.jsx';
 import LandingPage from './components/LandingPage.jsx';
 import { connectSocket } from './socket.js';
 import { getInbox, getMessages, claimConversation, reassignConversation, forceReassignConversation, releaseConversation, markAsRead, resolveConversation, deleteConversation, blockConversation, unblockConversation, pinConversation, updateWorkflow, getTeamUser, getTeamUsers, reassignExternalLead } from './api.js';
-import { LayoutDashboard, MessageSquare, Users, Megaphone, Settings, LogOut, Search, Bell, FileText, Workflow, Shield, ChevronsUpDown, Check, Zap, GitBranch, Instagram, ChevronDown, ChevronRight } from 'lucide-react';
+import { LayoutDashboard, MessageSquare, Users, Megaphone, Settings, LogOut, Search, Bell, FileText, Workflow, Shield, ChevronsUpDown, Check, Zap, GitBranch, Instagram, ChevronDown, ChevronRight, Mail } from 'lucide-react';
 import { Button } from './components/ui/Button';
 import { Badge } from './components/ui/Badge';
 import { Card, CardHeader, CardTitle, CardContent } from './components/ui/Card';
@@ -40,7 +41,7 @@ export default function App() {
   });
   const [isLoggedIn, setIsLoggedIn] = useState(!!storedUser);
   const [socket, setSocket] = useState(null);
-  const validPages = ['dashboard', 'inbox', 'contacts', 'labels', 'campaigns', 'team-members', 'templates', 'flows', 'workflows', 'rules', 'instagram', 'gallery', 'settings'];
+  const validPages = ['dashboard', 'inbox', 'contacts', 'labels', 'campaigns', 'team-members', 'templates', 'email-templates', 'flows', 'workflows', 'rules', 'instagram', 'gallery', 'settings'];
 
   const [activePage, setActivePage] = useState(() => {
     const fullPath = window.location.pathname.substring(1);
@@ -728,6 +729,20 @@ export default function App() {
                   Templates
                 </span>
               </Button>
+
+              <Button
+                variant={activePage === 'email-templates' ? 'secondary' : 'ghost'}
+                className="w-full flex items-center justify-start h-10 px-0 rounded-lg overflow-hidden shrink-0"
+                onClick={() => setActivePage('email-templates')}
+                title="Email Templates"
+              >
+                <div className="w-10 h-10 flex items-center justify-center shrink-0">
+                  <Mail size={20} />
+                </div>
+                <span className="ml-3 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100">
+                  Email Templates
+                </span>
+              </Button>
               <Button
                 variant={activePage === 'flows' ? 'secondary' : 'ghost'}
                 className="w-full flex items-center justify-start h-10 px-0 rounded-lg overflow-hidden shrink-0"
@@ -856,6 +871,7 @@ export default function App() {
         {activePage === 'settings' && <SettingsPage currentUser={currentUser} />}
 
         {activePage === 'templates' && <TemplatesPage />}
+        {activePage === 'email-templates' && <EmailTemplatesPage />}
         {activePage === 'flows' && <FlowsPage />}
 
         {activePage === 'workflows' && (

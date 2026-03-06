@@ -249,6 +249,23 @@ async function runMigrations() {
           console.log('[migrate] campaigns table already exists.');
         }
 
+        const emailTemplatesRes = await client.query(`
+          SELECT EXISTS (
+            SELECT FROM information_schema.tables
+            WHERE table_schema = 'public'
+            AND table_name = 'email_templates'
+          );
+        `);
+        if (!emailTemplatesRes.rows[0].exists) {
+          console.log('[migrate] Adding email_templates table...');
+          await client.query('BEGIN');
+          await runSQLFile(client, path.join(__dirname, '..', 'db', 'migrations', '0014_email_templates.sql'));
+          await client.query('COMMIT');
+          console.log('[migrate] Applied email_templates migration.');
+        } else {
+          console.log('[migrate] email_templates table already exists.');
+        }
+
         // webhook_events table
         const webhookEventsRes = await client.query(`
           SELECT EXISTS (
