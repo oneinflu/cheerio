@@ -2217,6 +2217,11 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
           </div>
           <div className="p-4 space-y-3 overflow-y-auto">
             {viewMode === 'canvas' && (
+              <div className="pt-1 pb-1">
+                <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Triggers</h2>
+              </div>
+            )}
+            {viewMode === 'canvas' && (
               <div
                 className="flex items-center gap-2 p-2 rounded-md bg-green-50 border border-green-200 cursor-pointer hover:bg-green-100 transition-colors"
                 draggable
@@ -2357,6 +2362,12 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
               </div>
             )}
 
+            {viewMode === 'canvas' && (
+              <div className="pt-3 pb-1">
+                <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">System Actions</h3>
+              </div>
+            )}
+
             {/* Payment Request action */}
             {viewMode === 'canvas' && (
               <div
@@ -2445,6 +2456,26 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 <div className="min-w-0">
                   <div className="text-xs font-semibold text-orange-800">Time Delay</div>
                   <div className="text-[10px] text-orange-600">Run next step later</div>
+                </div>
+              </div>
+            )}
+            {viewMode === 'canvas' && (
+              <div
+                className="flex items-center gap-2 p-2 rounded-md bg-slate-50 border border-slate-200 cursor-pointer hover:bg-slate-100 transition-colors"
+                draggable
+                onDragStart={(e) => {
+                    e.dataTransfer.setData('application/reactflow', 'end');
+                    e.dataTransfer.effectAllowed = 'move';
+                }}
+                onClick={() => handleAddNodeFromPalette('end')}
+                title="Terminate the workflow here"
+              >
+                <div className="w-7 h-7 rounded-md bg-slate-600 flex items-center justify-center shrink-0">
+                  <StopCircle size={14} className="text-white" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold text-slate-800">End Flow</div>
+                  <div className="text-[10px] text-slate-600">Stop execution</div>
                 </div>
               </div>
             )}
