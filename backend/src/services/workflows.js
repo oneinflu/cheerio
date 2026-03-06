@@ -709,6 +709,18 @@ async function runWorkflow(id, phoneNumber, context = {}) {
                 `[WorkflowRunner] Failed to trigger tag_added workflows: ${e.message}`
               );
             }
+          } else if (actionType === 'add_to_label') {
+            const convRes = await db.query('SELECT contact_id FROM conversations WHERE id = $1', [conversationId]);
+            if (convRes.rowCount > 0) {
+              const contactId = convRes.rows[0].contact_id;
+              const labelId = actionValue;
+              if (labelId) {
+                await db.query(
+                  `INSERT INTO contact_label_maps (label_id, contact_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+                  [labelId, contactId]
+                );
+              }
+            }
           } else if (actionType === 'remove_tag') {
             const convRes = await db.query('SELECT contact_id FROM conversations WHERE id = $1', [conversationId]);
             if (convRes.rowCount > 0) {

@@ -15,7 +15,7 @@ import {
 import '@xyflow/react/dist/style.css';
 import { Button } from './ui/Button';
 import { Save, ArrowLeft, Plus, Clock, MessageSquare, GitBranch, Zap, StopCircle, Loader2, Play, MessageCircle, Code, UserCheck, Tag, Mic, Workflow as WorkflowIcon, Megaphone, Filter, Link, Copy, Check, RefreshCw, Trash2, Globe, Send, ChevronDown, ChevronUp, Image, Video, FileText as FileIcon, Upload, X, Star, CreditCard, BellRing, Bell } from 'lucide-react';
-import { getTemplates, runWorkflow, aiGenerateWorkflow, getWorkflows, getCampaigns, getWebhookEvents, clearWebhookEvents, fetchMediaLibrary, uploadFlowMedia, createPaymentLink } from '../api';
+import { getTemplates, runWorkflow, aiGenerateWorkflow, getWorkflows, getCampaigns, getWebhookEvents, clearWebhookEvents, fetchMediaLibrary, uploadFlowMedia, createPaymentLink, getLabels } from '../api';
 import { GallerySelectModal } from './GallerySelectModal';
 
 // --- Custom Node Components ---
@@ -917,6 +917,8 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
   const [availableWorkflows, setAvailableWorkflows] = useState([]);
   const [loadingWorkflows, setLoadingWorkflows] = useState(false);
   const [availableCampaigns, setAvailableCampaigns] = useState([]);
+  const [availableLabels, setAvailableLabels] = useState([]);
+  const [loadingLabels, setLoadingLabels] = useState(false);
   const [viewMode, setViewMode] = useState('canvas');
   const [draggingNodeId, setDraggingNodeId] = useState(null);
   const [expandedNodeId, setExpandedNodeId] = useState(null);
@@ -1018,6 +1020,23 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
       .catch(console.error);
   }, []);
 
+  React.useEffect(() => {
+    const fetchLabels = async () => {
+      setLoadingLabels(true);
+      try {
+        const res = await getLabels();
+        if (res && res.success) setAvailableLabels(res.labels || []);
+        else setAvailableLabels([]);
+      } catch (e) {
+        console.error('Failed to load labels:', e);
+        setAvailableLabels([]);
+      } finally {
+        setLoadingLabels(false);
+      }
+    };
+    fetchLabels();
+  }, []);
+
   const handleAddNotificationAction = useCallback(() => {
     const newNode = {
       id: `notification_${Math.random().toString(36).substr(2, 9)}`,
@@ -1066,6 +1085,9 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
         newNode.data.actionType = actionType;
         if (actionType === 'update_chat_status') {
           newNode.data.actionValue = 'open';
+        }
+        if (actionType === 'add_to_label') {
+          newNode.data.actionValue = '';
         }
       }
       if (type === 'delay') {
@@ -1362,6 +1384,9 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
           data.actionType = actionType;
           if (actionType === 'update_chat_status') {
             data.actionValue = 'open';
+          }
+          if (actionType === 'add_to_label') {
+            data.actionValue = '';
           }
         }
         if (type === 'delay') {
@@ -2441,6 +2466,27 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 <div className="min-w-0">
                   <div className="text-xs font-semibold text-cyan-800">Update Chat Status</div>
                   <div className="text-[10px] text-cyan-600">Open / Snooze / Close</div>
+                </div>
+              </div>
+            )}
+            {viewMode === 'canvas' && (
+              <div
+                className="flex items-center gap-2 p-2 rounded-md bg-emerald-50 border border-emerald-200 cursor-pointer hover:bg-emerald-100 transition-colors"
+                draggable
+                onDragStart={(e) => {
+                    e.dataTransfer.setData('application/reactflow', 'action');
+                    e.dataTransfer.setData('application/actiontype', 'add_to_label');
+                    e.dataTransfer.effectAllowed = 'move';
+                }}
+                onClick={() => handleAddNodeFromPalette('action', 'add_to_label')}
+                title="Add contact to a label (group)"
+              >
+                <div className="w-7 h-7 rounded-md bg-emerald-600 flex items-center justify-center shrink-0">
+                  <Tag size={14} className="text-white" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold text-emerald-800">Add To Label</div>
+                  <div className="text-[10px] text-emerald-600">Select group</div>
                 </div>
               </div>
             )}
@@ -4612,13 +4658,18 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
               {selectedNode.type === 'action' && (
                 <div className="space-y-3">
                   {/* Hide redundant dropdown if actionType is already specific */}
-                  {['assign_agent', 'update_chat_status'].includes(selectedNode.data.actionType) ? (
+                  {['assign_agent', 'update_chat_status', 'add_to_label'].includes(selectedNode.data.actionType) ? (
                     <div className="space-y-1 pb-2 border-b border-slate-100">
                       <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide">Action Type</label>
                       <div className="text-sm font-semibold text-slate-800 flex items-center gap-2">
                         {selectedNode.data.actionType === 'assign_agent' && <UserCheck size={16} className="text-orange-500" />}
                         {selectedNode.data.actionType === 'update_chat_status' && <MessageCircle size={16} className="text-cyan-500" />}
-                        {selectedNode.data.actionType === 'assign_agent' ? 'Assign Agent' : 'Update Chat Status'}
+                        {selectedNode.data.actionType === 'add_to_label' && <Tag size={16} className="text-emerald-600" />}
+                        {selectedNode.data.actionType === 'assign_agent'
+                          ? 'Assign Agent'
+                          : selectedNode.data.actionType === 'update_chat_status'
+                            ? 'Update Chat Status'
+                            : 'Add To Label'}
                       </div>
                     </div>
                   ) : (
@@ -4643,6 +4694,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                         <option value="assign_agent">Assign Agent</option>
                         <option value="set_variable">Update Attribute</option>
                         <option value="start_workflow">Start Workflow</option>
+                        <option value="add_to_label">Add To Label</option>
                         <option value="update_chat_status">Update Chat Status</option>
                       </select>
                     </>
@@ -4777,6 +4829,25 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                       </select>
                       {loadingWorkflows && (
                         <p className="text-[10px] text-slate-400">Loading workflows...</p>
+                      )}
+                    </div>
+                  ) : selectedNode.data.actionType === 'add_to_label' ? (
+                    <div className="space-y-1">
+                      <label className="text-xs text-slate-500">Select Label</label>
+                      <select
+                        className="w-full border border-slate-300 rounded-md p-2 text-sm"
+                        value={selectedNode.data.actionValue || ''}
+                        onChange={(e) => updateNodeData('actionValue', e.target.value)}
+                      >
+                        <option value="">Select label...</option>
+                        {availableLabels.map((l) => (
+                          <option key={l.id} value={l.id}>
+                            {l.name}
+                          </option>
+                        ))}
+                      </select>
+                      {loadingLabels && (
+                        <p className="text-[10px] text-slate-400">Loading labels...</p>
                       )}
                     </div>
                   ) : selectedNode.data.actionType === 'update_chat_status' ? (
