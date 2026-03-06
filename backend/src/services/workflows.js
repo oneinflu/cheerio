@@ -359,9 +359,23 @@ async function runWorkflow(id, phoneNumber, context = {}) {
         const nodeData = currentNode.data || {};
         const templateName = nodeData.template;
         if (templateName) {
-          const components = Array.isArray(nodeData.components) ? nodeData.components : [];
+          let components = Array.isArray(nodeData.components) ? JSON.parse(JSON.stringify(nodeData.components)) : [];
           const languageCode = nodeData.languageCode || 'en_US';
-          console.log(`[WorkflowRunner] Sending template ${templateName} to ${phoneNumber}`);
+          
+          // Resolve variables in components
+          components = components.map(comp => {
+            if (comp.parameters && Array.isArray(comp.parameters)) {
+              comp.parameters = comp.parameters.map(param => {
+                if (param.type === 'text' && param.text) {
+                  param.text = resolvePlaceholders(param.text, context);
+                }
+                return param;
+              });
+            }
+            return comp;
+          });
+
+          console.log(`[WorkflowRunner] Sending template ${templateName} to ${phoneNumber}. Components:`, JSON.stringify(components));
           // Resolve conversation and send via outbound service (persists to DB)
           try {
             const conversationId = await ensureConversation(phoneNumber);
