@@ -2077,14 +2077,24 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
           </div>
           <div className="p-4 space-y-3 overflow-y-auto">
             {viewMode === 'canvas' && (
-              <DraggableBlock
-                type="trigger"
-                label="Whatsapp Incoming"
-                icon={MessageSquare}
-                color="bg-green-600"
-                onAdd={handleAddNodeFromPalette}
-                disabledDrag={false}
-              />
+              <div
+                className="flex items-center gap-2 p-2 rounded-md bg-green-50 border border-green-200 cursor-pointer hover:bg-green-100 transition-colors"
+                draggable
+                onDragStart={(e) => {
+                    e.dataTransfer.setData('application/reactflow', 'trigger');
+                    e.dataTransfer.effectAllowed = 'move';
+                }}
+                onClick={() => handleAddNodeFromPalette('trigger')}
+                title="Triggers when a specific keyword is received"
+              >
+                <div className="w-7 h-7 rounded-md bg-green-600 flex items-center justify-center shrink-0">
+                  <MessageSquare size={14} className="text-white" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold text-green-800">Whatsapp Incoming</div>
+                  <div className="text-[10px] text-green-600">Keyword match trigger</div>
+                </div>
+              </div>
             )}
             {viewMode === 'canvas' && (
               <div
@@ -2257,6 +2267,29 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 </div>
               </div>
             )}
+            {/* Assign Agent (New Action) */}
+            {viewMode === 'canvas' && (
+              <div
+                className="flex items-center gap-2 p-2 rounded-md bg-orange-50 border border-orange-200 cursor-pointer hover:bg-orange-100 transition-colors"
+                draggable
+                onDragStart={(e) => {
+                    e.dataTransfer.setData('application/reactflow', 'action');
+                    e.dataTransfer.setData('application/actiontype', 'assign_agent');
+                    e.dataTransfer.effectAllowed = 'move';
+                }}
+                onClick={() => handleAddNodeFromPalette('action', 'assign_agent')}
+                title="Assign conversation to an agent (Round Robin or Direct)"
+              >
+                <div className="w-7 h-7 rounded-md bg-orange-500 flex items-center justify-center shrink-0">
+                  <UserCheck size={14} className="text-white" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold text-orange-800">Assign Agent</div>
+                  <div className="text-[10px] text-orange-600">Route to team member</div>
+                </div>
+              </div>
+            )}
+            {/*
             {viewMode === 'canvas' && (
               <>
                 <DraggableBlock
@@ -2353,6 +2386,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 />
               </>
             )}
+            */}
           </div>
         </div>
 
