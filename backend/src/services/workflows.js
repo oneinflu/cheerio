@@ -619,6 +619,7 @@ async function runWorkflow(id, phoneNumber, context = {}) {
           `, [conversationId]);
           attrs = res.rows[0]?.attrs || {};
         } catch (e) {}
+        attrs = { ...(attrs || {}), ...(context || {}) };
 
         const groups = Array.isArray(currentNode.data?.groups) ? currentNode.data.groups : [];
         const normalize = (v) => {

@@ -848,6 +848,16 @@ const getUpstreamVariables = (targetNodeId, nodes, edges) => {
         if (saveVar && !vars.includes(`{{${saveVar}}}`)) {
           vars.push(`{{${saveVar}}}`);
         }
+      } else if (srcNode.type === 'feedback') {
+        const saveVar = srcNode.data.saveVariable;
+        if (saveVar && !vars.includes(`{{${saveVar}}}`)) {
+          vars.push(`{{${saveVar}}}`);
+        }
+      } else if (srcNode.type === 'action' && srcNode.data && srcNode.data.actionType === 'set_variable') {
+        const varName = srcNode.data.variableName;
+        if (varName && !vars.includes(`{{${varName}}}`)) {
+          vars.push(`{{${varName}}}`);
+        }
       }
 
       // Continue walking backward
@@ -4408,38 +4418,62 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                   <div className="p-3 bg-slate-50 border border-slate-200 rounded-md">
                     <div className="text-xs text-slate-600">Default route executes when none of the below match.</div>
                   </div>
-                  <div className="space-y-6">
-                    {(Array.isArray(selectedNode.data.groups) ? selectedNode.data.groups : []).map((group, gi) => {
-                      const clauses = Array.isArray(group.clauses) ? group.clauses : [];
-                      return (
-                        <div key={group.id || gi} className="border border-slate-200 rounded-md p-3">
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="text-xs font-semibold text-slate-700">Condition Node {gi + 1}</div>
-                            <button
-                              type="button"
-                              className="text-xs text-red-600"
-                              onClick={() => {
-                                const next = (selectedNode.data.groups || []).filter((_, idx) => idx !== gi);
-                                updateNodeFields(selectedNode.id, { groups: next });
-                              }}
-                            >
-                              Delete
-                            </button>
-                          </div>
-                          <div className="space-y-3">
-                            {clauses.map((cl, ci) => (
-                              <div key={`${gi}-${ci}`} className="space-y-2">
-                                <div className="grid grid-cols-3 gap-2">
-                                  <input
-                                    placeholder="Attribute (e.g. location)"
-                                    className="w-full border border-slate-300 rounded-md p-2 text-sm"
-                                    value={cl.key || ''}
-                                    onChange={(e) => {
-                                      const groups = JSON.parse(JSON.stringify(selectedNode.data.groups || []));
-                                      groups[gi].clauses[ci].key = e.target.value;
-                                      updateNodeFields(selectedNode.id, { groups });
-                                    }}
-                                  />
+                  {(() => {
+                    const upstreamVars = getUpstreamVariables(selectedNode.id, nodes, edges);
+                    const upstreamKeys = Array.from(
+                      new Set(
+                        upstreamVars
+                          .map((v) => String(v).replace(/[{}]/g, '').trim())
+                          .filter(Boolean)
+                      )
+                    );
+
+                    return (
+                      <div className="space-y-6">
+                        {(Array.isArray(selectedNode.data.groups) ? selectedNode.data.groups : []).map((group, gi) => {
+                          const clauses = Array.isArray(group.clauses) ? group.clauses : [];
+                          return (
+                            <div key={group.id || gi} className="border border-slate-200 rounded-md p-3">
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="text-xs font-semibold text-slate-700">Condition Node {gi + 1}</div>
+                                <button
+                                  type="button"
+                                  className="text-xs text-red-600"
+                                  onClick={() => {
+                                    const next = (selectedNode.data.groups || []).filter((_, idx) => idx !== gi);
+                                    updateNodeFields(selectedNode.id, { groups: next });
+                                  }}
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                              <div className="space-y-3">
+                                {clauses.map((cl, ci) => (
+                                  <div key={`${gi}-${ci}`} className="space-y-2">
+                                    <div className="grid grid-cols-3 gap-2">
+                                      <select
+                                        className="w-full border border-slate-300 rounded-md p-2 text-sm bg-white"
+                                        value={cl.key || ''}
+                                        onChange={(e) => {
+                                          const groups = JSON.parse(JSON.stringify(selectedNode.data.groups || []));
+                                          groups[gi].clauses[ci].key = e.target.value;
+                                          updateNodeFields(selectedNode.id, { groups });
+                                        }}
+                                      >
+                                        {upstreamKeys.length === 0 ? (
+                                          <option value="">No variables available</option>
+                                        ) : (
+                                          <option value="">Select attribute</option>
+                                        )}
+                                        {upstreamKeys.map((k) => (
+                                          <option key={k} value={k}>
+                                            {k}
+                                          </option>
+                                        ))}
+                                        {cl.key && !upstreamKeys.includes(cl.key) && (
+                                          <option value={cl.key}>{cl.key}</option>
+                                        )}
+                                      </select>
                                   <select
                                     className="w-full border border-slate-300 rounded-md p-2 text-sm"
                                     value={cl.op || 'eq'}
@@ -4468,68 +4502,70 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                                       updateNodeFields(selectedNode.id, { groups });
                                     }}
                                   />
-                                </div>
-                                {ci < clauses.length - 1 && (
-                                  <div className="flex items-center gap-2">
-                                    <button
-                                      type="button"
-                                      className={`px-3 py-1 text-xs rounded ${cl.join === 'AND' ? 'bg-violet-600 text-white' : 'bg-slate-200 text-slate-700'}`}
-                                      onClick={() => {
-                                        const groups = JSON.parse(JSON.stringify(selectedNode.data.groups || []));
-                                        groups[gi].clauses[ci].join = 'AND';
-                                        updateNodeFields(selectedNode.id, { groups });
-                                      }}
-                                    >
-                                      AND
-                                    </button>
-                                    <span className="text-[10px] text-slate-500">OR</span>
-                                    <button
-                                      type="button"
-                                      className={`px-3 py-1 text-xs rounded ${cl.join === 'OR' ? 'bg-violet-600 text-white' : 'bg-slate-200 text-slate-700'}`}
-                                      onClick={() => {
-                                        const groups = JSON.parse(JSON.stringify(selectedNode.data.groups || []));
-                                        groups[gi].clauses[ci].join = 'OR';
-                                        updateNodeFields(selectedNode.id, { groups });
-                                      }}
-                                    >
-                                      OR
-                                    </button>
+                                    </div>
+                                    {ci < clauses.length - 1 && (
+                                      <div className="flex items-center gap-2">
+                                        <button
+                                          type="button"
+                                          className={`px-3 py-1 text-xs rounded ${cl.join === 'AND' ? 'bg-violet-600 text-white' : 'bg-slate-200 text-slate-700'}`}
+                                          onClick={() => {
+                                            const groups = JSON.parse(JSON.stringify(selectedNode.data.groups || []));
+                                            groups[gi].clauses[ci].join = 'AND';
+                                            updateNodeFields(selectedNode.id, { groups });
+                                          }}
+                                        >
+                                          AND
+                                        </button>
+                                        <span className="text-[10px] text-slate-500">OR</span>
+                                        <button
+                                          type="button"
+                                          className={`px-3 py-1 text-xs rounded ${cl.join === 'OR' ? 'bg-violet-600 text-white' : 'bg-slate-200 text-slate-700'}`}
+                                          onClick={() => {
+                                            const groups = JSON.parse(JSON.stringify(selectedNode.data.groups || []));
+                                            groups[gi].clauses[ci].join = 'OR';
+                                            updateNodeFields(selectedNode.id, { groups });
+                                          }}
+                                        >
+                                          OR
+                                        </button>
+                                      </div>
+                                    )}
                                   </div>
-                                )}
+                                ))}
+                                <div className="flex gap-2">
+                                  <button
+                                    type="button"
+                                    className="px-3 py-1 text-xs border border-slate-300 rounded"
+                                    onClick={() => {
+                                      const groups = JSON.parse(JSON.stringify(selectedNode.data.groups || []));
+                                      groups[gi].clauses.push({ key: '', op: 'eq', value: '', join: 'AND' });
+                                      updateNodeFields(selectedNode.id, { groups });
+                                    }}
+                                  >
+                                    Add Condition
+                                  </button>
+                                </div>
                               </div>
-                            ))}
-                            <div className="flex gap-2">
-                              <button
-                                type="button"
-                                className="px-3 py-1 text-xs border border-slate-300 rounded"
-                                onClick={() => {
-                                  const groups = JSON.parse(JSON.stringify(selectedNode.data.groups || []));
-                                  groups[gi].clauses.push({ key: '', op: 'eq', value: '', join: 'AND' });
-                                  updateNodeFields(selectedNode.id, { groups });
-                                }}
-                              >
-                                Add Condition
-                              </button>
                             </div>
-                          </div>
+                          );
+                        })}
+                        <div>
+                          <button
+                            type="button"
+                            className="px-3 py-2 text-xs border border-slate-300 rounded"
+                            onClick={() => {
+                              const groups = Array.isArray(selectedNode.data.groups) ? [...selectedNode.data.groups] : [];
+                              groups.push({ id: `g${groups.length + 1}`, clauses: [{ key: '', op: 'eq', value: '', join: 'AND' }] });
+                              updateNodeFields(selectedNode.id, { groups });
+                            }}
+                          >
+                            Add Condition Node
+                          </button>
                         </div>
-                      );
-                    })}
-                    <div>
-                      <button
-                        type="button"
-                        className="px-3 py-2 text-xs border border-slate-300 rounded"
-                        onClick={() => {
-                          const groups = Array.isArray(selectedNode.data.groups) ? [...selectedNode.data.groups] : [];
-                          groups.push({ id: `g${groups.length + 1}`, clauses: [{ key: '', op: 'eq', value: '', join: 'AND' }] });
-                          updateNodeFields(selectedNode.id, { groups });
-                        }}
-                      >
-                        Add Condition Node
-                      </button>
-                    </div>
-                    <div className="text-[10px] text-slate-500">Create edges from this node: one for each Condition Node output and one Default.</div>
-                  </div>
+                        <div className="text-[10px] text-slate-500">Create edges from this node: one for each Condition Node output and one Default.</div>
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
 
