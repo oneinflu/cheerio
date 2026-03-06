@@ -349,6 +349,24 @@ async function runMigrations() {
           console.log('[migrate] payment_requests table already exists.');
         }
 
+        // 0018 – whatsapp_templates table
+        const waTemplatesRes = await client.query(`
+          SELECT EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE  table_schema = 'public'
+            AND    table_name   = 'whatsapp_templates'
+          );
+        `);
+        if (!waTemplatesRes.rows[0].exists) {
+          console.log('[migrate] Adding whatsapp_templates table...');
+          await client.query('BEGIN');
+          await runSQLFile(client, path.join(__dirname, '..', 'db', 'migrations', '0018_whatsapp_templates.sql'));
+          await client.query('COMMIT');
+          console.log('[migrate] Applied 0018_whatsapp_templates migration.');
+        } else {
+          console.log('[migrate] whatsapp_templates table already exists.');
+        }
+
         return;
 
 

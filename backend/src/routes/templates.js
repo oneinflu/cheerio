@@ -34,24 +34,47 @@ router.get('/', async (req, res, next) => {
   }
   try {
     console.log('[templates] Fetching templates for WABA:', WABA_ID);
-    const resp = await whatsappClient.getTemplates(WABA_ID);
-    const templates = resp.data && resp.data.data ? resp.data.data : [];
+    let templates = [];
+    try {
+      const resp = await whatsappClient.getTemplates(WABA_ID);
+      templates = resp.data && resp.data.data ? resp.data.data : [];
+    } catch (apiErr) {
+      console.error('[templates] Failed to fetch Meta templates:', apiErr.message);
+      // Don't fail completely, try to load local templates
+    }
 
-    // Fetch starred settings from DB
+    // Fetch local templates
+    let localTemplates = [];
     const client = await db.getClient();
     let starredMap = new Set();
     try {
-      const res = await client.query('SELECT template_name FROM template_settings WHERE is_starred = TRUE');
-      res.rows.forEach(r => starredMap.add(r.template_name));
+      const starredRes = await client.query('SELECT template_name FROM template_settings WHERE is_starred = TRUE');
+      starredRes.rows.forEach(r => starredMap.add(r.template_name));
       console.log(`[templates] Found ${starredMap.size} starred templates in DB.`);
+      
+      const localRes = await client.query('SELECT * FROM whatsapp_templates');
+      localTemplates = localRes.rows.map(t => ({
+        id: t.id,
+        name: t.name,
+        language: t.language,
+        category: t.category,
+        components: t.components,
+        status: t.status, // 'LOCAL'
+        last_updated_time: t.updated_at
+      }));
     } catch (dbErr) {
-      console.error('[templates] Error fetching template settings (migration might be missing):', dbErr.message);
+      console.error('[templates] Error fetching local/starred templates:', dbErr.message);
     } finally {
       client.release();
     }
 
+    // Merge Meta + Local
+    // Deduplicate by name (prefer Meta if conflict, or show both? Usually name must be unique per WABA)
+    // We'll just concat them for now.
+    const allTemplates = [...templates, ...localTemplates];
+
     // Merge info
-    const enriched = templates.map(t => ({
+    const enriched = allTemplates.map(t => ({
       ...t,
       is_starred: starredMap.has(t.name)
     }));
