@@ -366,8 +366,15 @@ async function runWorkflow(id, phoneNumber, context = {}) {
           components = components.map(comp => {
             if (comp.parameters && Array.isArray(comp.parameters)) {
               comp.parameters = comp.parameters.map(param => {
-                if (param.type === 'text' && param.text) {
-                  param.text = resolvePlaceholders(param.text, context);
+                // IMPORTANT: We must NOT include parameter_name in the final payload to Meta.
+                // Meta API expects: { type: "text", text: "Value" }
+                // Extra fields like parameter_name cause rejection (100: Invalid parameter).
+                
+                const resolvedText = param.text ? resolvePlaceholders(param.text, context) : '';
+                
+                // Return clean object for Meta
+                if (param.type === 'text') {
+                    return { type: 'text', text: resolvedText };
                 }
                 return param;
               });
