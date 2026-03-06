@@ -284,6 +284,20 @@ async function runMigrations() {
           console.log('[migrate] webhook_events table already exists.');
         }
 
+        const emailDesignColRes = await client.query(`
+          SELECT column_name FROM information_schema.columns
+          WHERE table_name='email_templates' AND column_name='design'
+        `);
+        if (emailDesignColRes.rowCount === 0) {
+          console.log('[migrate] Adding design column to email_templates...');
+          await client.query('BEGIN');
+          await runSQLFile(client, path.join(__dirname, '..', 'db', 'migrations', '0017_email_templates_design.sql'));
+          await client.query('COMMIT');
+          console.log('[migrate] Applied email_templates design column migration.');
+        } else {
+          console.log('[migrate] email_templates.design column already exists.');
+        }
+
         // 0014 – relax webhook_events.workflow_id to TEXT (was UUID+FK, caused silent drops)
         const whCol = await client.query(`
           SELECT data_type FROM information_schema.columns

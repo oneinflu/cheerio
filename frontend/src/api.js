@@ -662,6 +662,31 @@ export async function getEmailTemplates() {
   return res.json();
 }
 
+export async function createEmailTemplate(data) {
+  const res = await fetch(`/api/email-templates`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
+export async function updateEmailTemplate(id, data) {
+  const res = await fetch(`/api/email-templates/${id}`, {
+    method: 'PUT',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
+export async function deleteEmailTemplate(id) {
+  const res = await fetch(`/api/email-templates/${id}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+  });
+  return res.json();
+}
 export async function createLabel(name) {
   const res = await fetch(`/api/labels`, {
     method: "POST",
