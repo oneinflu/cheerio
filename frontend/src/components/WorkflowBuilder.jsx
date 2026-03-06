@@ -4231,28 +4231,42 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
 
               {selectedNode.type === 'action' && (
                 <div className="space-y-3">
-                  <label className="block text-sm font-medium text-slate-700">Action</label>
-                  <select
-                    className="w-full border border-slate-300 rounded-md p-2 text-sm"
-                    value={selectedNode.data.actionType || 'add_tag'}
-                    onChange={(e) => {
-                      const type = e.target.value;
-                      updateNodeFields(selectedNode.id, {
-                        actionType: type,
-                        actionValue: '',
-                        variableName: '',
-                        variableValue: '',
-                        targetWorkflowName: '',
-                      });
-                    }}
-                  >
-                    <option value="add_tag">Add to Label</option>
-                    <option value="remove_tag">Remove Label</option>
-                    <option value="assign_agent">Assign Agent</option>
-                    <option value="set_variable">Update Attribute</option>
-                    <option value="start_workflow">Start Workflow</option>
-                    <option value="update_chat_status">Update Chat Status</option>
-                  </select>
+                  {/* Hide redundant dropdown if actionType is already specific */}
+                  {['assign_agent', 'update_chat_status'].includes(selectedNode.data.actionType) ? (
+                    <div className="space-y-1 pb-2 border-b border-slate-100">
+                      <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide">Action Type</label>
+                      <div className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                        {selectedNode.data.actionType === 'assign_agent' && <UserCheck size={16} className="text-orange-500" />}
+                        {selectedNode.data.actionType === 'update_chat_status' && <MessageCircle size={16} className="text-cyan-500" />}
+                        {selectedNode.data.actionType === 'assign_agent' ? 'Assign Agent' : 'Update Chat Status'}
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <label className="block text-sm font-medium text-slate-700">Action</label>
+                      <select
+                        className="w-full border border-slate-300 rounded-md p-2 text-sm"
+                        value={selectedNode.data.actionType || 'add_tag'}
+                        onChange={(e) => {
+                          const type = e.target.value;
+                          updateNodeFields(selectedNode.id, {
+                            actionType: type,
+                            actionValue: '',
+                            variableName: '',
+                            variableValue: '',
+                            targetWorkflowName: '',
+                          });
+                        }}
+                      >
+                        <option value="add_tag">Add to Label</option>
+                        <option value="remove_tag">Remove Label</option>
+                        <option value="assign_agent">Assign Agent</option>
+                        <option value="set_variable">Update Attribute</option>
+                        <option value="start_workflow">Start Workflow</option>
+                        <option value="update_chat_status">Update Chat Status</option>
+                      </select>
+                    </>
+                  )}
 
                   {selectedNode.data.actionType === 'assign_agent' ? (
                     <div className="space-y-3">
