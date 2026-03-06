@@ -2267,7 +2267,6 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 </div>
               </div>
             )}
-            {/* Assign Agent (New Action) */}
             {viewMode === 'canvas' && (
               <div
                 className="flex items-center gap-2 p-2 rounded-md bg-orange-50 border border-orange-200 cursor-pointer hover:bg-orange-100 transition-colors"
@@ -2289,104 +2288,27 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 </div>
               </div>
             )}
-            {/*
             {viewMode === 'canvas' && (
-              <>
-                <DraggableBlock
-                  type="trigger"
-                  label="Trigger"
-                  icon={Zap}
-                  color="bg-purple-600"
-                  onAdd={handleAddNodeFromPalette}
-                  disabledDrag={false}
-                />
-                <DraggableBlock
-                  type="send_template"
-                  label="Send Template"
-                  icon={MessageSquare}
-                  color="bg-green-600"
-                  onAdd={handleAddNodeFromPalette}
-                  disabledDrag={viewMode !== 'canvas'}
-                />
-                <DraggableBlock
-                  type="send_message"
-                  label="Send Message"
-                  icon={MessageCircle}
-                  color="bg-teal-500"
-                  onAdd={handleAddNodeFromPalette}
-                  disabledDrag={viewMode !== 'canvas'}
-                />
-                <DraggableBlock
-                  type="condition"
-                  label="Condition"
-                  icon={GitBranch}
-                  color="bg-blue-600"
-                  onAdd={handleAddNodeFromPalette}
-                  disabledDrag={viewMode !== 'canvas'}
-                />
-                <DraggableBlock
-                  type="delay"
-                  label="Delay"
-                  icon={Clock}
-                  color="bg-orange-500"
-                  onAdd={handleAddNodeFromPalette}
-                  disabledDrag={false}
-                />
-                <DraggableBlock
-                  type="action"
-                  actionType="assign_agent"
-                  label="Assign Agent"
-                  icon={UserCheck}
-                  color="bg-orange-500"
-                  onAdd={handleAddNodeFromPalette}
-                  disabledDrag={false}
-                />
-                <DraggableBlock
-                  type="action"
-                  actionType="add_tag"
-                  label="Add to Label"
-                  icon={Tag}
-                  color="bg-emerald-500"
-                  onAdd={handleAddNodeFromPalette}
-                  disabledDrag={false}
-                />
-                <DraggableBlock
-                  type="action"
-                  actionType="set_variable"
-                  label="Update Attribute"
-                  icon={Plus}
-                  color="bg-indigo-500"
-                  onAdd={handleAddNodeFromPalette}
-                  disabledDrag={false}
-                />
-                <DraggableBlock
-                  type="action"
-                  actionType="update_chat_status"
-                  label="Update Chat Status"
-                  icon={MessageCircle}
-                  color="bg-cyan-500"
-                  onAdd={handleAddNodeFromPalette}
-                  disabledDrag={false}
-                />
-                <DraggableBlock
-                  type="custom_code"
-                  label="Custom Code"
-                  icon={Code}
-                  color="bg-gray-800"
-                  onAdd={handleAddNodeFromPalette}
-                  disabledDrag={false}
-                />
-                <DraggableBlock
-                  type="end"
-                  label="End"
-                  icon={StopCircle}
-                  color="bg-slate-600"
-                  onAdd={handleAddNodeFromPalette}
-                  disabledDrag={false}
-                />
-              </>
+              <div
+                className="flex items-center gap-2 p-2 rounded-md bg-cyan-50 border border-cyan-200 cursor-pointer hover:bg-cyan-100 transition-colors"
+                draggable
+                onDragStart={(e) => {
+                    e.dataTransfer.setData('application/reactflow', 'action');
+                    e.dataTransfer.setData('application/actiontype', 'update_chat_status');
+                    e.dataTransfer.effectAllowed = 'move';
+                }}
+                onClick={() => handleAddNodeFromPalette('action', 'update_chat_status')}
+                title="Change conversation status (open / snoozed / closed)"
+              >
+                <div className="w-7 h-7 rounded-md bg-cyan-600 flex items-center justify-center shrink-0">
+                  <MessageCircle size={14} className="text-white" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold text-cyan-800">Update Chat Status</div>
+                  <div className="text-[10px] text-cyan-600">Open / Snooze / Close</div>
+                </div>
+              </div>
             )}
-            */}
           </div>
         </div>
 
