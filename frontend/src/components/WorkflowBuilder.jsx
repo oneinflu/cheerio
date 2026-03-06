@@ -178,6 +178,34 @@ const ConditionNode = ({ data, selected }) => {
   );
 };
 
+const AttributeConditionNode = ({ data, selected }) => {
+  const groups = Array.isArray(data.groups) ? data.groups : [];
+  const total = groups.length + 1;
+  return (
+    <NodeWrapper selected={selected} title="Custom Attributes" icon={GitBranch} colorClass="bg-violet-600">
+      <div className="text-xs text-slate-600 mb-2">Groups: {groups.length} • Default route</div>
+      <Handle type="target" position={Position.Top} className="w-3 h-3 bg-slate-400" />
+      {groups.map((g, idx) => (
+        <Handle
+          key={`g-${idx}`}
+          type="source"
+          position={Position.Bottom}
+          id={`group-${idx}`}
+          className="w-3 h-3 bg-emerald-500"
+          style={{ left: `${Math.round(((idx + 1) / (total + 1)) * 100)}%` }}
+        />
+      ))}
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        id="default"
+        className="w-3 h-3 bg-slate-500"
+        style={{ left: `${Math.round(((total) / (total + 1)) * 100)}%` }}
+      />
+    </NodeWrapper>
+  );
+};
+
 const SendMessageNode = ({ data, selected }) => {
   return (
     <NodeWrapper selected={selected} title="Send Message" icon={MessageCircle} colorClass="bg-teal-500">
@@ -672,6 +700,7 @@ const nodeTypes = {
   send_template: TemplateNode,
   delay: DelayNode,
   condition: ConditionNode,
+  attribute_condition: AttributeConditionNode,
   send_message: SendMessageNode,
   custom_code: CustomCodeNode,
   action: ActionNode,
@@ -1005,6 +1034,19 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
         newNode.data.hours = 0;
         newNode.data.minutes = 0;
         newNode.data.targetAt = null;
+      }
+      if (type === 'attribute_condition') {
+        newNode.data = {
+          label: 'Custom Attributes',
+          groups: [
+            {
+              id: 'g1',
+              clauses: [
+                { key: '', op: 'eq', value: '', join: 'AND' }
+              ]
+            }
+          ]
+        };
       }
 
       setNodes((nds) => nds.concat(newNode));
@@ -2358,6 +2400,26 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 <div className="min-w-0">
                   <div className="text-xs font-semibold text-cyan-800">Update Chat Status</div>
                   <div className="text-[10px] text-cyan-600">Open / Snooze / Close</div>
+                </div>
+              </div>
+            )}
+            {viewMode === 'canvas' && (
+              <div
+                className="flex items-center gap-2 p-2 rounded-md bg-violet-50 border border-violet-200 cursor-pointer hover:bg-violet-100 transition-colors"
+                draggable
+                onDragStart={(e) => {
+                    e.dataTransfer.setData('application/reactflow', 'attribute_condition');
+                    e.dataTransfer.effectAllowed = 'move';
+                }}
+                onClick={() => handleAddNodeFromPalette('attribute_condition')}
+                title="Route based on contact attributes with AND/OR groups"
+              >
+                <div className="w-7 h-7 rounded-md bg-violet-600 flex items-center justify-center shrink-0">
+                  <GitBranch size={14} className="text-white" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold text-violet-800">Custom Attributes</div>
+                  <div className="text-[10px] text-violet-600">Multi-branch with default</div>
                 </div>
               </div>
             )}
@@ -4338,6 +4400,136 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                   <p className="text-xs text-slate-500">
                     Code runs in a restricted environment. Use `console.log` for debugging.
                   </p>
+                </div>
+              )}
+
+              {selectedNode.type === 'attribute_condition' && (
+                <div className="space-y-4">
+                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-md">
+                    <div className="text-xs text-slate-600">Default route executes when none of the below match.</div>
+                  </div>
+                  <div className="space-y-6">
+                    {(Array.isArray(selectedNode.data.groups) ? selectedNode.data.groups : []).map((group, gi) => {
+                      const clauses = Array.isArray(group.clauses) ? group.clauses : [];
+                      return (
+                        <div key={group.id || gi} className="border border-slate-200 rounded-md p-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="text-xs font-semibold text-slate-700">Condition Node {gi + 1}</div>
+                            <button
+                              type="button"
+                              className="text-xs text-red-600"
+                              onClick={() => {
+                                const next = (selectedNode.data.groups || []).filter((_, idx) => idx !== gi);
+                                updateNodeFields(selectedNode.id, { groups: next });
+                              }}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                          <div className="space-y-3">
+                            {clauses.map((cl, ci) => (
+                              <div key={`${gi}-${ci}`} className="space-y-2">
+                                <div className="grid grid-cols-3 gap-2">
+                                  <input
+                                    placeholder="Attribute (e.g. location)"
+                                    className="w-full border border-slate-300 rounded-md p-2 text-sm"
+                                    value={cl.key || ''}
+                                    onChange={(e) => {
+                                      const groups = JSON.parse(JSON.stringify(selectedNode.data.groups || []));
+                                      groups[gi].clauses[ci].key = e.target.value;
+                                      updateNodeFields(selectedNode.id, { groups });
+                                    }}
+                                  />
+                                  <select
+                                    className="w-full border border-slate-300 rounded-md p-2 text-sm"
+                                    value={cl.op || 'eq'}
+                                    onChange={(e) => {
+                                      const groups = JSON.parse(JSON.stringify(selectedNode.data.groups || []));
+                                      groups[gi].clauses[ci].op = e.target.value;
+                                      updateNodeFields(selectedNode.id, { groups });
+                                    }}
+                                  >
+                                    <option value="eq">equal to (==)</option>
+                                    <option value="neq">not equal to (!=)</option>
+                                    <option value="gt">greater than (&gt;)</option>
+                                    <option value="lt">less than (&lt;)</option>
+                                    <option value="contains">contains</option>
+                                    <option value="not_contains">not contains</option>
+                                    <option value="starts_with">starts with</option>
+                                    <option value="ends_with">ends with</option>
+                                  </select>
+                                  <input
+                                    placeholder="Value"
+                                    className="w-full border border-slate-300 rounded-md p-2 text-sm"
+                                    value={cl.value || ''}
+                                    onChange={(e) => {
+                                      const groups = JSON.parse(JSON.stringify(selectedNode.data.groups || []));
+                                      groups[gi].clauses[ci].value = e.target.value;
+                                      updateNodeFields(selectedNode.id, { groups });
+                                    }}
+                                  />
+                                </div>
+                                {ci < clauses.length - 1 && (
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      className={`px-3 py-1 text-xs rounded ${cl.join === 'AND' ? 'bg-violet-600 text-white' : 'bg-slate-200 text-slate-700'}`}
+                                      onClick={() => {
+                                        const groups = JSON.parse(JSON.stringify(selectedNode.data.groups || []));
+                                        groups[gi].clauses[ci].join = 'AND';
+                                        updateNodeFields(selectedNode.id, { groups });
+                                      }}
+                                    >
+                                      AND
+                                    </button>
+                                    <span className="text-[10px] text-slate-500">OR</span>
+                                    <button
+                                      type="button"
+                                      className={`px-3 py-1 text-xs rounded ${cl.join === 'OR' ? 'bg-violet-600 text-white' : 'bg-slate-200 text-slate-700'}`}
+                                      onClick={() => {
+                                        const groups = JSON.parse(JSON.stringify(selectedNode.data.groups || []));
+                                        groups[gi].clauses[ci].join = 'OR';
+                                        updateNodeFields(selectedNode.id, { groups });
+                                      }}
+                                    >
+                                      OR
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                className="px-3 py-1 text-xs border border-slate-300 rounded"
+                                onClick={() => {
+                                  const groups = JSON.parse(JSON.stringify(selectedNode.data.groups || []));
+                                  groups[gi].clauses.push({ key: '', op: 'eq', value: '', join: 'AND' });
+                                  updateNodeFields(selectedNode.id, { groups });
+                                }}
+                              >
+                                Add Condition
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    <div>
+                      <button
+                        type="button"
+                        className="px-3 py-2 text-xs border border-slate-300 rounded"
+                        onClick={() => {
+                          const groups = Array.isArray(selectedNode.data.groups) ? [...selectedNode.data.groups] : [];
+                          groups.push({ id: `g${groups.length + 1}`, clauses: [{ key: '', op: 'eq', value: '', join: 'AND' }] });
+                          updateNodeFields(selectedNode.id, { groups });
+                        }}
+                      >
+                        Add Condition Node
+                      </button>
+                    </div>
+                    <div className="text-[10px] text-slate-500">Create edges from this node: one for each Condition Node output and one Default.</div>
+                  </div>
                 </div>
               )}
 

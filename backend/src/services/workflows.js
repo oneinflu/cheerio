@@ -607,6 +607,73 @@ async function runWorkflow(id, phoneNumber, context = {}) {
 
         console.log(`[WorkflowRunner] Waiting ${ms}ms (delay node)`);
         if (ms > 0) await sleep(ms);
+      } else if (currentNode.type === 'attribute_condition') {
+        let attrs = {};
+        try {
+          const conversationId = await ensureConversation(phoneNumber);
+          const res = await db.query(`
+            SELECT c.profile->'attributes' AS attrs
+            FROM conversations v
+            JOIN contacts c ON c.id = v.contact_id
+            WHERE v.id = $1
+          `, [conversationId]);
+          attrs = res.rows[0]?.attrs || {};
+        } catch (e) {}
+
+        const groups = Array.isArray(currentNode.data?.groups) ? currentNode.data.groups : [];
+        const normalize = (v) => {
+          if (v == null) return '';
+          if (typeof v === 'string') return v;
+          if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+          return JSON.stringify(v);
+        };
+        const cmp = (leftRaw, op, rightRaw) => {
+          const left = normalize(leftRaw);
+          const right = normalize(rightRaw);
+          const li = left.toLowerCase();
+          const ri = right.toLowerCase();
+          if (op === 'eq') return left === right;
+          if (op === 'neq') return left !== right;
+          if (op === 'gt') return parseFloat(left) > parseFloat(right);
+          if (op === 'lt') return parseFloat(left) < parseFloat(right);
+          if (op === 'contains') return li.includes(ri);
+          if (op === 'not_contains') return !li.includes(ri);
+          if (op === 'starts_with') return li.startsWith(ri);
+          if (op === 'ends_with') return li.endsWith(ri);
+          return false;
+        };
+
+        let matchedRoute = null;
+        for (let gi = 0; gi < groups.length; gi++) {
+          const g = groups[gi];
+          const clauses = Array.isArray(g.clauses) ? g.clauses : [];
+          let acc = null;
+          for (let ci = 0; ci < clauses.length; ci++) {
+            const cl = clauses[ci];
+            const key = cl.key || '';
+            const op = cl.op || 'eq';
+            const val = cl.value || '';
+            const left = attrs?.[key];
+            const res = cmp(left, op, val);
+            if (acc === null) acc = res;
+            else {
+              const join = (clauses[ci - 1]?.join || 'AND').toUpperCase();
+              if (join === 'OR') acc = acc || res;
+              else acc = acc && res;
+            }
+          }
+          if (acc) {
+            matchedRoute = currentNode.routes && currentNode.routes[`group-${gi}`];
+            break;
+          }
+        }
+        if (!matchedRoute) {
+          matchedRoute = currentNode.routes && currentNode.routes['default'];
+        }
+        if (matchedRoute) {
+          currentNode = nodes.find((n) => n.id === matchedRoute);
+          continue;
+        }
       } else if (currentNode.type === 'action') {
         const actionType = currentNode.data.actionType;
         const actionValue = currentNode.data.actionValue;
