@@ -231,6 +231,63 @@ async function checkUserReply(phoneNumber, sinceTime) {
   }
 }
 
+/**
+ * Called when a webhook triggers a workflow.
+ * Finds and runs all workflows triggered by 'incoming_webhook'.
+ */
+async function triggerWebhookWorkflows(payload) {
+  // Extract contact info from payload
+  const phone = payload.phone || payload.mobile || payload.whatsapp || payload.contact || '';
+  const name = payload.name || payload.full_name || payload.username || '';
+  const email = payload.email || payload.mail || '';
+  
+  if (!phone) {
+    console.log('[WorkflowEvents] Webhook received but no phone number found in payload. Skipping workflow.');
+    return;
+  }
+
+  // Normalize phone (remove + if present, ensuring lookup works)
+  const normalizedPhone = String(phone).replace(/[+\s-]/g, '');
+
+  console.log(`[WorkflowEvents] Webhook triggered for ${normalizedPhone}. Payload:`, payload);
+
+  // Initial Context from Payload
+  const initialContext = { ...payload };
+  if (name) initialContext.name = name;
+  if (email) initialContext.email = email;
+  if (normalizedPhone) initialContext.phone = normalizedPhone;
+
+  // Find all active workflows with 'incoming_webhook' trigger
+  const res = await db.query(`
+    SELECT id, steps FROM workflows 
+    WHERE status = 'active' 
+    AND steps->'nodes' @> '[{"type":"incoming_webhook"}]'
+  `);
+
+  console.log(`[WorkflowEvents] Found ${res.rowCount} workflows with incoming_webhook trigger.`);
+
+  for (const wf of res.rows) {
+    const nodes = wf.steps.nodes || [];
+    const triggerNode = nodes.find(n => n.type === 'incoming_webhook');
+    
+    // Check if this specific webhook ID matches (if we support multiple webhook endpoints per workflow)
+    // For now, we assume global webhook trigger or filtered by workflow ID in the route handler.
+    // If the route handler calls this specific function for a specific workflow ID, we should pass it.
+    
+    // However, if this is a generic broadcast, we run all.
+    // BUT, usually webhook URLs are unique per workflow (e.g. /webhooks/workflow/:id).
+    // If so, the caller (route) should call runWorkflow directly.
+    
+    // Let's assume this function is for GENERIC webhooks or when we want to match payload criteria.
+    // For specific workflow webhooks, the route handler calls runWorkflow(id, phone, payload).
+    
+    // We will still run it here for completeness if used that way.
+    runWorkflow(wf.id, normalizedPhone, initialContext).catch(err => {
+      console.error(`[WorkflowEvents] Failed to run workflow ${wf.id}:`, err);
+    });
+  }
+}
+
 async function runWorkflow(id, phoneNumber, context = {}) {
   const workflow = await getWorkflow(id);
   if (!workflow) throw new Error('Workflow not found');
@@ -241,8 +298,40 @@ async function runWorkflow(id, phoneNumber, context = {}) {
   const { nodes } = steps;
 
   // Find trigger node
-  let currentNode = nodes.find(n => n.type === 'trigger');
+  let currentNode = nodes.find(n => n.type === 'trigger' || n.type === 'incoming_webhook');
   if (!currentNode) throw new Error('No trigger node found');
+
+  // If trigger is incoming_webhook, map payload to variables
+  if (currentNode.type === 'incoming_webhook') {
+    const paramMapping = currentNode.data?.paramMapping || {};
+    // paramMapping: { "name": "user_name", "email": "user_email" } 
+    // where key is payload field, value is variable name
+    
+    Object.entries(paramMapping).forEach(([payloadKey, varName]) => {
+      if (context[payloadKey] !== undefined) {
+        context[varName] = context[payloadKey];
+      }
+    });
+
+    // Also auto-map standard fields if not explicitly mapped but present
+    if (!context['name'] && context['name']) context['name'] = context['name']; // already in context
+    
+    // Ensure contact exists or update it with new info
+    try {
+        const contactId = await ensureContact({
+            external_id: phoneNumber,
+            name: context.name || undefined,
+            email: context.email || undefined,
+            attributes: context // Save full payload as attributes
+        });
+        context.contact_id = contactId;
+    } catch (err) {
+        console.error(`[WorkflowRunner] Failed to ensure contact for ${phoneNumber}:`, err);
+    }
+  } else if (currentNode.type === 'trigger' && currentNode.data?.triggerType === 'new_contact') {
+      // Ensure contact attributes are in context
+      // (Already handled by triggerContactCreatedWorkflows but good for safety)
+  }
 
   const executionLog = [];
   const MAX_STEPS = 50;
@@ -253,6 +342,7 @@ async function runWorkflow(id, phoneNumber, context = {}) {
   const workflowStartTime = new Date();
 
   console.log(`[WorkflowRunner] Starting workflow ${id} for ${phoneNumber}`);
+  console.log(`[WorkflowRunner] Context variables:`, JSON.stringify(context));
 
   while (currentNode && stepCount < MAX_STEPS) {
     stepCount++;
@@ -1465,5 +1555,6 @@ module.exports = {
   runWorkflow,
   triggerWorkflowsForEvent,
   triggerContactCreatedWorkflows,
+  triggerWebhookWorkflows,
   generateWorkflowFromDescription,
 };
