@@ -873,6 +873,37 @@ const getUpstreamVariables = (targetNodeId, nodes, edges) => {
   return vars;
 };
 
+const getAllDefinedVariables = (nodes) => {
+  const vars = [];
+  (nodes || []).forEach((n) => {
+    if (!n || !n.data) return;
+    if (n.type === 'new_contact') {
+      const fm = n.data.fieldMapping || {};
+      Object.values(fm).forEach((v) => {
+        if (v && !vars.includes(`{{${v}}}`)) vars.push(`{{${v}}}`);
+      });
+      ['name', 'phone', 'email', 'tags', 'source', 'contact_id'].forEach((def) => {
+        if (!vars.includes(`{{${def}}}`)) vars.push(`{{${def}}}`);
+      });
+    } else if (n.type === 'incoming_webhook') {
+      const pm = n.data.paramMapping || {};
+      Object.values(pm).forEach((v) => {
+        if (v && !vars.includes(`{{${v}}}`)) vars.push(`{{${v}}}`);
+      });
+    } else if (n.type === 'response_message' || n.type === 'feedback') {
+      const saveVar = n.data.saveVariable;
+      if (saveVar && !vars.includes(`{{${saveVar}}}`)) vars.push(`{{${saveVar}}}`);
+    } else if (n.type === 'action' && n.data.actionType === 'set_variable') {
+      const varName = n.data.variableName;
+      if (varName && !vars.includes(`{{${varName}}}`)) vars.push(`{{${varName}}}`);
+    }
+  });
+  if (vars.length === 0) {
+    ['{{name}}', '{{phone}}', '{{email}}', '{{tags}}', '{{source}}', '{{contact_id}}'].forEach((v) => vars.push(v));
+  }
+  return vars;
+};
+
 // --- Main Component ---
 
 export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
@@ -4420,6 +4451,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                   </div>
                   {(() => {
                     const upstreamVars = getUpstreamVariables(selectedNode.id, nodes, edges);
+                    const allVars = getAllDefinedVariables(nodes);
                     const upstreamKeys = Array.from(
                       new Set(
                         upstreamVars
@@ -4427,6 +4459,14 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                           .filter(Boolean)
                       )
                     );
+                    const allKeys = Array.from(
+                      new Set(
+                        allVars
+                          .map((v) => String(v).replace(/[{}]/g, '').trim())
+                          .filter(Boolean)
+                      )
+                    );
+                    const availableKeys = Array.from(new Set([...upstreamKeys, ...allKeys]));
 
                     return (
                       <div className="space-y-6">
@@ -4460,17 +4500,17 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                                           updateNodeFields(selectedNode.id, { groups });
                                         }}
                                       >
-                                        {upstreamKeys.length === 0 ? (
+                                        {availableKeys.length === 0 ? (
                                           <option value="">No variables available</option>
                                         ) : (
                                           <option value="">Select attribute</option>
                                         )}
-                                        {upstreamKeys.map((k) => (
+                                        {availableKeys.map((k) => (
                                           <option key={k} value={k}>
                                             {k}
                                           </option>
                                         ))}
-                                        {cl.key && !upstreamKeys.includes(cl.key) && (
+                                        {cl.key && !availableKeys.includes(cl.key) && (
                                           <option value={cl.key}>{cl.key}</option>
                                         )}
                                       </select>
