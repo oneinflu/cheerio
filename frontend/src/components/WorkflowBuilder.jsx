@@ -140,9 +140,23 @@ const TemplateNode = ({ data, selected }) => {
 };
 
 const DelayNode = ({ data, selected }) => {
+  const mode = data.delayMode || (data.targetAt ? 'specific' : 'relative');
+  let summary = '';
+  if (mode === 'specific' && data.targetAt) {
+    const d = new Date(data.targetAt);
+    summary = isNaN(d.getTime()) ? '' : `Until: ${d.toLocaleString()}`;
+  } else if (typeof data.days === 'number' || typeof data.hours === 'number' || typeof data.minutes === 'number') {
+    const days = Number.isFinite(Number(data.days)) ? Number(data.days) : 0;
+    const hours = Number.isFinite(Number(data.hours)) ? Number(data.hours) : 0;
+    const minutes = Number.isFinite(Number(data.minutes)) ? Number(data.minutes) : 0;
+    summary = `Wait: ${days}d ${hours}h ${minutes}m`;
+  } else {
+    summary = `Wait: ${data.duration || 0} ${data.unit || 'minutes'}`;
+  }
+
   return (
-    <NodeWrapper selected={selected} title="Delay" icon={Clock} colorClass="bg-orange-500">
-      <div className="text-xs text-slate-600">Wait: <b>{data.duration || 0} {data.unit || 'minutes'}</b></div>
+    <NodeWrapper selected={selected} title="Time Delay" icon={Clock} colorClass="bg-orange-500">
+      <div className="text-xs text-slate-600"><b>{summary}</b></div>
       <Handle type="target" position={Position.Top} className="w-3 h-3 bg-slate-400" />
       <Handle type="source" position={Position.Bottom} className="w-3 h-3 bg-slate-400" />
     </NodeWrapper>
@@ -984,6 +998,14 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
           newNode.data.actionValue = 'open';
         }
       }
+      if (type === 'delay') {
+        newNode.data.label = 'Time Delay';
+        newNode.data.delayMode = 'relative';
+        newNode.data.days = 0;
+        newNode.data.hours = 0;
+        newNode.data.minutes = 0;
+        newNode.data.targetAt = null;
+      }
 
       setNodes((nds) => nds.concat(newNode));
     },
@@ -1258,6 +1280,16 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
           if (actionType === 'update_chat_status') {
             data.actionValue = 'open';
           }
+        }
+        if (type === 'delay') {
+          data = {
+            label: 'Time Delay',
+            delayMode: 'relative',
+            days: 0,
+            hours: 0,
+            minutes: 0,
+            targetAt: null,
+          };
         }
 
         if (
@@ -2285,6 +2317,26 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 <div className="min-w-0">
                   <div className="text-xs font-semibold text-orange-800">Assign Agent</div>
                   <div className="text-[10px] text-orange-600">Route to team member</div>
+                </div>
+              </div>
+            )}
+            {viewMode === 'canvas' && (
+              <div
+                className="flex items-center gap-2 p-2 rounded-md bg-orange-50 border border-orange-200 cursor-pointer hover:bg-orange-100 transition-colors"
+                draggable
+                onDragStart={(e) => {
+                    e.dataTransfer.setData('application/reactflow', 'delay');
+                    e.dataTransfer.effectAllowed = 'move';
+                }}
+                onClick={() => handleAddNodeFromPalette('delay')}
+                title="Wait before executing the next node"
+              >
+                <div className="w-7 h-7 rounded-md bg-orange-500 flex items-center justify-center shrink-0">
+                  <Clock size={14} className="text-white" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold text-orange-800">Time Delay</div>
+                  <div className="text-[10px] text-orange-600">Run next step later</div>
                 </div>
               </div>
             )}
@@ -4136,24 +4188,84 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
 
               {selectedNode.type === 'delay' && (
                 <div className="space-y-3">
-                  <label className="block text-sm font-medium text-slate-700">Wait Duration</label>
-                  <div className="flex gap-2">
-                    <input
-                      type="number"
-                      className="w-20 border border-slate-300 rounded-md p-2 text-sm"
-                      value={selectedNode.data.duration || 0}
-                      onChange={(e) => updateNodeData('duration', parseInt(e.target.value))}
-                    />
-                    <select
-                      className="flex-1 border border-slate-300 rounded-md p-2 text-sm"
-                      value={selectedNode.data.unit || 'minutes'}
-                      onChange={(e) => updateNodeData('unit', e.target.value)}
-                    >
-                      <option value="seconds">Seconds</option>
-                      <option value="minutes">Minutes</option>
-                      <option value="hours">Hours</option>
-                      <option value="days">Days</option>
-                    </select>
+                  <label className="block text-sm font-medium text-slate-700">Time Delay</label>
+                  <div className="space-y-2">
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        className={`flex-1 border rounded-md p-2 text-sm ${((selectedNode.data.delayMode || (selectedNode.data.targetAt ? 'specific' : 'relative')) === 'relative') ? 'border-orange-400 bg-orange-50' : 'border-slate-300 bg-white'}`}
+                        onClick={() => updateNodeFields(selectedNode.id, { delayMode: 'relative', targetAt: null })}
+                      >
+                        After duration
+                      </button>
+                      <button
+                        type="button"
+                        className={`flex-1 border rounded-md p-2 text-sm ${((selectedNode.data.delayMode || (selectedNode.data.targetAt ? 'specific' : 'relative')) === 'specific') ? 'border-orange-400 bg-orange-50' : 'border-slate-300 bg-white'}`}
+                        onClick={() => updateNodeFields(selectedNode.id, { delayMode: 'specific' })}
+                      >
+                        Specific date/time
+                      </button>
+                    </div>
+
+                    {((selectedNode.data.delayMode || (selectedNode.data.targetAt ? 'specific' : 'relative')) === 'relative') ? (
+                      <div className="grid grid-cols-3 gap-2">
+                        <div className="space-y-1">
+                          <label className="text-xs text-slate-500">Days</label>
+                          <input
+                            type="number"
+                            min="0"
+                            className="w-full border border-slate-300 rounded-md p-2 text-sm"
+                            value={Number.isFinite(Number(selectedNode.data.days)) ? Number(selectedNode.data.days) : 0}
+                            onChange={(e) => updateNodeFields(selectedNode.id, { days: parseInt(e.target.value || '0', 10) })}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-xs text-slate-500">Hours</label>
+                          <input
+                            type="number"
+                            min="0"
+                            className="w-full border border-slate-300 rounded-md p-2 text-sm"
+                            value={Number.isFinite(Number(selectedNode.data.hours)) ? Number(selectedNode.data.hours) : 0}
+                            onChange={(e) => updateNodeFields(selectedNode.id, { hours: parseInt(e.target.value || '0', 10) })}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-xs text-slate-500">Minutes</label>
+                          <input
+                            type="number"
+                            min="0"
+                            className="w-full border border-slate-300 rounded-md p-2 text-sm"
+                            value={Number.isFinite(Number(selectedNode.data.minutes)) ? Number(selectedNode.data.minutes) : 0}
+                            onChange={(e) => updateNodeFields(selectedNode.id, { minutes: parseInt(e.target.value || '0', 10) })}
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-1">
+                        <label className="text-xs text-slate-500">Run at</label>
+                        <input
+                          type="datetime-local"
+                          className="w-full border border-slate-300 rounded-md p-2 text-sm"
+                          value={(() => {
+                            const iso = selectedNode.data.targetAt;
+                            if (!iso) return '';
+                            const d = new Date(iso);
+                            if (isNaN(d.getTime())) return '';
+                            const pad = (n) => String(n).padStart(2, '0');
+                            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+                          })()}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            if (!v) {
+                              updateNodeFields(selectedNode.id, { targetAt: null });
+                              return;
+                            }
+                            const iso = new Date(v).toISOString();
+                            updateNodeFields(selectedNode.id, { targetAt: iso });
+                          }}
+                        />
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

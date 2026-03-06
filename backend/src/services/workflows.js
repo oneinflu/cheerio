@@ -578,16 +578,34 @@ async function runWorkflow(id, phoneNumber, context = {}) {
         console.log(`[WorkflowRunner] Executing custom code (mock): ${currentNode.data.code}`);
         // In a real system, use vm2 or isolated sandbox
       } else if (currentNode.type === 'delay') {
-        const duration = parseInt(currentNode.data.duration || 0, 10);
-        const unit = currentNode.data.unit || 'minutes';
+        const d = currentNode.data || {};
         let ms = 0;
 
-        if (unit === 'seconds') ms = duration * 1000;
-        else if (unit === 'minutes') ms = duration * 60 * 1000;
-        else if (unit === 'hours') ms = duration * 60 * 60 * 1000;
-        else if (unit === 'days') ms = duration * 24 * 60 * 60 * 1000;
+        const mode = d.delayMode || (d.targetAt ? 'specific' : 'relative');
+        if (mode === 'specific' && d.targetAt) {
+          const target = new Date(d.targetAt).getTime();
+          if (!Number.isNaN(target)) {
+            ms = target - Date.now();
+          }
+        } else if (mode === 'relative' && (d.days != null || d.hours != null || d.minutes != null)) {
+          const days = parseInt(d.days || 0, 10);
+          const hours = parseInt(d.hours || 0, 10);
+          const minutes = parseInt(d.minutes || 0, 10);
+          ms = (days * 24 * 60 * 60 * 1000) + (hours * 60 * 60 * 1000) + (minutes * 60 * 1000);
+        } else {
+          const duration = parseInt(d.duration || 0, 10);
+          const unit = d.unit || 'minutes';
 
-        console.log(`[WorkflowRunner] Waiting for ${duration} ${unit} (${ms}ms)`);
+          if (unit === 'seconds') ms = duration * 1000;
+          else if (unit === 'minutes') ms = duration * 60 * 1000;
+          else if (unit === 'hours') ms = duration * 60 * 60 * 1000;
+          else if (unit === 'days') ms = duration * 24 * 60 * 60 * 1000;
+        }
+
+        if (!Number.isFinite(ms)) ms = 0;
+        if (ms < 0) ms = 0;
+
+        console.log(`[WorkflowRunner] Waiting ${ms}ms (delay node)`);
         if (ms > 0) await sleep(ms);
       } else if (currentNode.type === 'action') {
         const actionType = currentNode.data.actionType;
