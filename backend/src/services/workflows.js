@@ -6,6 +6,7 @@ const razorpay = require('./razorpay');
 const { findAgentForAssignment } = require('./agentAssignment');
 const axios = require('axios');
 const zeptoMail = require('./zeptoMail');
+const fast2sms = require('./fast2sms');
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const WABA_ID = process.env.WHATSAPP_BUSINESS_ACCOUNT_ID || '';
@@ -786,6 +787,13 @@ async function runWorkflow(id, phoneNumber, context = {}) {
                 });
               }
             }
+          } else if (actionType === 'send_sms_otp') {
+            const digits = parseInt(currentNode.data.otpDigits || currentNode.data.digits || 6, 10);
+            const saveVarRaw = currentNode.data.saveVariable || 'otp';
+            const saveVar = String(saveVarRaw).replace(/[{}]/g, '').trim() || 'otp';
+            const otp = fast2sms.generateOtp(Number.isFinite(digits) ? digits : 6);
+            context[saveVar] = otp;
+            await fast2sms.sendOtpSms({ phoneNumber, otp });
           } else if (actionType === 'remove_tag') {
             const convRes = await db.query('SELECT contact_id FROM conversations WHERE id = $1', [conversationId]);
             if (convRes.rowCount > 0) {

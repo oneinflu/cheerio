@@ -858,6 +858,11 @@ const getUpstreamVariables = (targetNodeId, nodes, edges) => {
         if (varName && !vars.includes(`{{${varName}}}`)) {
           vars.push(`{{${varName}}}`);
         }
+      } else if (srcNode.type === 'action' && srcNode.data && srcNode.data.actionType === 'send_sms_otp') {
+        const saveVar = srcNode.data.saveVariable;
+        if (saveVar && !vars.includes(`{{${saveVar}}}`)) {
+          vars.push(`{{${saveVar}}}`);
+        }
       }
 
       // Continue walking backward
@@ -896,6 +901,9 @@ const getAllDefinedVariables = (nodes) => {
     } else if (n.type === 'action' && n.data.actionType === 'set_variable') {
       const varName = n.data.variableName;
       if (varName && !vars.includes(`{{${varName}}}`)) vars.push(`{{${varName}}}`);
+    } else if (n.type === 'action' && n.data.actionType === 'send_sms_otp') {
+      const saveVar = n.data.saveVariable;
+      if (saveVar && !vars.includes(`{{${saveVar}}}`)) vars.push(`{{${saveVar}}}`);
     }
   });
   if (vars.length === 0) {
@@ -1113,6 +1121,11 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
           newNode.data.emailTemplateId = '';
           newNode.data.variableMapping = {};
           newNode.data.toVarKey = 'email';
+        }
+        if (actionType === 'send_sms_otp') {
+          newNode.data.actionValue = '';
+          newNode.data.otpDigits = 6;
+          newNode.data.saveVariable = 'otp';
         }
       }
       if (type === 'delay') {
@@ -1418,6 +1431,11 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
             data.emailTemplateId = '';
             data.variableMapping = {};
             data.toVarKey = 'email';
+          }
+          if (actionType === 'send_sms_otp') {
+            data.actionValue = '';
+            data.otpDigits = 6;
+            data.saveVariable = 'otp';
           }
         }
         if (type === 'delay') {
@@ -2394,6 +2412,28 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 <div className="min-w-0">
                   <div className="text-xs font-semibold text-blue-800">Send Email</div>
                   <div className="text-[10px] text-blue-600">ZeptoMail template</div>
+                </div>
+              </div>
+            )}
+
+            {viewMode === 'canvas' && (
+              <div
+                className="flex items-center gap-2 p-2 rounded-md bg-fuchsia-50 border border-fuchsia-200 cursor-pointer hover:bg-fuchsia-100 transition-colors"
+                draggable
+                onDragStart={(e) => {
+                    e.dataTransfer.setData('application/reactflow', 'action');
+                    e.dataTransfer.setData('application/actiontype', 'send_sms_otp');
+                    e.dataTransfer.effectAllowed = 'move';
+                }}
+                onClick={() => handleAddNodeFromPalette('action', 'send_sms_otp')}
+                title="Send OTP SMS with configurable digit count"
+              >
+                <div className="w-7 h-7 rounded-md bg-fuchsia-600 flex items-center justify-center shrink-0">
+                  <MessageSquare size={14} className="text-white" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold text-fuchsia-800">Send SMS OTP</div>
+                  <div className="text-[10px] text-fuchsia-600">Fast2SMS OTP route</div>
                 </div>
               </div>
             )}
@@ -4742,7 +4782,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
               {selectedNode.type === 'action' && (
                 <div className="space-y-3">
                   {/* Hide redundant dropdown if actionType is already specific */}
-                  {['assign_agent', 'update_chat_status', 'add_to_label', 'send_email'].includes(selectedNode.data.actionType) ? (
+                  {['assign_agent', 'update_chat_status', 'add_to_label', 'send_email', 'send_sms_otp'].includes(selectedNode.data.actionType) ? (
                     <div className="space-y-1 pb-2 border-b border-slate-100">
                       <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide">Action Type</label>
                       <div className="text-sm font-semibold text-slate-800 flex items-center gap-2">
@@ -4750,13 +4790,16 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                         {selectedNode.data.actionType === 'update_chat_status' && <MessageCircle size={16} className="text-cyan-500" />}
                         {selectedNode.data.actionType === 'add_to_label' && <Tag size={16} className="text-emerald-600" />}
                         {selectedNode.data.actionType === 'send_email' && <Mail size={16} className="text-blue-600" />}
+                        {selectedNode.data.actionType === 'send_sms_otp' && <MessageSquare size={16} className="text-fuchsia-600" />}
                         {selectedNode.data.actionType === 'assign_agent'
                           ? 'Assign Agent'
                           : selectedNode.data.actionType === 'update_chat_status'
                             ? 'Update Chat Status'
                             : selectedNode.data.actionType === 'add_to_label'
                               ? 'Add To Label'
-                              : 'Send Email'}
+                              : selectedNode.data.actionType === 'send_email'
+                                ? 'Send Email'
+                                : 'Send SMS OTP'}
                       </div>
                     </div>
                   ) : (
@@ -4789,6 +4832,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                         <option value="start_workflow">Start Workflow</option>
                         <option value="add_to_label">Add To Label</option>
                         <option value="send_email">Send Email</option>
+                        <option value="send_sms_otp">Send SMS OTP</option>
                         <option value="update_chat_status">Update Chat Status</option>
                       </select>
                     </>
@@ -5053,6 +5097,30 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                           </>
                         );
                       })()}
+                    </div>
+                  ) : selectedNode.data.actionType === 'send_sms_otp' ? (
+                    <div className="space-y-3">
+                      <div className="space-y-1">
+                        <label className="text-xs text-slate-500">OTP Digits</label>
+                        <select
+                          className="w-full border border-slate-300 rounded-md p-2 text-sm"
+                          value={selectedNode.data.otpDigits || 6}
+                          onChange={(e) => updateNodeData('otpDigits', parseInt(e.target.value, 10))}
+                        >
+                          <option value={4}>4</option>
+                          <option value={5}>5</option>
+                          <option value={6}>6</option>
+                        </select>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs text-slate-500">Save OTP as Variable</label>
+                        <input
+                          placeholder="e.g. otp"
+                          className="w-full border border-slate-300 rounded-md p-2 text-sm"
+                          value={selectedNode.data.saveVariable || 'otp'}
+                          onChange={(e) => updateNodeData('saveVariable', e.target.value)}
+                        />
+                      </div>
                     </div>
                   ) : selectedNode.data.actionType === 'update_chat_status' ? (
                     <div className="space-y-1">
