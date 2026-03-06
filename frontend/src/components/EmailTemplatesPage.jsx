@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Mail, Plus, Trash2, Save, Eye, Download, Upload, GripVertical, Image as ImageIcon, Type, Divide, Link, MousePointer, Code } from 'lucide-react';
 import { Button } from './ui/Button';
-import { getEmailTemplates, createEmailTemplate, updateEmailTemplate, deleteEmailTemplate } from '../api';
+import { getEmailTemplates, createEmailTemplate, updateEmailTemplate, deleteEmailTemplate, uploadFlowMedia } from '../api';
+import { GallerySelectModal } from './GallerySelectModal';
 
 const initialBlocks = [];
 
@@ -79,6 +80,11 @@ export default function EmailTemplatesPage({ startCreate = false }) {
   const [blocks, setBlocks] = useState(initialBlocks);
   const [dragIndex, setDragIndex] = useState(null);
   const iframeRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const [uploadTargetIdx, setUploadTargetIdx] = useState(null);
+  const [uploadingIdx, setUploadingIdx] = useState(null);
+  const [showGallery, setShowGallery] = useState(false);
+  const [galleryTargetIdx, setGalleryTargetIdx] = useState(null);
 
   const design = useMemo(() => ({ blocks }), [blocks]);
   const html = useMemo(() => compileHtml(design), [design]);
@@ -209,6 +215,39 @@ export default function EmailTemplatesPage({ startCreate = false }) {
 
   const removeBlock = (idx) => {
     setBlocks((arr) => arr.filter((_, i) => i !== idx));
+  };
+
+  const handleUploadClick = (idx) => {
+    setUploadTargetIdx(idx);
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || uploadTargetIdx == null) return;
+    setUploadingIdx(uploadTargetIdx);
+    try {
+      const res = await uploadFlowMedia(file);
+      if (res && res.url) {
+        updateBlock(uploadTargetIdx, { url: res.url });
+      } else if (res && res.secure_url) {
+        updateBlock(uploadTargetIdx, { url: res.secure_url });
+      } else {
+        alert('Upload failed: No URL in response');
+      }
+    } catch (err) {
+      console.error('Upload failed', err);
+      alert('Upload failed');
+    } finally {
+      setUploadingIdx(null);
+      setUploadTargetIdx(null);
+    }
+  };
+
+  const openGalleryFor = (idx) => {
+    setGalleryTargetIdx(idx);
+    setShowGallery(true);
   };
 
   return (
@@ -366,7 +405,30 @@ export default function EmailTemplatesPage({ startCreate = false }) {
                       )}
                       {b.type === 'image' && (
                         <div className="grid grid-cols-2 gap-2 mt-2">
-                          <input className="border border-slate-300 rounded-md p-2 text-sm col-span-2" value={b.url || ''} onChange={(e) => updateBlock(i, { url: e.target.value })} placeholder="Image URL" />
+                          <div className="col-span-2 flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleUploadClick(i)}
+                              disabled={uploadingIdx === i}
+                            >
+                              {uploadingIdx === i ? 'Uploading…' : 'Upload'}
+                            </Button>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => openGalleryFor(i)}
+                              disabled={uploadingIdx === i}
+                            >
+                              Gallery
+                            </Button>
+                            <input
+                              className="border border-slate-300 rounded-md p-2 text-sm flex-1"
+                              value={b.url || ''}
+                              onChange={(e) => updateBlock(i, { url: e.target.value })}
+                              placeholder="Paste URL or select Upload/Gallery"
+                            />
+                          </div>
                           <input className="border border-slate-300 rounded-md p-2 text-sm" value={b.alt || ''} onChange={(e) => updateBlock(i, { alt: e.target.value })} placeholder="Alt text" />
                           <select className="border border-slate-300 rounded-md p-2 text-sm" value={b.align || 'left'} onChange={(e) => updateBlock(i, { align: e.target.value })}>
                             <option value="left">Left</option>
@@ -433,6 +495,25 @@ export default function EmailTemplatesPage({ startCreate = false }) {
           </div>
         </div>
       )}
+      <input
+        type="file"
+        ref={fileInputRef}
+        className="hidden"
+        accept="image/*"
+        onChange={handleFileChange}
+      />
+      <GallerySelectModal
+        isOpen={showGallery}
+        onClose={() => { setShowGallery(false); setGalleryTargetIdx(null); }}
+        resourceType="image"
+        onSelect={(url) => {
+          if (galleryTargetIdx != null) {
+            updateBlock(galleryTargetIdx, { url });
+          }
+          setShowGallery(false);
+          setGalleryTargetIdx(null);
+        }}
+      />
     </div>
   );
 }
