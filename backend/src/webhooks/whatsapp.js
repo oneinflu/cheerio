@@ -177,7 +177,7 @@ router.post('/', async (req, res, next) => {
               DO UPDATE SET display_name = COALESCE(EXCLUDED.display_name, contacts.display_name)
               RETURNING id, profile
               `,
-              [channelId, senderWaId, profileName]
+              [channelId, senderWaId, profileName || 'User']
             );
             const contactRow = contactResult.rows[0];
             const contactId = contactRow.id;

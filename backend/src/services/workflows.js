@@ -301,6 +301,49 @@ async function runWorkflow(id, phoneNumber, context = {}) {
   let currentNode = nodes.find(n => n.type === 'trigger' || n.type === 'incoming_webhook');
   if (!currentNode) throw new Error('No trigger node found');
 
+  // Ensure contact exists or update it with new info
+  try {
+      // If we don't have a name in context (e.g. inbound message trigger), try to fetch it from DB
+      if (!context.name) {
+          const contactRes = await db.query('SELECT display_name, profile FROM contacts WHERE external_id = $1', [phoneNumber]);
+          if (contactRes.rowCount > 0) {
+              const row = contactRes.rows[0];
+              context.name = row.display_name || row.profile?.name || 'User';
+              console.log(`[WorkflowRunner] Fetched name from contact DB: ${context.name}`);
+          } else {
+              // Contact doesn't exist (e.g. manual run without prior inbound msg). Create it.
+              console.log(`[WorkflowRunner] Contact ${phoneNumber} not found. Creating placeholder.`);
+              // We need a channel_id. Try to find a whatsapp channel.
+              const chanRes = await db.query("SELECT id FROM channels WHERE type='whatsapp' LIMIT 1");
+              if (chanRes.rowCount > 0) {
+                  const channelId = chanRes.rows[0].id;
+                  const newContact = await db.query(`
+                      INSERT INTO contacts (id, channel_id, external_id, display_name, profile)
+                      VALUES (gen_random_uuid(), $1, $2, 'User', '{}'::jsonb)
+                      ON CONFLICT (channel_id, external_id) DO UPDATE SET updated_at = NOW()
+                      RETURNING display_name
+                  `, [channelId, phoneNumber]);
+                  context.name = newContact.rows[0].display_name;
+              } else {
+                  context.name = 'User';
+              }
+          }
+      }
+
+      // If incoming_webhook has name/email, we update the contact
+      if (currentNode.type === 'incoming_webhook') {
+          const contactId = await ensureContact({
+              external_id: phoneNumber,
+              name: context.name || undefined,
+              email: context.email || undefined,
+              attributes: context // Save full payload as attributes
+          });
+          context.contact_id = contactId;
+      }
+  } catch (err) {
+      console.error(`[WorkflowRunner] Failed to ensure/fetch contact for ${phoneNumber}:`, err);
+  }
+
   // If trigger is incoming_webhook, map payload to variables
   if (currentNode.type === 'incoming_webhook') {
     const paramMapping = currentNode.data?.paramMapping || {};
@@ -316,18 +359,7 @@ async function runWorkflow(id, phoneNumber, context = {}) {
     // Also auto-map standard fields if not explicitly mapped but present
     if (!context['name'] && context['name']) context['name'] = context['name']; // already in context
     
-    // Ensure contact exists or update it with new info
-    try {
-        const contactId = await ensureContact({
-            external_id: phoneNumber,
-            name: context.name || undefined,
-            email: context.email || undefined,
-            attributes: context // Save full payload as attributes
-        });
-        context.contact_id = contactId;
-    } catch (err) {
-        console.error(`[WorkflowRunner] Failed to ensure contact for ${phoneNumber}:`, err);
-    }
+    // Contact update already handled above
   } else if (currentNode.type === 'trigger' && currentNode.data?.triggerType === 'new_contact') {
       // Ensure contact attributes are in context
       // (Already handled by triggerContactCreatedWorkflows but good for safety)
