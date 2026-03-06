@@ -41,7 +41,7 @@ export default function App() {
   });
   const [isLoggedIn, setIsLoggedIn] = useState(!!storedUser);
   const [socket, setSocket] = useState(null);
-  const validPages = ['dashboard', 'inbox', 'contacts', 'labels', 'campaigns', 'team-members', 'templates', 'email-templates', 'flows', 'workflows', 'rules', 'instagram', 'gallery', 'settings'];
+  const validPages = ['dashboard', 'inbox', 'contacts', 'labels', 'campaigns', 'team-members', 'templates', 'email-templates', 'create-template', 'flows', 'workflows', 'rules', 'instagram', 'gallery', 'settings'];
 
   const [activePage, setActivePage] = useState(() => {
     const fullPath = window.location.pathname.substring(1);
@@ -872,6 +872,7 @@ export default function App() {
 
         {activePage === 'templates' && <TemplatesPage />}
         {activePage === 'email-templates' && <EmailTemplatesPage />}
+        {activePage === 'create-template' && <EmailTemplatesPage startCreate={true} />}
         {activePage === 'flows' && <FlowsPage />}
 
         {activePage === 'workflows' && (

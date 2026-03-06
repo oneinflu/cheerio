@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Mail, Plus, Trash2, Save, Eye, Download, Upload, GripVertical, Image as ImageIcon, Type, Divide, Link, MousePointer } from 'lucide-react';
+import { Mail, Plus, Trash2, Save, Eye, Download, Upload, GripVertical, Image as ImageIcon, Type, Divide, Link, MousePointer, Code } from 'lucide-react';
 import { Button } from './ui/Button';
 import { getEmailTemplates, createEmailTemplate, updateEmailTemplate, deleteEmailTemplate } from '../api';
 
@@ -69,7 +69,7 @@ function compileHtml(design) {
   return parts.join('');
 }
 
-export default function EmailTemplatesPage() {
+export default function EmailTemplatesPage({ startCreate = false }) {
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
@@ -97,6 +97,16 @@ export default function EmailTemplatesPage() {
     };
     load();
   }, []);
+
+  useEffect(() => {
+    if (startCreate) {
+      setIsCreating(true);
+      setEditing(null);
+      setName('');
+      setSubject('');
+      setBlocks([]);
+    }
+  }, [startCreate]);
 
   useEffect(() => {
     if (iframeRef.current) {
