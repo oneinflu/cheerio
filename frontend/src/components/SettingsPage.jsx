@@ -104,7 +104,6 @@ export default function SettingsPage({ currentUser }) {
   }, [teamId]);
 
   const handleCreateStage = async () => {
-    if (!teamId) return;
     if (!newStageName.trim()) {
       setStagesError('Stage name is required');
       return;
