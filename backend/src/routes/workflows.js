@@ -57,7 +57,23 @@ router.get('/', auth.requireRole('admin', 'supervisor'), async (req, res, next) 
 // Create workflow
 router.post('/', auth.requireRole('admin', 'supervisor'), async (req, res, next) => {
   try {
-    const workflow = await svc.createWorkflow(req.body);
+    const { stageId, ...workflowData } = req.body;
+    const workflow = await svc.createWorkflow(workflowData);
+
+    if (stageId) {
+      const posRes = await db.query(
+        `SELECT COALESCE(MAX(position), 0) AS max_pos FROM lead_stage_workflows WHERE stage_id = $1`,
+        [stageId]
+      );
+      const nextPos = Number(posRes.rows[0].max_pos || 0) + 1;
+      await db.query(
+        `INSERT INTO lead_stage_workflows (stage_id, workflow_id, position)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (stage_id, workflow_id) DO UPDATE SET position = EXCLUDED.position`,
+        [stageId, workflow.id, nextPos]
+      );
+    }
+    
     res.status(201).json(workflow);
   } catch (err) {
     next(err);
@@ -139,6 +155,13 @@ router.put('/kanban/reorder', auth.requireRole('admin', 'supervisor'), async (re
     for (const mv of moves) {
       const { workflowId, toStageId, toPosition } = mv;
       if (!workflowId || !toStageId || typeof toPosition !== 'number') continue;
+      
+      // Ensure workflow belongs to only this stage (Kanban move)
+      await db.query(
+        `DELETE FROM lead_stage_workflows WHERE workflow_id = $1 AND stage_id != $2`,
+        [workflowId, toStageId]
+      );
+
       await db.query(
         `INSERT INTO lead_stage_workflows (stage_id, workflow_id, position)
          VALUES ($1, $2, $3)
