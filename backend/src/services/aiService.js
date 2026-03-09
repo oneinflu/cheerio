@@ -136,5 +136,9 @@ async function generateResponse(userMessage, context, systemPrompt, model) {
 }
 
 module.exports = {
-  handleIncomingMessage
+  handleIncomingMessage,
+  scrapeWebsite,
+  parsePdf,
+  retrieveContext,
+  generateResponse
 };

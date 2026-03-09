@@ -925,3 +925,12 @@ export async function uploadAiDocument(file, title) {
   });
   return res.json();
 }
+
+export async function testAiAgent(message) {
+  const res = await fetch('/api/ai-agent/test', {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ message }),
+  });
+  return res.json();
+}

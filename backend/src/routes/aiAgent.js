@@ -80,6 +80,36 @@ router.get('/knowledge', auth.requireRole('admin', 'super_admin'), async (req, r
 const aiService = require('../services/aiService');
 
 /**
+ * POST /api/ai-agent/test
+ * Test the AI with a message
+ */
+router.post('/test', auth.requireRole('admin', 'super_admin'), async (req, res, next) => {
+  try {
+    const { message } = req.body;
+    if (!message) return res.status(400).json({ error: 'Message is required' });
+
+    // Retrieve global config
+    const configRes = await db.query('SELECT * FROM ai_agent_config LIMIT 1');
+    const config = configRes.rows[0];
+
+    // Retrieve context
+    const context = await aiService.retrieveContext(message);
+    
+    // Generate response
+    const response = await aiService.generateResponse(
+      message, 
+      context, 
+      config ? config.system_prompt : '', 
+      config ? config.model_name : 'gpt-4-turbo'
+    );
+
+    res.json({ response });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
  * POST /api/ai-agent/knowledge/text
  * Add text content (website URL or raw text)
  */
