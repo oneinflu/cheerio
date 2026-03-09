@@ -43,6 +43,8 @@ const axios = require('axios');
 const translation = require('../services/translation');
 const { triggerWorkflowsForEvent } = require('../services/workflows');
 const { evaluateMessageRules, evaluateCourseRules } = require('../services/rules');
+const aiService = require('../services/aiService');
+const outboundWhatsApp = require('../services/outboundWhatsApp');
 
 // Verify token for GET challenge.
 const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN || '';
@@ -387,6 +389,27 @@ router.post('/', async (req, res, next) => {
               io.to(`conversation:${conversationId}`).emit('message:new', payload);
               io.emit('message:new', payload);
             }
+
+            // --- AI Agent Integration ---
+            // Trigger AI response if no workflows or rules handled it first
+            // We run this asynchronously to not block the webhook response
+            if (textBody && !isFirstMessage) {
+              (async () => {
+                 try {
+                   // Add a small delay to mimic typing and ensure DB is consistent
+                   await new Promise(r => setTimeout(r, 1000));
+                   
+                   const aiResponse = await aiService.handleIncomingMessage(conversationId, textBody);
+                   if (aiResponse) {
+                      console.log(`[AI Agent] Generated response for ${conversationId}:`, aiResponse);
+                      await outboundWhatsApp.sendText(conversationId, aiResponse);
+                   }
+                 } catch (aiErr) {
+                    console.error('[AI Agent] Failed to generate/send response:', aiErr);
+                 }
+              })();
+            }
+            // ----------------------------
 
             // Lead Webhook Integration
             // Trigger for ANY first message (or if not yet assigned/lead created)
