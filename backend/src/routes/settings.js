@@ -19,7 +19,7 @@ async function resolveTeamId(req) {
   return null;
 }
 
-router.get('/settings/lead-stages', auth.requireRole('admin', 'supervisor'), async (req, res, next) => {
+async function handleGetLeadStages(req, res, next) {
   try {
     const teamId = await resolveTeamId(req);
     if (!teamId) {
@@ -64,9 +64,9 @@ router.get('/settings/lead-stages', auth.requireRole('admin', 'supervisor'), asy
   } catch (err) {
     next(err);
   }
-});
+}
 
-router.post('/settings/lead-stages', auth.requireRole('admin', 'supervisor'), async (req, res, next) => {
+async function handleCreateLeadStage(req, res, next) {
   try {
     const teamId = await resolveTeamId(req);
     if (!teamId) {
@@ -93,9 +93,9 @@ router.post('/settings/lead-stages', auth.requireRole('admin', 'supervisor'), as
   } catch (err) {
     next(err);
   }
-});
+}
 
-router.put('/settings/lead-stages/:id', auth.requireRole('admin', 'supervisor'), async (req, res, next) => {
+async function handleUpdateLeadStage(req, res, next) {
   try {
     const { id } = req.params;
     const teamId = await resolveTeamId(req);
@@ -154,9 +154,9 @@ router.put('/settings/lead-stages/:id', auth.requireRole('admin', 'supervisor'),
   } catch (err) {
     next(err);
   }
-});
+}
 
-router.delete('/settings/lead-stages/:id', auth.requireRole('admin', 'supervisor'), async (req, res, next) => {
+async function handleDeleteLeadStage(req, res, next) {
   try {
     const { id } = req.params;
     const teamId = await resolveTeamId(req);
@@ -174,9 +174,9 @@ router.delete('/settings/lead-stages/:id', auth.requireRole('admin', 'supervisor
   } catch (err) {
     next(err);
   }
-});
+}
 
-router.get('/settings/working-hours', auth.requireRole('admin', 'supervisor'), async (req, res, next) => {
+async function handleGetWorkingHours(req, res, next) {
   try {
     const teamId = await resolveTeamId(req);
     if (!teamId) {
@@ -217,9 +217,9 @@ router.get('/settings/working-hours', auth.requireRole('admin', 'supervisor'), a
   } catch (err) {
     next(err);
   }
-});
+}
 
-router.put('/settings/working-hours', auth.requireRole('admin', 'supervisor'), async (req, res, next) => {
+async function handleSaveWorkingHours(req, res, next) {
   try {
     const teamId = await resolveTeamId(req);
     if (!teamId) {
@@ -274,6 +274,20 @@ router.put('/settings/working-hours', auth.requireRole('admin', 'supervisor'), a
   } catch (err) {
     next(err);
   }
-});
+}
+
+router.get('/lead-stages', auth.requireRole('admin', 'supervisor'), handleGetLeadStages);
+router.post('/lead-stages', auth.requireRole('admin', 'supervisor'), handleCreateLeadStage);
+router.put('/lead-stages/:id', auth.requireRole('admin', 'supervisor'), handleUpdateLeadStage);
+router.delete('/lead-stages/:id', auth.requireRole('admin', 'supervisor'), handleDeleteLeadStage);
+router.get('/working-hours', auth.requireRole('admin', 'supervisor'), handleGetWorkingHours);
+router.put('/working-hours', auth.requireRole('admin', 'supervisor'), handleSaveWorkingHours);
+
+router.get('/settings/lead-stages', auth.requireRole('admin', 'supervisor'), handleGetLeadStages);
+router.post('/settings/lead-stages', auth.requireRole('admin', 'supervisor'), handleCreateLeadStage);
+router.put('/settings/lead-stages/:id', auth.requireRole('admin', 'supervisor'), handleUpdateLeadStage);
+router.delete('/settings/lead-stages/:id', auth.requireRole('admin', 'supervisor'), handleDeleteLeadStage);
+router.get('/settings/working-hours', auth.requireRole('admin', 'supervisor'), handleGetWorkingHours);
+router.put('/settings/working-hours', auth.requireRole('admin', 'supervisor'), handleSaveWorkingHours);
 
 module.exports = router;

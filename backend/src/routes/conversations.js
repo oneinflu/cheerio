@@ -105,6 +105,14 @@ router.put('/:conversationId/lead-stage', auth.requireRole('admin', 'super_admin
         [stageId, conversationId]
       );
       if (upd.rowCount === 0) return res.status(404).json({ error: 'Conversation not found' });
+      try {
+        const { runStageWorkflows } = require('../services/workflows');
+        const phoneRes = await db.query('SELECT contacts.external_id FROM conversations JOIN contacts ON contacts.id = conversations.contact_id WHERE conversations.id = $1', [conversationId]);
+        const phoneNumber = phoneRes.rows[0]?.external_id;
+        if (phoneNumber) await runStageWorkflows(stageId, phoneNumber);
+      } catch (e) {
+        console.error('[lead-stage] Failed to trigger stage workflows:', e.message);
+      }
       return res.json({
         conversationId,
         leadStage: {

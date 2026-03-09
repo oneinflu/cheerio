@@ -212,6 +212,23 @@ async function runMigrations() {
           }
         }
 
+        // lead_stage_workflows mapping table
+        const stageWorkflowsRes = await client.query(`
+          SELECT EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE  table_schema = 'public'
+            AND    table_name   = 'lead_stage_workflows'
+          );
+        `);
+        if (!stageWorkflowsRes.rows[0].exists) {
+          console.log('[migrate] Adding lead_stage_workflows table...');
+          await client.query('BEGIN');
+          await runSQLFile(client, path.join(__dirname, '..', 'db', 'migrations', '0020_lead_stage_workflows.sql'));
+          await client.query('COMMIT');
+          console.log('[migrate] Applied lead_stage_workflows migration.');
+        } else {
+          console.log('[migrate] lead_stage_workflows table already exists.');
+        }
         const flowSettingsRes = await client.query(`
           SELECT EXISTS (
             SELECT FROM information_schema.tables 

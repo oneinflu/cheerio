@@ -9,7 +9,7 @@ import TeamPage from './components/TeamPage.jsx';
 import SettingsPage from './components/SettingsPage.jsx';
 import TemplatesPage from './components/TemplatesPage.jsx';
 import FlowsPage from './components/FlowsPage.jsx';
-import WorkflowsPage from './components/WorkflowsPage.jsx';
+import WorkflowsKanban from './components/WorkflowsKanban.jsx';
 import WorkflowBuilder from './components/WorkflowBuilder.jsx';
 import RulesPage from './components/RulesPage.jsx';
 import TeamMembersPage from './components/TeamMembersPage.jsx';
@@ -895,7 +895,7 @@ export default function App() {
               onSave={handleWorkflowSave}
             />
           ) : (
-            <WorkflowsPage onOpenBuilder={setEditingWorkflow} />
+            <WorkflowsKanban currentUser={currentUser} />
           )
         )}
 

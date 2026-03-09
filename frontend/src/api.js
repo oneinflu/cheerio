@@ -385,6 +385,32 @@ export async function getWorkflows() {
   return res.json();
 }
 
+export async function getWorkflowsKanban(teamId) {
+  const headers = getAuthHeaders();
+  const qs = teamId ? `?teamId=${encodeURIComponent(teamId)}` : '';
+  const res = await fetch(`/api/workflows/kanban${qs}`, { headers });
+  return res.json();
+}
+
+export async function assignWorkflowToStage(stageId, workflowId) {
+  const headers = getAuthHeaders();
+  const res = await fetch('/api/workflows/kanban/assign', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ stageId, workflowId }),
+  });
+  return res.json();
+}
+
+export async function reorderStageWorkflows(moves) {
+  const headers = getAuthHeaders();
+  const res = await fetch('/api/workflows/kanban/reorder', {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify({ moves }),
+  });
+  return res.json();
+}
 export async function getLeadStages(teamId) {
   const headers = getAuthHeaders();
   const qs = teamId ? `?teamId=${encodeURIComponent(teamId)}` : '';

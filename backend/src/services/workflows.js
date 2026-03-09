@@ -125,6 +125,25 @@ async function updateWorkflow(id, data) {
   return res.rows[0];
 }
 
+async function runStageWorkflows(stageId, phoneNumber) {
+  const res = await db.query(
+    `SELECT lsw.workflow_id 
+     FROM lead_stage_workflows lsw
+     JOIN workflows w ON w.id = lsw.workflow_id
+     WHERE lsw.stage_id = $1 AND w.status = 'active'
+     ORDER BY lsw.position ASC, w.created_at ASC`,
+    [stageId]
+  );
+  for (const row of res.rows) {
+    const wfId = row.workflow_id;
+    try {
+      await runWorkflow(wfId, phoneNumber);
+    } catch (e) {
+      console.error(`[runStageWorkflows] Workflow ${wfId} failed: ${e.message}`);
+      break; // stop sequence on error
+    }
+  }
+}
 async function deleteWorkflow(id) {
   await db.query(`DELETE FROM workflows WHERE id = $1`, [id]);
   return { success: true };
@@ -1067,6 +1086,13 @@ async function runWorkflow(id, phoneNumber, context = {}) {
             if (['open', 'closed', 'snoozed'].includes(newStatus)) {
               await db.query('UPDATE conversations SET status = $1 WHERE id = $2', [newStatus, conversationId]);
               console.log(`[WorkflowRunner] Updated chat status to ${newStatus}`);
+            }
+          } else if (actionType === 'update_lead_stage') {
+            const stageId = actionValue;
+            if (stageId) {
+              await db.query('UPDATE conversations SET lead_stage_id = $1 WHERE id = $2', [stageId, conversationId]);
+              console.log(`[WorkflowRunner] Updated lead stage to ${stageId}`);
+              await runStageWorkflows(stageId, phoneNumber);
             }
           } else if (actionType === 'start_workflow') {
             const targetId = actionValue;
