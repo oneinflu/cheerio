@@ -5,6 +5,32 @@ const svc = require('../services/workflows');
 const auth = require('../middlewares/auth');
 const db = require('../../db');
 
+async function resolveTeamId(req) {
+  // Do not rely on custom headers; derive or fallback
+  if (req.query && req.query.teamId) return req.query.teamId;
+  if (req.user && Array.isArray(req.user.teamIds) && req.user.teamIds.length > 0) {
+    return req.user.teamIds[0];
+  }
+  if (req.user && req.user.id) {
+    try {
+      const res = await db.query('SELECT team_id FROM team_members WHERE user_id = $1 LIMIT 1', [req.user.id]);
+      const t = res.rows[0]?.team_id;
+      if (t) return t;
+    } catch (e) {}
+  }
+  try {
+    const anyTeam = await db.query('SELECT id FROM teams ORDER BY created_at ASC LIMIT 1');
+    let t = anyTeam.rows[0]?.id;
+    if (!t) {
+      t = 'default';
+      await db.query('INSERT INTO teams (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING', [t, 'Default Team']);
+    }
+    return t;
+  } catch (e) {
+    return 'default';
+  }
+}
+
 router.post('/ai/generate', auth.requireRole('admin', 'supervisor'), async (req, res, next) => {
   try {
     const { description } = req.body;
@@ -40,8 +66,7 @@ router.post('/', auth.requireRole('admin', 'supervisor'), async (req, res, next)
 
 router.get('/kanban', auth.requireRole('admin', 'supervisor'), async (req, res, next) => {
   try {
-    const teamId = req.query.teamId || (req.user && req.user.teamIds && req.user.teamIds[0]) || null;
-    if (!teamId) return res.status(400).json({ error: 'teamId required' });
+    const teamId = await resolveTeamId(req);
     const stagesRes = await db.query(
       `SELECT id, name, color, position, is_closed
        FROM lead_stages

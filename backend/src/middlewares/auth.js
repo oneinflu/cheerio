@@ -52,6 +52,12 @@ function requireAuth(req, res, next) {
         if (!teamIds.length && decoded.teamId) {
           teamIds = [decoded.teamId];
         }
+        if (!teamIds.length && decoded.team_id) {
+          teamIds = [decoded.team_id];
+        }
+        if (!teamIds.length && req.headers['x-team-id']) {
+          teamIds = [req.headers['x-team-id']];
+        }
         // If still empty, maybe default to the dev teamId so they see data?
         if (!teamIds.length && process.env.NODE_ENV !== 'production') {
           teamIds = ['b0eebc99-9c0b-4ef8-bb6d-6bb9bd380b22'];

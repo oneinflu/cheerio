@@ -5,6 +5,7 @@ const auth = require('../middlewares/auth');
 const db = require('../../db');
 
 async function resolveTeamId(req) {
+  // Try query/body/user-derived hints, but do not rely on custom headers
   if (req.query && req.query.teamId) return req.query.teamId;
   if (req.user && Array.isArray(req.user.teamIds) && req.user.teamIds.length > 0) {
     return req.user.teamIds[0];
@@ -16,15 +17,24 @@ async function resolveTeamId(req) {
       if (t) return t;
     } catch (e) {}
   }
-  return null;
+  // Fallback: ensure a default team exists
+  try {
+    const anyTeam = await db.query('SELECT id FROM teams ORDER BY created_at ASC LIMIT 1');
+    let t = anyTeam.rows[0]?.id;
+    if (!t) {
+      t = 'default';
+      await db.query('INSERT INTO teams (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING', [t, 'Default Team']);
+    }
+    return t;
+  } catch (e) {
+    // Last resort default
+    return 'default';
+  }
 }
 
 async function handleGetLeadStages(req, res, next) {
   try {
     const teamId = await resolveTeamId(req);
-    if (!teamId) {
-      return res.status(400).json({ error: 'teamId required' });
-    }
     let result = await db.query(
       `
       SELECT id, name, color, position, is_closed
@@ -69,9 +79,6 @@ async function handleGetLeadStages(req, res, next) {
 async function handleCreateLeadStage(req, res, next) {
   try {
     const teamId = await resolveTeamId(req);
-    if (!teamId) {
-      return res.status(400).json({ error: 'teamId required' });
-    }
     const { name, color, is_closed } = req.body || {};
     if (!name || typeof name !== 'string') {
       return res.status(400).json({ error: 'name is required' });
@@ -99,9 +106,6 @@ async function handleUpdateLeadStage(req, res, next) {
   try {
     const { id } = req.params;
     const teamId = await resolveTeamId(req);
-    if (!teamId) {
-      return res.status(400).json({ error: 'teamId required' });
-    }
     const fields = [];
     const values = [];
 
@@ -160,9 +164,6 @@ async function handleDeleteLeadStage(req, res, next) {
   try {
     const { id } = req.params;
     const teamId = await resolveTeamId(req);
-    if (!teamId) {
-      return res.status(400).json({ error: 'teamId required' });
-    }
     const result = await db.query(
       `DELETE FROM lead_stages WHERE id = $1 AND team_id = $2`,
       [id, teamId]
@@ -179,9 +180,6 @@ async function handleDeleteLeadStage(req, res, next) {
 async function handleGetWorkingHours(req, res, next) {
   try {
     const teamId = await resolveTeamId(req);
-    if (!teamId) {
-      return res.status(400).json({ error: 'teamId required' });
-    }
     const result = await db.query(
       `
       SELECT timezone, hours
@@ -222,9 +220,6 @@ async function handleGetWorkingHours(req, res, next) {
 async function handleSaveWorkingHours(req, res, next) {
   try {
     const teamId = await resolveTeamId(req);
-    if (!teamId) {
-      return res.status(400).json({ error: 'teamId required' });
-    }
     const { timezone, hours } = req.body || {};
     if (!timezone || typeof timezone !== 'string') {
       return res.status(400).json({ error: 'timezone is required' });

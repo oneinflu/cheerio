@@ -204,10 +204,15 @@ export default function App() {
 
   const currentUser = useMemo(() => {
     if (storedUser) {
+      const rawTeamIds = storedUser.teamId
+        ? [storedUser.teamId]
+        : Array.isArray(storedUser.teamIds) && storedUser.teamIds.length > 0
+          ? storedUser.teamIds
+          : ['b0eebc99-9c0b-4ef8-bb6d-6bb9bd380b22'];
       return {
         id: storedUser._id || storedUser.id,
         role: storedUser.role || 'agent',
-        teamIds: storedUser.teamId ? [storedUser.teamId] : (storedUser.teamIds || ['b0eebc99-9c0b-4ef8-bb6d-6bb9bd380b22']),
+        teamIds: rawTeamIds,
         name: `${storedUser.firstname || ''} ${storedUser.lastname || ''}`.trim() || storedUser.name || 'User'
       };
     }

@@ -22,6 +22,32 @@ export default function LoginPage({ onLogin }) {
         const externalUser = res.data.user;
         const accessToken = res.data.accessToken;
 
+        const decodeJwt = (jwtToken) => {
+          try {
+            const parts = String(jwtToken || '').split('.');
+            if (parts.length < 2) return null;
+            const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+            const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4);
+            const json = decodeURIComponent(
+              atob(padded)
+                .split('')
+                .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+                .join('')
+            );
+            return JSON.parse(json);
+          } catch (e) {
+            return null;
+          }
+        };
+        const decoded = decodeJwt(accessToken);
+        const inferredTeamId =
+          externalUser.teamId ||
+          externalUser.team_id ||
+          (externalUser.team && (externalUser.team.id || externalUser.team._id)) ||
+          (decoded && (decoded.teamId || decoded.team_id)) ||
+          (decoded && Array.isArray(decoded.team_ids) && decoded.team_ids[0]) ||
+          null;
+
         // Map external user to internal format
         const roleMap = {
             'super_admin': 'admin',
@@ -35,7 +61,8 @@ export default function LoginPage({ onLogin }) {
             name: `${externalUser.firstname} ${externalUser.lastname}`,
             email: externalUser.email,
             role: roleMap[externalUser.role] || 'agent',
-            teamIds: [] 
+            teamId: inferredTeamId || undefined,
+            teamIds: inferredTeamId ? [inferredTeamId] : [] 
         };
 
         // Store in localStorage

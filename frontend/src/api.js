@@ -660,12 +660,43 @@ export async function forceReassignConversation(conversationId, teamId, newAssig
 function getAuthHeaders(contentType = 'application/json') {
   const token = localStorage.getItem('accessToken');
   const user = localStorage.getItem('user');
+  const decodeJwt = (jwtToken) => {
+    try {
+      const parts = String(jwtToken || '').split('.');
+      if (parts.length < 2) return null;
+      const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+      const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4);
+      const json = decodeURIComponent(
+        atob(padded)
+          .split('')
+          .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+          .join('')
+      );
+      return JSON.parse(json);
+    } catch (e) {
+      return null;
+    }
+  };
+
+  const decoded = token ? decodeJwt(token) : null;
+
   let role = 'agent';
+  let teamId = null;
   if (user) {
     try {
       const u = JSON.parse(user);
       role = u.role || 'agent';
+      if (u.teamId) teamId = u.teamId;
+      if (!teamId && Array.isArray(u.teamIds) && u.teamIds.length > 0) teamId = u.teamIds[0];
     } catch (e) { }
+  }
+  if (!teamId && decoded) {
+    if (decoded.teamId) teamId = decoded.teamId;
+    if (!teamId && decoded.team_id) teamId = decoded.team_id;
+    if (!teamId && Array.isArray(decoded.team_ids) && decoded.team_ids.length > 0) teamId = decoded.team_ids[0];
+  }
+  if (decoded && (!user || !role)) {
+    role = decoded.role || role;
   }
 
   const headers = {};
@@ -675,6 +706,7 @@ function getAuthHeaders(contentType = 'application/json') {
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
     headers['x-user-role'] = role;
+    // Do not send custom team header; backend will derive/fallback
   }
   return headers;
 }
