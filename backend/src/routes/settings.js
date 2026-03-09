@@ -4,17 +4,24 @@ const router = express.Router();
 const auth = require('../middlewares/auth');
 const db = require('../../db');
 
-function resolveTeamId(req) {
+async function resolveTeamId(req) {
   if (req.query && req.query.teamId) return req.query.teamId;
   if (req.user && Array.isArray(req.user.teamIds) && req.user.teamIds.length > 0) {
     return req.user.teamIds[0];
+  }
+  if (req.user && req.user.id) {
+    try {
+      const res = await db.query('SELECT team_id FROM team_members WHERE user_id = $1 LIMIT 1', [req.user.id]);
+      const t = res.rows[0]?.team_id;
+      if (t) return t;
+    } catch (e) {}
   }
   return null;
 }
 
 router.get('/settings/lead-stages', auth.requireRole('admin', 'supervisor'), async (req, res, next) => {
   try {
-    const teamId = resolveTeamId(req);
+    const teamId = await resolveTeamId(req);
     if (!teamId) {
       return res.status(400).json({ error: 'teamId required' });
     }
@@ -61,7 +68,7 @@ router.get('/settings/lead-stages', auth.requireRole('admin', 'supervisor'), asy
 
 router.post('/settings/lead-stages', auth.requireRole('admin', 'supervisor'), async (req, res, next) => {
   try {
-    const teamId = resolveTeamId(req);
+    const teamId = await resolveTeamId(req);
     if (!teamId) {
       return res.status(400).json({ error: 'teamId required' });
     }
@@ -91,7 +98,7 @@ router.post('/settings/lead-stages', auth.requireRole('admin', 'supervisor'), as
 router.put('/settings/lead-stages/:id', auth.requireRole('admin', 'supervisor'), async (req, res, next) => {
   try {
     const { id } = req.params;
-    const teamId = resolveTeamId(req);
+    const teamId = await resolveTeamId(req);
     if (!teamId) {
       return res.status(400).json({ error: 'teamId required' });
     }
@@ -152,7 +159,7 @@ router.put('/settings/lead-stages/:id', auth.requireRole('admin', 'supervisor'),
 router.delete('/settings/lead-stages/:id', auth.requireRole('admin', 'supervisor'), async (req, res, next) => {
   try {
     const { id } = req.params;
-    const teamId = resolveTeamId(req);
+    const teamId = await resolveTeamId(req);
     if (!teamId) {
       return res.status(400).json({ error: 'teamId required' });
     }
@@ -171,7 +178,7 @@ router.delete('/settings/lead-stages/:id', auth.requireRole('admin', 'supervisor
 
 router.get('/settings/working-hours', auth.requireRole('admin', 'supervisor'), async (req, res, next) => {
   try {
-    const teamId = resolveTeamId(req);
+    const teamId = await resolveTeamId(req);
     if (!teamId) {
       return res.status(400).json({ error: 'teamId required' });
     }
@@ -214,7 +221,7 @@ router.get('/settings/working-hours', auth.requireRole('admin', 'supervisor'), a
 
 router.put('/settings/working-hours', auth.requireRole('admin', 'supervisor'), async (req, res, next) => {
   try {
-    const teamId = resolveTeamId(req);
+    const teamId = await resolveTeamId(req);
     if (!teamId) {
       return res.status(400).json({ error: 'teamId required' });
     }
