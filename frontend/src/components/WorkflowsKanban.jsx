@@ -186,14 +186,12 @@ export default function WorkflowsKanban({ currentUser, onOpenBuilder, onOpenSett
       </div>
       
       <div className="flex-1 overflow-x-auto overflow-y-hidden p-6">
+        {error && (
+          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {error}
+          </div>
+        )}
         <div className="flex gap-6 h-full pb-2">
-          {error && (
-            <div className="w-full">
-              <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                {error}
-              </div>
-            </div>
-          )}
           {columns.map((col) => (
             <div key={col.stage.id} className="w-80 flex-shrink-0 flex flex-col h-full max-h-full">
               <div className="flex items-center justify-between mb-3 px-1">
