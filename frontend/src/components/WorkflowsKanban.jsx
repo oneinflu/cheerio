@@ -13,7 +13,7 @@ import {
   createLeadStage,
   getLabels,
 } from '../api';
-import { Plus, X, GripVertical, MoreHorizontal } from 'lucide-react';
+import { Plus, X, GripVertical, MoreHorizontal, Search } from 'lucide-react';
 
 function CreateWorkflowModal({ isOpen, onClose, onSubmit, stageName }) {
   const [name, setName] = useState('');
@@ -212,9 +212,16 @@ function EditWorkflowModal({ isOpen, onClose, onSubmit, workflow }) {
     if (workflow) {
       setName(workflow.name || '');
       setDescription(workflow.description || '');
+      // Ensure we're reading steps correctly, handling potential nulls
       const steps = workflow.steps || {};
       setTriggerLabel(steps.triggerLabel || '');
       setTriggerCourse(steps.triggerCourse || '');
+    } else {
+      // Reset when closed or no workflow
+      setName('');
+      setDescription('');
+      setTriggerLabel('');
+      setTriggerCourse('');
     }
   }, [workflow]);
 
@@ -331,6 +338,7 @@ export default function WorkflowsKanban({ currentUser, onOpenBuilder }) {
   const [openStageMenuId, setOpenStageMenuId] = useState(null);
   const [openWorkflowMenuId, setOpenWorkflowMenuId] = useState(null);
   const [editWorkflow, setEditWorkflow] = useState(null);
+  const [filterQuery, setFilterQuery] = useState('');
 
   const load = async () => {
     try {
@@ -516,6 +524,19 @@ export default function WorkflowsKanban({ currentUser, onOpenBuilder }) {
     );
   }
 
+  // Filter workflows locally
+  const filteredColumns = columns.map(col => {
+    const filteredWfs = col.workflows.filter(w => {
+      if (!filterQuery) return true;
+      const q = filterQuery.toLowerCase();
+      const matchName = w.name.toLowerCase().includes(q);
+      const matchLabel = w.steps?.triggerLabel?.toLowerCase().includes(q);
+      const matchCourse = w.steps?.triggerCourse?.toLowerCase().includes(q);
+      return matchName || matchLabel || matchCourse;
+    });
+    return { ...col, workflows: filteredWfs };
+  });
+
   return (
     <div className="flex-1 flex flex-col h-full bg-slate-50/50 overflow-hidden">
       <div className="border-b border-slate-200 bg-white shadow-sm z-10">
@@ -524,7 +545,25 @@ export default function WorkflowsKanban({ currentUser, onOpenBuilder }) {
             <h1 className="text-xl font-bold text-slate-900 tracking-tight">Workflows Board</h1>
             <p className="text-sm text-slate-500 mt-0.5">Manage your automation pipeline visually</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input 
+                type="text" 
+                placeholder="Filter by name, tag, course..." 
+                className="pl-9 pr-3 py-1.5 text-sm border border-slate-200 rounded-lg outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 w-64 transition-all"
+                value={filterQuery}
+                onChange={(e) => setFilterQuery(e.target.value)}
+              />
+              {filterQuery && (
+                <button 
+                  onClick={() => setFilterQuery('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
             <Button variant="outline" size="sm" onClick={load}>Refresh</Button>
           </div>
         </div>
@@ -537,7 +576,7 @@ export default function WorkflowsKanban({ currentUser, onOpenBuilder }) {
           </div>
         )}
         <div className="flex gap-6 h-full pb-2">
-          {columns.map((col) => (
+          {filteredColumns.map((col) => (
             <div key={col.stage.id} className="w-80 flex-shrink-0 flex flex-col h-full max-h-full">
               <div className="flex items-center justify-between mb-3 px-1">
                 <div className="flex items-center gap-2">
@@ -700,6 +739,24 @@ export default function WorkflowsKanban({ currentUser, onOpenBuilder }) {
                     {w.description && (
                       <div className="text-xs text-slate-500 mb-3 line-clamp-2 leading-relaxed">
                         {w.description}
+                      </div>
+                    )}
+
+                    {/* Tags/Filters Display */}
+                    {(w.steps?.triggerLabel || w.steps?.triggerCourse) && (
+                      <div className="flex flex-wrap gap-1 mb-2">
+                        {w.steps?.triggerLabel && (
+                          <div className="flex items-center gap-1 bg-purple-50 text-purple-700 px-1.5 py-0.5 rounded text-[10px] font-medium border border-purple-100">
+                            <span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span>
+                            {w.steps.triggerLabel}
+                          </div>
+                        )}
+                        {w.steps?.triggerCourse && (
+                          <div className="flex items-center gap-1 bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded text-[10px] font-medium border border-blue-100">
+                            <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                            {w.steps.triggerCourse}
+                          </div>
+                        )}
                       </div>
                     )}
                     
