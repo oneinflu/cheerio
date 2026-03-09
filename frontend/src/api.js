@@ -934,3 +934,12 @@ export async function testAiAgent(message) {
   });
   return res.json();
 }
+
+export async function toggleAiForConversation(conversationId, isActive) {
+  const res = await fetch(`/api/conversations/${conversationId}/ai-status`, {
+    method: 'PUT',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ is_active: isActive }),
+  });
+  return res.json();
+}

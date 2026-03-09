@@ -61,12 +61,8 @@ async function handleIncomingMessage(conversationId, messageText) {
     
     const conv = convRes.rows[0];
     
-    // RULE: AI stops ONLY if a human is assigned OR AI is explicitly disabled
-    if (conv.assignee_user_id) {
-      console.log(`[AI Agent] Skipping conversation ${conversationId} (Human Assigned: ${conv.assignee_user_id})`);
-      return null; 
-    }
-    
+    // RULE: AI stops ONLY if explicitly disabled (is_ai_active = false)
+    // Even if human is assigned, AI continues UNTIL human manually toggles it off.
     if (conv.is_ai_active === false) {
       console.log(`[AI Agent] Skipping conversation ${conversationId} (AI Disabled Manually)`);
       return null;

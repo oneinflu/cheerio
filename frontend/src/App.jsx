@@ -24,8 +24,8 @@ import GalleryPage from './components/GalleryPage.jsx';
 import LandingPage from './components/LandingPage.jsx';
 import AiAgentPage from './components/AiAgentPage.jsx';
 import { connectSocket } from './socket.js';
-import { getInbox, getMessages, claimConversation, reassignConversation, forceReassignConversation, releaseConversation, markAsRead, resolveConversation, deleteConversation, blockConversation, unblockConversation, pinConversation, updateWorkflow, getTeamUser, getTeamUsers, reassignExternalLead } from './api.js';
-import { LayoutDashboard, MessageSquare, Users, Megaphone, Settings, LogOut, Search, Bell, FileText, Workflow, Shield, ChevronsUpDown, Check, Zap, GitBranch, Instagram, ChevronDown, ChevronRight, Mail, Bot, ArrowRight } from 'lucide-react';
+import { getInbox, getMessages, claimConversation, reassignConversation, forceReassignConversation, releaseConversation, markAsRead, resolveConversation, deleteConversation, blockConversation, unblockConversation, pinConversation, updateWorkflow, getTeamUser, getTeamUsers, reassignExternalLead, toggleAiForConversation } from './api.js';
+import { LayoutDashboard, MessageSquare, Users, Megaphone, Settings, LogOut, Search, Bell, FileText, Workflow, Shield, ChevronsUpDown, Check, Zap, GitBranch, Instagram, ChevronDown, ChevronRight, Mail, Bot, ArrowRight, PauseCircle, PlayCircle } from 'lucide-react';
 import { Button } from './components/ui/Button';
 import { Badge } from './components/ui/Badge';
 import { Card, CardHeader, CardTitle, CardContent } from './components/ui/Card';
@@ -535,6 +535,25 @@ export default function App() {
     }
   };
 
+  const handleToggleAi = async () => {
+    if (!selectedConversation) return;
+    
+    // Toggle logic: If currently active, set to false (pause). If inactive, set to true (resume).
+    // Note: is_ai_active can be null/undefined (default true), so we treat falsy as active unless explicitly false.
+    const currentStatus = selectedConversation.is_ai_active !== false;
+    const newStatus = !currentStatus;
+
+    try {
+      await toggleAiForConversation(selectedConversation.id, newStatus);
+      // Optimistic update
+      setConversations(prev => 
+        prev.map(c => c.id === selectedConversation.id ? { ...c, is_ai_active: newStatus } : c)
+      );
+    } catch (err) {
+      console.error('Failed to toggle AI:', err);
+    }
+  };
+
   const handlePin = async (conversationId) => {
     try {
       await pinConversation(conversationId);
@@ -1014,24 +1033,64 @@ export default function App() {
                 </div>
               )}
 
-              {/* AI Status Banner & Takeover */}
-              {selectedConversation && !isAssigned && selectedConversation.is_ai_active && (
-                 <div className="bg-purple-50 border-b border-purple-100 px-4 py-2 flex items-center justify-between">
+              {/* AI Status Banner & Controls */}
+              {selectedConversation && (
+                 <div className={`border-b px-4 py-2 flex items-center justify-between transition-colors ${
+                    selectedConversation.is_ai_active !== false 
+                      ? 'bg-purple-50 border-purple-100' 
+                      : 'bg-slate-50 border-slate-200'
+                 }`}>
                     <div className="flex items-center gap-2">
                        <div className="relative">
-                         <Bot size={16} className="text-purple-600" />
-                         <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-green-500 rounded-full border border-white animate-pulse"></span>
+                         <Bot size={16} className={selectedConversation.is_ai_active !== false ? "text-purple-600" : "text-slate-400"} />
+                         {selectedConversation.is_ai_active !== false && (
+                           <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-green-500 rounded-full border border-white animate-pulse"></span>
+                         )}
                        </div>
-                       <span className="text-xs font-medium text-purple-700">AI is handling this conversation</span>
+                       <span className={`text-xs font-medium ${
+                          selectedConversation.is_ai_active !== false ? "text-purple-700" : "text-slate-500"
+                       }`}>
+                          {selectedConversation.is_ai_active !== false 
+                            ? "AI is active (Replying automatically)" 
+                            : "AI is paused (Manual mode)"}
+                       </span>
                     </div>
-                    <Button 
-                       size="sm" 
-                       className="h-7 text-xs bg-purple-600 hover:bg-purple-700 text-white border-none shadow-sm gap-2"
-                       onClick={() => handleAssign(currentUser.id)}
-                    >
-                       <span>Take Over</span>
-                       <ArrowRight size={12} />
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button 
+                         size="sm" 
+                         variant="ghost"
+                         className={`h-7 text-xs border shadow-sm gap-2 ${
+                            selectedConversation.is_ai_active !== false
+                              ? "bg-white text-red-600 border-red-100 hover:bg-red-50"
+                              : "bg-white text-green-600 border-green-100 hover:bg-green-50"
+                         }`}
+                         onClick={handleToggleAi}
+                         title={selectedConversation.is_ai_active !== false ? "Stop AI from replying" : "Let AI handle replies"}
+                      >
+                         {selectedConversation.is_ai_active !== false ? (
+                           <>
+                             <PauseCircle size={14} />
+                             Pause AI
+                           </>
+                         ) : (
+                           <>
+                             <PlayCircle size={14} />
+                             Resume AI
+                           </>
+                         )}
+                      </Button>
+                      
+                      {!isAssigned && (
+                        <Button 
+                           size="sm" 
+                           className="h-7 text-xs bg-purple-600 hover:bg-purple-700 text-white border-none shadow-sm gap-2"
+                           onClick={() => handleAssign(currentUser.id)}
+                        >
+                           <span>Take Over</span>
+                           <ArrowRight size={12} />
+                        </Button>
+                      )}
+                    </div>
                  </div>
               )}
 
