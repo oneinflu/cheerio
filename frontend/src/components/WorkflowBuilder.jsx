@@ -1620,7 +1620,9 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
       if (createdNode) {
         setSelectedNode(createdNode);
       }
-      syncGraphFromList();
+      if (viewMode === 'list') {
+        syncGraphFromList();
+      }
     },
     [setNodes, syncGraphFromList, viewMode, branchTarget]
   );
@@ -1880,7 +1882,9 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
       Object.prototype.hasOwnProperty.call(changes, 'delayValue') ||
       Object.prototype.hasOwnProperty.call(changes, 'delayUnit')
     ) {
-      syncGraphFromList();
+      if (viewMode === 'list') {
+        syncGraphFromList();
+      }
     }
   };
 
@@ -2086,7 +2090,9 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
           }));
           return [...nds, ...created];
         });
-        syncGraphFromList();
+        if (viewMode === 'list') {
+          syncGraphFromList();
+        }
       } else {
         const steps = (graph.nodes || []).filter(
           (n) => n.type === 'send_template' || n.type === 'send_message'
@@ -2120,7 +2126,9 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
           }));
           return [...nds, ...created];
         });
-        syncGraphFromList();
+        if (viewMode === 'list') {
+          syncGraphFromList();
+        }
       }
       setIsVoiceModalOpen(false);
       setVoiceText('');
