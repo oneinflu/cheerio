@@ -2864,6 +2864,9 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 onPaneClick={onPaneClick}
                 nodeTypes={nodeTypes}
                 fitView
+                selectionOnDrag={true}
+                panOnDrag={[1, 2]}
+                selectionMode="partial"
               >
                 <Background variant={BackgroundVariant.Dots} color="#ccc" gap={20} size={1} />
                 <Controls />
