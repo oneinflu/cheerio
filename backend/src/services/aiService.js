@@ -110,7 +110,7 @@ async function retrieveContext(query) {
 /**
  * Call LLM
  */
-async function generateResponse(userMessage, context, systemPrompt, model) {
+async function generateResponse(userMessage, context, systemPrompt, model, isStreaming = false) {
   try {
     if (!process.env.OPENAI_API_KEY) {
       console.log('[AI Agent] No API Key, skipping generation.');
@@ -121,6 +121,16 @@ async function generateResponse(userMessage, context, systemPrompt, model) {
       { role: "system", content: `${systemPrompt}\n\nRelevant Context:\n${context}` },
       { role: "user", content: userMessage }
     ];
+
+    if (isStreaming) {
+      const stream = await openai.chat.completions.create({
+        messages,
+        model: model || "gpt-4-turbo",
+        temperature: 0.7,
+        stream: true,
+      });
+      return stream;
+    }
 
     const completion = await openai.chat.completions.create({
       messages,

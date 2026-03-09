@@ -136,9 +136,55 @@ export default function AiAgentPage() {
     setIsChatLoading(true);
 
     try {
-      const res = await testAiAgent(userMsg.content);
-      const aiMsg = { role: 'assistant', content: res.response || 'No response generated.' };
-      setChatMessages(prev => [...prev, aiMsg]);
+      const token = localStorage.getItem('accessToken');
+      const headers = {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      };
+      
+      const response = await fetch('/api/ai-agent/test', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ message: userMsg.content, stream: true })
+      });
+
+      if (!response.body) return;
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      
+      setChatMessages(prev => [...prev, { role: 'assistant', content: '' }]);
+      
+      while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          
+          const chunk = decoder.decode(value);
+          const lines = chunk.split('\n');
+          
+          for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                  const dataStr = line.replace('data: ', '').trim();
+                  if (!dataStr) continue;
+                  if (dataStr === '[DONE]') break;
+                  
+                  try {
+                      const parsed = JSON.parse(dataStr);
+                      if (parsed.content) {
+                          setChatMessages(prev => {
+                              const newMsgs = [...prev];
+                              const lastMsg = newMsgs[newMsgs.length - 1];
+                              if (lastMsg.role === 'assistant') {
+                                  lastMsg.content += parsed.content;
+                              }
+                              return newMsgs;
+                          });
+                      }
+                  } catch (e) {
+                      // ignore parse error
+                  }
+              }
+          }
+      }
     } catch (e) {
       setChatMessages(prev => [...prev, { role: 'system', content: 'Error generating response.' }]);
     } finally {

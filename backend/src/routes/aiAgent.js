@@ -81,11 +81,11 @@ const aiService = require('../services/aiService');
 
 /**
  * POST /api/ai-agent/test
- * Test the AI with a message
+ * Test the AI with a message (supports streaming)
  */
 router.post('/test', auth.requireRole('admin', 'super_admin'), async (req, res, next) => {
   try {
-    const { message } = req.body;
+    const { message, stream } = req.body;
     if (!message) return res.status(400).json({ error: 'Message is required' });
 
     // Retrieve global config
@@ -95,15 +95,45 @@ router.post('/test', auth.requireRole('admin', 'super_admin'), async (req, res, 
     // Retrieve context
     const context = await aiService.retrieveContext(message);
     
-    // Generate response
-    const response = await aiService.generateResponse(
-      message, 
-      context, 
-      config ? config.system_prompt : '', 
-      config ? config.model_name : 'gpt-4-turbo'
-    );
+    if (stream) {
+        // Handle streaming response
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
 
-    res.json({ response });
+        const streamResponse = await aiService.generateResponse(
+            message, 
+            context, 
+            config ? config.system_prompt : '', 
+            config ? config.model_name : 'gpt-4-turbo',
+            true // isStreaming
+        );
+
+        if (!streamResponse) {
+             res.write('data: [ERROR]\n\n');
+             return res.end();
+        }
+
+        for await (const chunk of streamResponse) {
+            const content = chunk.choices[0]?.delta?.content || '';
+            if (content) {
+                // Send data as SSE
+                res.write(`data: ${JSON.stringify({ content })}\n\n`);
+            }
+        }
+        
+        res.write('data: [DONE]\n\n');
+        res.end();
+    } else {
+        // Normal JSON response
+        const response = await aiService.generateResponse(
+          message, 
+          context, 
+          config ? config.system_prompt : '', 
+          config ? config.model_name : 'gpt-4-turbo'
+        );
+        res.json({ response });
+    }
   } catch (err) {
     next(err);
   }
