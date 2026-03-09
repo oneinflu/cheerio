@@ -56,7 +56,8 @@ async function handleIncomingMessage(conversationId, messageText) {
     const config = configRes.rows[0];
 
     // 2. Check if conversation is assigned to a human or AI disabled
-    const convRes = await db.query('SELECT assignee_user_id, is_ai_active FROM conversations WHERE id = $1', [conversationId]);
+    // NOTE: assignee_user_id is not in conversations table, it's in conversation_assignments
+    const convRes = await db.query('SELECT is_ai_active FROM conversations WHERE id = $1', [conversationId]);
     if (convRes.rows.length === 0) return null;
     
     const conv = convRes.rows[0];
