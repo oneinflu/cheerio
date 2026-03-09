@@ -49,6 +49,17 @@ router.get('/:conversationId/contact', auth.requireRole('admin', 'super_admin', 
     }
     const row = result.rows[0];
     const profile = row.profile || {};
+    
+    // Fetch tags/labels for this contact
+    const labelsRes = await db.query(
+      `SELECT cl.name 
+       FROM contact_label_maps clm
+       JOIN contact_labels cl ON cl.id = clm.label_id
+       WHERE clm.contact_id = $1`,
+      [row.contact_id]
+    );
+    const tags = labelsRes.rows.map(r => r.name);
+
     res.json({
       contactId: row.contact_id,
       name: row.display_name,
@@ -64,6 +75,7 @@ router.get('/:conversationId/contact', auth.requireRole('admin', 'super_admin', 
           isClosed: row.lead_stage_is_closed === true,
         }
         : null,
+      tags: tags
     });
   } catch (err) {
     next(err);
@@ -140,12 +152,12 @@ router.put('/:conversationId/lead-stage', auth.requireRole('admin', 'super_admin
 
 /**
  * PUT /api/conversations/:conversationId/contact
- * Updates contact details (name, course)
+ * Updates contact details (name, course, tags)
  */
 router.put('/:conversationId/contact', auth.requireRole('admin', 'super_admin', 'quality_manager', 'agent', 'supervisor'), async (req, res, next) => {
   try {
     const { conversationId } = req.params;
-    const { name, course } = req.body;
+    const { name, course, tags } = req.body;
 
     const cRes = await db.query('SELECT contact_id, lead_id FROM conversations WHERE id = $1', [conversationId]);
     if (cRes.rows.length === 0) {
@@ -154,25 +166,62 @@ router.put('/:conversationId/contact', auth.requireRole('admin', 'super_admin', 
     const contactId = cRes.rows[0].contact_id;
     let leadId = cRes.rows[0].lead_id;
 
-    console.log(`[ContactUpdate] Updating contact ${contactId} (LeadID: ${leadId}) - Name: ${name}, Course: ${course}`);
+    console.log(`[ContactUpdate] Updating contact ${contactId} (LeadID: ${leadId}) - Name: ${name}, Course: ${course}, Tags: ${tags}`);
+    
+    // Update basic fields
+    await db.query(
+      `UPDATE contacts 
+       SET display_name = $1, 
+           profile = jsonb_set(COALESCE(profile, '{}'), '{course}', to_jsonb($2::text), true)
+       WHERE id = $3`,
+      [name, course, contactId]
+    );
 
-    // Fix: If leadId is not in conversations table, try to find it in contacts table profile
-    // The user says "in the inbox API response we have leadId". 
-    // The inbox service gets leadId from c.lead_id.
-    // If c.lead_id is null in DB, then inbox shouldn't have it unless it's getting it from somewhere else?
-    // Inbox query: SELECT c.lead_id ... FROM conversations c ...
-    // So if inbox has it, it MUST be in the DB.
-    // Maybe the user is looking at a different conversation ID? 
-    // The log says: conversation 0596a052-f39d-49e0-922b-a162ed5455ac has LeadID: null.
-    // The user provided JSON has ID: 4950f37e-449f-4291-a340-dd02eb992bf3 which has leadId.
-    // It seems the user might be updating a DIFFERENT conversation or the frontend is passing the wrong ID?
-    // OR, maybe the leadId is in the profile but not the column?
-    // But inbox query uses column.
+    // Update tags if provided
+    if (Array.isArray(tags)) {
+      // 1. Get existing tags for this contact
+      const existingRes = await db.query(
+        `SELECT cl.id, cl.name FROM contact_label_maps clm 
+         JOIN contact_labels cl ON cl.id = clm.label_id 
+         WHERE clm.contact_id = $1`,
+        [contactId]
+      );
+      const existingMap = new Map(existingRes.rows.map(r => [r.name, r.id]));
+      const existingNames = new Set(existingMap.keys());
+      const newNames = new Set(tags);
 
-    // However, if leadId is missing, we can try to "find" it via webhook or passed in body?
-    // User input: "pass the leadId and courseName na why not passing"
-    // This suggests we should accept leadId in the request body if available.
+      // 2. Find tags to add
+      const toAdd = [...newNames].filter(x => !existingNames.has(x));
+      for (const tagName of toAdd) {
+        // Find label ID by name
+        let labelRes = await db.query('SELECT id FROM contact_labels WHERE name = $1', [tagName]);
+        let labelId;
+        if (labelRes.rows.length > 0) {
+          labelId = labelRes.rows[0].id;
+        } else {
+          // Should be created via API but handle fallback just in case or skip
+          continue; 
+        }
+        await db.query(
+          `INSERT INTO contact_label_maps (contact_id, label_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+          [contactId, labelId]
+        );
+      }
 
+      // 3. Find tags to remove
+      const toRemove = [...existingNames].filter(x => !newNames.has(x));
+      for (const tagName of toRemove) {
+        const labelId = existingMap.get(tagName);
+        if (labelId) {
+          await db.query(
+            `DELETE FROM contact_label_maps WHERE contact_id = $1 AND label_id = $2`,
+            [contactId, labelId]
+          );
+        }
+      }
+    }
+
+    // Lead syncing logic...
     let effectiveLeadId = leadId;
     if (!effectiveLeadId && req.body.leadId) {
       effectiveLeadId = req.body.leadId;

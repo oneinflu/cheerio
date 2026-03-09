@@ -127,15 +127,77 @@ async function updateWorkflow(id, data) {
 
 async function runStageWorkflows(stageId, phoneNumber) {
   const res = await db.query(
-    `SELECT lsw.workflow_id 
+    `SELECT lsw.workflow_id, w.steps
      FROM lead_stage_workflows lsw
      JOIN workflows w ON w.id = lsw.workflow_id
      WHERE lsw.stage_id = $1 AND w.status = 'active'
      ORDER BY lsw.position ASC, w.created_at ASC`,
     [stageId]
   );
+  
+  // Fetch contact labels to check conditions
+  let contactLabels = [];
+  try {
+    const contactRes = await db.query(
+      `SELECT cl.name 
+       FROM contacts c
+       JOIN contact_label_maps clm ON clm.contact_id = c.id
+       JOIN contact_labels cl ON cl.id = clm.label_id
+       WHERE c.external_id = $1`,
+      [phoneNumber]
+    );
+    if (contactRes.rowCount === 0) {
+        const altPhone = phoneNumber.startsWith('+') ? phoneNumber.slice(1) : `+${phoneNumber}`;
+        const contactRes2 = await db.query(
+          `SELECT cl.name 
+           FROM contacts c
+           JOIN contact_label_maps clm ON clm.contact_id = c.id
+           JOIN contact_labels cl ON cl.id = clm.label_id
+           WHERE c.external_id = $1`,
+          [altPhone]
+        );
+        contactLabels = contactRes2.rows.map(r => r.name);
+    } else {
+        contactLabels = contactRes.rows.map(r => r.name);
+    }
+  } catch (e) {
+    console.error(`[runStageWorkflows] Error fetching contact labels: ${e.message}`);
+  }
+
   for (const row of res.rows) {
     const wfId = row.workflow_id;
+    const steps = row.steps || {};
+    
+    // Check label filter if present
+    if (steps.triggerLabel) {
+      if (!contactLabels.includes(steps.triggerLabel)) {
+        console.log(`[runStageWorkflows] Skipping workflow ${wfId}: Lead does not have label "${steps.triggerLabel}"`);
+        continue;
+      }
+    }
+
+    // Check course/attribute filter if present
+    if (steps.triggerCourse) {
+        // We need to fetch contact profile for course check
+        try {
+            const profileRes = await db.query(
+                `SELECT profile FROM contacts WHERE external_id = $1 OR external_id = $2 LIMIT 1`,
+                [phoneNumber, phoneNumber.startsWith('+') ? phoneNumber.slice(1) : `+${phoneNumber}`]
+            );
+            const profile = profileRes.rows[0]?.profile || {};
+            const contactCourse = profile.course || profile.Course || '';
+            
+            // Loose matching for course name
+            if (!contactCourse || !contactCourse.toLowerCase().includes(steps.triggerCourse.toLowerCase())) {
+                console.log(`[runStageWorkflows] Skipping workflow ${wfId}: Lead course "${contactCourse}" does not match "${steps.triggerCourse}"`);
+                continue;
+            }
+        } catch (e) {
+            console.error(`[runStageWorkflows] Error checking course: ${e.message}`);
+            continue; // Skip if we can't verify course
+        }
+    }
+
     try {
       await runWorkflow(wfId, phoneNumber);
     } catch (e) {

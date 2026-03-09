@@ -11,6 +11,7 @@ import {
   deleteWorkflow,
   deleteLeadStage,
   createLeadStage,
+  getLabels,
 } from '../api';
 import { Plus, X, GripVertical, MoreHorizontal } from 'lucide-react';
 
@@ -18,6 +19,17 @@ function CreateWorkflowModal({ isOpen, onClose, onSubmit, stageName }) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
+  const [triggerLabel, setTriggerLabel] = useState('');
+  const [triggerCourse, setTriggerCourse] = useState('');
+  const [availableLabels, setAvailableLabels] = useState([]);
+
+  useEffect(() => {
+    if (isOpen) {
+      getLabels().then((res) => {
+        if (res && res.success) setAvailableLabels(res.labels || []);
+      });
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -26,9 +38,16 @@ function CreateWorkflowModal({ isOpen, onClose, onSubmit, stageName }) {
     if (!name.trim()) return;
     setLoading(true);
     try {
-      await onSubmit({ name, description });
+      await onSubmit({ 
+        name, 
+        description, 
+        triggerLabel: triggerLabel || null,
+        triggerCourse: triggerCourse || null 
+      });
       setName('');
       setDescription('');
+      setTriggerLabel('');
+      setTriggerCourse('');
       onClose();
     } catch (error) {
       console.error(error);
@@ -65,6 +84,32 @@ function CreateWorkflowModal({ isOpen, onClose, onSubmit, stageName }) {
               placeholder="Optional description..."
               className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 min-h-[80px]"
             />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Trigger Filter (Optional)</label>
+            <select
+              value={triggerLabel}
+              onChange={(e) => setTriggerLabel(e.target.value)}
+              className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+            >
+              <option value="">Run for All Leads</option>
+              {availableLabels.map((l) => (
+                <option key={l.id} value={l.name}>
+                  Run only for label: {l.name}
+                </option>
+              ))}
+            </select>
+            <p className="text-[10px] text-slate-500 mt-1">If selected, this workflow only runs when a lead has this label.</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Course Filter (Optional)</label>
+            <Input
+              value={triggerCourse}
+              onChange={(e) => setTriggerCourse(e.target.value)}
+              placeholder="e.g. Python, Java, Data Science"
+              className="w-full"
+            />
+            <p className="text-[10px] text-slate-500 mt-1">If set, runs only if lead's course matches this text.</p>
           </div>
           {stageName && (
             <div className="text-xs text-slate-500 bg-slate-50 px-3 py-2 rounded-md border border-slate-100">
@@ -159,13 +204,27 @@ function EditWorkflowModal({ isOpen, onClose, onSubmit, workflow }) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
+  const [triggerLabel, setTriggerLabel] = useState('');
+  const [triggerCourse, setTriggerCourse] = useState('');
+  const [availableLabels, setAvailableLabels] = useState([]);
 
   useEffect(() => {
     if (workflow) {
       setName(workflow.name || '');
       setDescription(workflow.description || '');
+      const steps = workflow.steps || {};
+      setTriggerLabel(steps.triggerLabel || '');
+      setTriggerCourse(steps.triggerCourse || '');
     }
   }, [workflow]);
+
+  useEffect(() => {
+    if (isOpen) {
+      getLabels().then((res) => {
+        if (res && res.success) setAvailableLabels(res.labels || []);
+      });
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -174,7 +233,13 @@ function EditWorkflowModal({ isOpen, onClose, onSubmit, workflow }) {
     if (!name.trim()) return;
     setLoading(true);
     try {
-      await onSubmit({ ...workflow, name, description });
+      const currentSteps = workflow.steps || { nodes: [], edges: [] };
+      const updatedSteps = { 
+        ...currentSteps, 
+        triggerLabel: triggerLabel || null,
+        triggerCourse: triggerCourse || null
+      };
+      await onSubmit({ ...workflow, name, description, steps: updatedSteps });
       onClose();
     } catch (error) {
       console.error(error);
@@ -211,6 +276,32 @@ function EditWorkflowModal({ isOpen, onClose, onSubmit, workflow }) {
               placeholder="Optional description..."
               className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 min-h-[80px]"
             />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Trigger Filter (Optional)</label>
+            <select
+              value={triggerLabel}
+              onChange={(e) => setTriggerLabel(e.target.value)}
+              className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+            >
+              <option value="">Run for All Leads</option>
+              {availableLabels.map((l) => (
+                <option key={l.id} value={l.name}>
+                  Run only for label: {l.name}
+                </option>
+              ))}
+            </select>
+            <p className="text-[10px] text-slate-500 mt-1">If selected, this workflow only runs when a lead has this label.</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Course Filter (Optional)</label>
+            <Input
+              value={triggerCourse}
+              onChange={(e) => setTriggerCourse(e.target.value)}
+              placeholder="e.g. Python, Java, Data Science"
+              className="w-full"
+            />
+            <p className="text-[10px] text-slate-500 mt-1">If set, runs only if lead's course matches this text.</p>
           </div>
           <div className="flex justify-end gap-3 pt-2">
             <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
@@ -321,7 +412,13 @@ export default function WorkflowsKanban({ currentUser, onOpenBuilder }) {
       ...data,
       stageId: createModal.stageId,
       status: 'active',
-      steps: { nodes: [], edges: [], trigger: '' },
+      steps: { 
+        nodes: [], 
+        edges: [], 
+        trigger: '', 
+        triggerLabel: data.triggerLabel,
+        triggerCourse: data.triggerCourse 
+      },
     });
     await load();
   };
@@ -374,7 +471,8 @@ export default function WorkflowsKanban({ currentUser, onOpenBuilder }) {
     try {
       await updateWorkflow(updatedData.id, {
         name: updatedData.name,
-        description: updatedData.description
+        description: updatedData.description,
+        steps: updatedData.steps
       });
       await load();
       setEditWorkflow(null);

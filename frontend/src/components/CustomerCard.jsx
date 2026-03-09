@@ -6,6 +6,7 @@ import { Button } from './ui/Button';
 import { User, Copy, Check } from 'lucide-react';
 import { useToast } from './ui/use-toast';
 import { getLeadStages, updateConversationLeadStage } from '../api';
+import TagSelector from './TagSelector';
 
 export default function CustomerCard({ conversationId, onLeadStageUpdated }) {
   const { toast } = useToast();
@@ -32,7 +33,8 @@ export default function CustomerCard({ conversationId, onLeadStageUpdated }) {
     course: '',
     preferredLanguage: '',
     blocked: false,
-    leadStageId: ''
+    leadStageId: '',
+    tags: []
   });
 
   useEffect(() => {
@@ -53,7 +55,8 @@ export default function CustomerCard({ conversationId, onLeadStageUpdated }) {
           course: data.course || '',
           preferredLanguage: data.preferredLanguage || '',
           blocked: !!data.blocked,
-          leadStageId: data.leadStage && data.leadStage.id ? data.leadStage.id : ''
+          leadStageId: data.leadStage && data.leadStage.id ? data.leadStage.id : '',
+          tags: data.tags || []
         });
       })
       .catch(err => console.error(err))
@@ -102,11 +105,12 @@ export default function CustomerCard({ conversationId, onLeadStageUpdated }) {
         headers,
         body: JSON.stringify({
           name: formData.name,
-          course: formData.course
+          course: formData.course,
+          tags: formData.tags
         })
       });
       if (!res.ok) throw new Error('Failed to update contact');
-      // Optional: Show success feedback
+      toast({ description: "Contact details updated" });
     } catch (err) {
       console.error(err);
     } finally {
@@ -229,6 +233,12 @@ export default function CustomerCard({ conversationId, onLeadStageUpdated }) {
                 <option value="F&A">F&A</option>
               </select>
             </div>
+            
+            <TagSelector 
+              selectedLabels={formData.tags}
+              onChange={(newTags) => setFormData(prev => ({ ...prev, tags: newTags }))}
+            />
+
             <Button size="sm" className="w-full mt-2" onClick={handleSubmit} disabled={loading}>
               {loading ? 'Saving...' : 'Submit'}
             </Button>
