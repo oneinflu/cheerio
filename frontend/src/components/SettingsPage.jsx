@@ -20,6 +20,10 @@ export default function SettingsPage({ currentUser }) {
   const [stagesError, setStagesError] = useState(null);
   const [savingStageId, setSavingStageId] = useState(null);
   const [addingStage, setAddingStage] = useState(false);
+  const [isAddStageModalOpen, setIsAddStageModalOpen] = useState(false);
+  const [newStageName, setNewStageName] = useState('');
+  const [newStageColor, setNewStageColor] = useState('#0f172a');
+  const [newStageClosed, setNewStageClosed] = useState(false);
 
   const [timezone, setTimezone] = useState('Asia/Kolkata');
   const [workingHours, setWorkingHours] = useState({
@@ -99,15 +103,26 @@ export default function SettingsPage({ currentUser }) {
     load();
   }, [teamId]);
 
-  const handleAddStage = async () => {
+  const handleCreateStage = async () => {
     if (!teamId) return;
+    if (!newStageName.trim()) {
+      setStagesError('Stage name is required');
+      return;
+    }
     try {
       setAddingStage(true);
-      const name = `Stage ${leadStages.length + 1}`;
-      const created = await createLeadStage({ name }, teamId);
+      const created = await createLeadStage({
+        name: newStageName.trim(),
+        color: newStageColor || null,
+        is_closed: newStageClosed,
+      }, teamId);
       if (created && created.id) {
         setLeadStages((prev) => [...prev, created]);
         setStagesError(null);
+        setIsAddStageModalOpen(false);
+        setNewStageName('');
+        setNewStageColor('#0f172a');
+        setNewStageClosed(false);
       } else {
         setStagesError('Failed to add stage');
       }
@@ -276,8 +291,14 @@ export default function SettingsPage({ currentUser }) {
               )}
             </div>
 
-            <Button type="button" variant="outline" size="sm" onClick={handleAddStage} disabled={addingStage}>
-              {addingStage ? 'Adding...' : 'Add Stage'}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setIsAddStageModalOpen(true)}
+              disabled={addingStage}
+            >
+              Add Stage
             </Button>
           </CardContent>
         </Card>
@@ -410,6 +431,54 @@ export default function SettingsPage({ currentUser }) {
               disabled={savingHours || loadingHours}
             >
               {savingHours ? 'Saving...' : 'Save Working Hours'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={isAddStageModalOpen}
+        onClose={() => setIsAddStageModalOpen(false)}
+        title="Add Lead Stage"
+      >
+        <div className="space-y-4">
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-slate-600">Stage Name</label>
+            <Input
+              value={newStageName}
+              onChange={(e) => setNewStageName(e.target.value)}
+              className="h-9 text-sm"
+              placeholder="e.g. New, Contacted, Enrolled"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-slate-600">Color</label>
+            <input
+              type="color"
+              className="h-8 w-14 p-0 border border-slate-200 rounded"
+              value={newStageColor}
+              onChange={(e) => setNewStageColor(e.target.value)}
+            />
+          </div>
+          <label className="flex items-center gap-2 text-xs text-slate-600">
+            <input
+              type="checkbox"
+              checked={newStageClosed}
+              onChange={(e) => setNewStageClosed(e.target.checked)}
+            />
+            Closed stage
+          </label>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <Button type="button" variant="ghost" onClick={() => setIsAddStageModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleCreateStage}
+              disabled={addingStage || !newStageName.trim()}
+            >
+              {addingStage ? 'Adding...' : 'Add Stage'}
             </Button>
           </div>
         </div>
