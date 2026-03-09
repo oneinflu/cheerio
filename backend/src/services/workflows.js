@@ -375,6 +375,14 @@ async function runWorkflow(id, phoneNumber, context = {}) {
 
   console.log(`[WorkflowRunner] Starting workflow ${id} for ${phoneNumber}`);
   console.log(`[WorkflowRunner] Context variables:`, JSON.stringify(context));
+  let io = null;
+  try {
+    const { getIO } = require('../realtime/io');
+    io = getIO();
+    if (io) {
+      io.emit('workflow:run:start', { workflowId: id, phoneNumber, startedAt: workflowStartTime });
+    }
+  } catch (e) {}
 
   while (currentNode && stepCount < MAX_STEPS) {
     stepCount++;
@@ -384,6 +392,9 @@ async function runWorkflow(id, phoneNumber, context = {}) {
       type: currentNode.type,
       status: 'started'
     });
+    if (io) {
+      io.emit('workflow:step:start', { workflowId: id, phoneNumber, nodeId: currentNode.id, type: currentNode.type, step: stepCount });
+    }
 
     try {
       // 1. Execute Node Logic
@@ -433,6 +444,9 @@ async function runWorkflow(id, phoneNumber, context = {}) {
             const pollingStart = Date.now();
             const TIMEOUT = 5 * 60 * 1000; // 5 mins wait max
             let matchedRoute = null;
+            if (io) {
+              io.emit('workflow:step:wait', { workflowId: id, phoneNumber, nodeId: currentNode.id, reason: 'await_reply' });
+            }
 
             while (Date.now() - pollingStart < TIMEOUT) {
               const replies = await checkUserReply(phoneNumber, lastTemplateSentAt);
@@ -457,6 +471,9 @@ async function runWorkflow(id, phoneNumber, context = {}) {
               continue; // Skip default next logic
             } else {
               console.log('[WorkflowRunner] Timed out waiting for button reply.');
+              if (io) {
+                io.emit('workflow:step:timeout', { workflowId: id, phoneNumber, nodeId: currentNode.id, reason: 'await_reply_timeout' });
+              }
             }
           }
         }
@@ -751,6 +768,9 @@ async function runWorkflow(id, phoneNumber, context = {}) {
         if (ms < 0) ms = 0;
 
         console.log(`[WorkflowRunner] Waiting ${ms}ms (delay node)`);
+        if (io) {
+          io.emit('workflow:step:wait', { workflowId: id, phoneNumber, nodeId: currentNode.id, reason: 'delay', ms });
+        }
         if (ms > 0) await sleep(ms);
       } else if (currentNode.type === 'attribute_condition') {
         let attrs = {};
@@ -930,6 +950,14 @@ async function runWorkflow(id, phoneNumber, context = {}) {
                 });
               }
             }
+          } else if (actionType === 'update_lead_stage') {
+            const stageId = actionValue;
+            if (!stageId) {
+              console.log('[WorkflowRunner] update_lead_stage skipped: no stage id');
+            } else {
+              await db.query('UPDATE conversations SET lead_stage_id = $1 WHERE id = $2', [stageId, conversationId]);
+              console.log(`[WorkflowRunner] Updated lead stage to ${stageId}`);
+            }
           } else if (actionType === 'send_sms_otp') {
             const digits = parseInt(currentNode.data.otpDigits || currentNode.data.digits || 6, 10);
             const saveVarRaw = currentNode.data.saveVariable || 'otp';
@@ -1055,6 +1083,9 @@ async function runWorkflow(id, phoneNumber, context = {}) {
           }
         } catch (err) {
           console.error(`[WorkflowRunner] Action failed: ${err.message}`);
+          if (io) {
+            io.emit('workflow:step:error', { workflowId: id, phoneNumber, nodeId: currentNode.id, message: err.message || 'Action failed' });
+          }
         }
       } else if (currentNode.type === 'xolox_event') {
         // ── XOLOX CRM webhook call ──────────────────────────────────────────
@@ -1184,15 +1215,25 @@ async function runWorkflow(id, phoneNumber, context = {}) {
         const nextId = currentNode.next;
         currentNode = nextId ? nodes.find(n => n.id === nextId) : null;
       }
+      if (io) {
+        const last = executionLog[executionLog.length - 1];
+        io.emit('workflow:step:complete', { workflowId: id, phoneNumber, nodeId: last?.nodeId });
+      }
 
     } catch (err) {
       console.error(`[WorkflowRunner] Error at node ${currentNode.id}:`, err);
       executionLog.push({ error: err.message });
+      if (io) {
+        io.emit('workflow:step:error', { workflowId: id, phoneNumber, nodeId: currentNode.id, message: err.message || 'Node failed' });
+      }
       // Stop execution on error
       break;
     }
   }
 
+  if (io) {
+    io.emit('workflow:run:complete', { workflowId: id, phoneNumber, endedAt: new Date(), steps: executionLog.length });
+  }
   return { success: true, log: executionLog };
 }
 

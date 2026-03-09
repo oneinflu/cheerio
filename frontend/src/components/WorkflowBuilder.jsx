@@ -15,23 +15,34 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { Button } from './ui/Button';
-import { Save, ArrowLeft, Plus, Clock, MessageSquare, GitBranch, Zap, StopCircle, Loader2, Play, MessageCircle, Code, UserCheck, Tag, Mic, Workflow as WorkflowIcon, Megaphone, Filter, Link, Copy, Check, RefreshCw, Trash2, Globe, Send, ChevronDown, ChevronUp, Image, Video, FileText as FileIcon, Upload, X, Star, CreditCard, BellRing, Bell, Mail } from 'lucide-react';
-import { getTemplates, runWorkflow, aiGenerateWorkflow, getWorkflows, getCampaigns, getWebhookEvents, clearWebhookEvents, fetchMediaLibrary, uploadFlowMedia, createPaymentLink, getLabels, getEmailTemplates } from '../api';
+import { Save, ArrowLeft, Plus, Clock, MessageSquare, GitBranch, Zap, StopCircle, Loader2, Play, MessageCircle, Code, UserCheck, Tag, Mic, Workflow as WorkflowIcon, Megaphone, Filter, Link, Copy, Check, RefreshCw, Trash2, Globe, Send, ChevronDown, ChevronUp, Image, Video, FileText as FileIcon, Upload, X, Star, CreditCard, BellRing, Bell, Mail, ListChecks } from 'lucide-react';
+import { getTemplates, runWorkflow, aiGenerateWorkflow, getWorkflows, getCampaigns, getWebhookEvents, clearWebhookEvents, fetchMediaLibrary, uploadFlowMedia, createPaymentLink, getLabels, getEmailTemplates, getLeadStages } from '../api';
 import { GallerySelectModal } from './GallerySelectModal';
+import { connectSocket } from '../socket';
 
 // --- Custom Node Components ---
 
-const NodeWrapper = ({ children, selected, title, icon: Icon, colorClass }) => (
-  <div className={`shadow-md rounded-md bg-white border-2 min-w-[200px] ${selected ? 'border-blue-500' : 'border-slate-200'}`}>
-    <div className={`flex items-center px-3 py-2 border-b border-slate-100 ${colorClass} text-white rounded-t-[4px]`}>
-      <Icon size={16} className="mr-2" />
-      <span className="font-medium text-sm">{title}</span>
+const NodeWrapper = ({ children, selected, title, icon: Icon, colorClass, status }) => {
+  let statusClass = 'bg-white/20 text-white';
+  let statusText = '';
+  if (status === 'running') { statusClass = 'bg-white/20 text-white'; statusText = 'Running'; }
+  else if (status === 'completed') { statusClass = 'bg-emerald-200 text-emerald-800'; statusText = 'Completed'; }
+  else if (status === 'waiting') { statusClass = 'bg-yellow-200 text-yellow-800'; statusText = 'Waiting'; }
+  else if (status === 'error') { statusClass = 'bg-red-200 text-red-800'; statusText = 'Error'; }
+
+  return (
+    <div className={`shadow-md rounded-md bg-white border-2 min-w-[200px] ${selected ? 'border-blue-500' : 'border-slate-200'}`}>
+      <div className={`flex items-center px-3 py-2 border-b border-slate-100 ${colorClass} text-white rounded-t-[4px]`}>
+        <Icon size={16} className="mr-2" />
+        <span className="font-medium text-sm">{title}</span>
+        {status && <span className={`ml-auto text-[10px] px-2 py-0.5 rounded-full font-semibold ${statusClass}`}>{statusText || status}</span>}
+      </div>
+      <div className="p-3">
+        {children}
+      </div>
     </div>
-    <div className="p-3">
-      {children}
-    </div>
-  </div>
-);
+  );
+};
 
 const MediaPreview = ({ type, url, fileName }) => {
   if (!type || type === 'none' || !url) return null;
@@ -80,6 +91,7 @@ const TriggerNode = ({ data, selected }) => {
       title="WhatsApp Incoming"
       icon={MessageSquare}
       colorClass="bg-green-600"
+      status={data.nodeStatus}
     >
       <div className="text-xs text-slate-600 mb-2">
         {data.label || 'WhatsApp Keyword Trigger'}
@@ -103,7 +115,7 @@ const TemplateNode = ({ data, selected }) => {
   const buttons = data.buttons || [];
 
   return (
-    <NodeWrapper selected={selected} title="Send Template" icon={MessageSquare} colorClass="bg-green-600">
+    <NodeWrapper selected={selected} title="Send Template" icon={MessageSquare} colorClass="bg-green-600" status={data.nodeStatus}>
       <MediaPreview type={data.headerType} url={data.headerUrl} fileName={data.headerFileName} />
       <div className="text-xs text-slate-600 mb-2 font-medium">Template: <span className="text-green-700">{data.template || 'Select...'}</span></div>
 
@@ -156,7 +168,7 @@ const DelayNode = ({ data, selected }) => {
   }
 
   return (
-    <NodeWrapper selected={selected} title="Time Delay" icon={Clock} colorClass="bg-orange-500">
+    <NodeWrapper selected={selected} title="Time Delay" icon={Clock} colorClass="bg-orange-500" status={data.nodeStatus}>
       <div className="text-xs text-slate-600"><b>{summary}</b></div>
       <Handle type="target" position={Position.Top} className="w-3 h-3 bg-slate-400" />
       <Handle type="source" position={Position.Bottom} className="w-3 h-3 bg-slate-400" />
@@ -166,7 +178,7 @@ const DelayNode = ({ data, selected }) => {
 
 const ConditionNode = ({ data, selected }) => {
   return (
-    <NodeWrapper selected={selected} title="Condition" icon={GitBranch} colorClass="bg-blue-600">
+    <NodeWrapper selected={selected} title="Condition" icon={GitBranch} colorClass="bg-blue-600" status={data.nodeStatus}>
       <div className="text-xs text-slate-600 mb-2">{data.condition || 'Configure condition'}</div>
       <div className="flex justify-between text-[10px] font-bold text-slate-500 px-1">
         <span>YES</span>
@@ -183,7 +195,7 @@ const AttributeConditionNode = ({ data, selected }) => {
   const groups = Array.isArray(data.groups) ? data.groups : [];
   const total = groups.length + 1;
   return (
-    <NodeWrapper selected={selected} title="Custom Attributes" icon={GitBranch} colorClass="bg-violet-600">
+    <NodeWrapper selected={selected} title="Custom Attributes" icon={GitBranch} colorClass="bg-violet-600" status={data.nodeStatus}>
       <div className="text-xs text-slate-600 mb-2">Groups: {groups.length} • Default route</div>
       <Handle type="target" position={Position.Top} className="w-3 h-3 bg-slate-400" />
       {groups.map((g, idx) => (
@@ -209,7 +221,7 @@ const AttributeConditionNode = ({ data, selected }) => {
 
 const SendMessageNode = ({ data, selected }) => {
   return (
-    <NodeWrapper selected={selected} title="Send Message" icon={MessageCircle} colorClass="bg-teal-500">
+    <NodeWrapper selected={selected} title="Send Message" icon={MessageCircle} colorClass="bg-teal-500" status={data.nodeStatus}>
       <div className="text-xs text-slate-600 mb-2 truncate max-w-[180px]">{data.message || 'Enter message...'}</div>
       <Handle type="target" position={Position.Top} className="w-3 h-3 bg-slate-400" />
       <Handle type="source" position={Position.Bottom} className="w-3 h-3 bg-slate-400" />
@@ -222,7 +234,7 @@ const ResponseMessageNode = ({ data, selected }) => {
   const hasMedia = data.headerType && data.headerType !== 'none';
 
   return (
-    <NodeWrapper selected={selected} title="Response Message" icon={MessageSquare} colorClass="bg-teal-600">
+    <NodeWrapper selected={selected} title="Response Message" icon={MessageSquare} colorClass="bg-teal-600" status={data.nodeStatus}>
       <MediaPreview type={data.headerType} url={data.headerUrl} fileName={data.headerFileName} />
       <div className="text-xs text-slate-600 mb-2 whitespace-pre-wrap break-words leading-relaxed">
         {data.message || 'Enter message...'}
@@ -272,7 +284,7 @@ const FeedbackNode = ({ data, selected }) => {
   };
 
   return (
-    <NodeWrapper selected={selected} title="Feedback" icon={Star} colorClass="bg-yellow-600">
+    <NodeWrapper selected={selected} title="Feedback" icon={Star} colorClass="bg-yellow-600" status={data.nodeStatus}>
       <div className="text-[10px] text-slate-600 mb-2 italic line-clamp-2">
         "{data.question || 'Your feedback matters! Please rate this chat on scale of 1-5'}"
       </div>
@@ -292,7 +304,7 @@ const FeedbackNode = ({ data, selected }) => {
 const PaymentRequestNode = ({ data, selected }) => {
   const type = data.requestType || 'course';
   return (
-    <NodeWrapper selected={selected} title="Payment Request" icon={CreditCard} colorClass="bg-indigo-600">
+    <NodeWrapper selected={selected} title="Payment Request" icon={CreditCard} colorClass="bg-indigo-600" status={data.nodeStatus}>
       <div className="bg-slate-50 -mx-3 -mb-3 p-3 rounded-b-xl border-t border-slate-100">
         <div className="text-[9px] font-black text-indigo-500 uppercase tracking-tighter mb-1 border-b border-indigo-100 pb-1">
           {data.headerText || 'Secure Payment'}
@@ -326,7 +338,7 @@ const PaymentRequestNode = ({ data, selected }) => {
 };
 
 const PaymentReminderNode = ({ data, selected }) => (
-  <NodeWrapper selected={selected} title="Payment Reminder" icon={BellRing} colorClass="bg-orange-500">
+  <NodeWrapper selected={selected} title="Payment Reminder" icon={BellRing} colorClass="bg-orange-500" status={data.nodeStatus}>
     <div className="space-y-1">
       <div className="text-[10px] text-slate-500 flex items-center gap-1">
         <Clock size={10} />
@@ -347,7 +359,7 @@ const PaymentReminderNode = ({ data, selected }) => (
 
 const CustomCodeNode = ({ data, selected }) => {
   return (
-    <NodeWrapper selected={selected} title="Custom Code" icon={Code} colorClass="bg-gray-800">
+    <NodeWrapper selected={selected} title="Custom Code" icon={Code} colorClass="bg-gray-800" status={data.nodeStatus}>
       <div className="text-xs text-slate-600 mb-2 font-mono truncate max-w-[180px]">{data.code || '// Enter code...'}</div>
       <Handle type="target" position={Position.Top} className="w-3 h-3 bg-slate-400" />
       <Handle type="source" position={Position.Bottom} className="w-3 h-3 bg-slate-400" />
@@ -361,13 +373,15 @@ const ActionNode = ({ data, selected }) => {
   const isVar = data.actionType === 'set_variable';
   const isWorkflow = data.actionType === 'start_workflow';
   const isStatus = data.actionType === 'update_chat_status';
+    const isLeadStage = data.actionType === 'update_lead_stage';
 
   return (
     <NodeWrapper
       selected={selected}
       title="Action"
-      icon={isAssign ? UserCheck : isWorkflow ? WorkflowIcon : isTag ? Tag : Plus}
+        icon={isLeadStage ? ListChecks : isAssign ? UserCheck : isWorkflow ? WorkflowIcon : isTag ? Tag : Plus}
       colorClass="bg-indigo-600"
+      status={data.nodeStatus}
     >
       <div className="text-xs text-slate-600 font-medium mb-1">
         {data.actionType === 'assign_agent'
@@ -382,6 +396,8 @@ const ActionNode = ({ data, selected }) => {
                   ? 'Start Workflow'
                   : data.actionType === 'update_chat_status'
                     ? 'Update Chat Status'
+                    : data.actionType === 'update_lead_stage'
+                      ? 'Update Lead Stage'
                     : 'Action'}
       </div>
       <div className="text-xs text-slate-500 truncate max-w-[180px]">
@@ -391,6 +407,8 @@ const ActionNode = ({ data, selected }) => {
             ? data.targetWorkflowName || 'Select workflow...'
             : isStatus
               ? data.actionValue || 'open'
+            : isLeadStage
+              ? data.leadStageName || 'Select stage...'
               : data.actionValue || 'Configure...'}
       </div>
       <Handle type="target" position={Position.Top} className="w-3 h-3 bg-slate-400" />
@@ -401,7 +419,7 @@ const ActionNode = ({ data, selected }) => {
 
 const NotificationNode = ({ data, selected }) => {
   return (
-    <NodeWrapper selected={selected} title="Internal Alert" icon={Bell} colorClass="bg-orange-500">
+    <NodeWrapper selected={selected} title="Internal Alert" icon={Bell} colorClass="bg-orange-500" status={data.nodeStatus}>
       <div className="text-xs text-slate-500 font-medium mb-1 truncate max-w-[180px]">
         {data.message || 'Configure internal alert...'}
       </div>
@@ -413,7 +431,7 @@ const NotificationNode = ({ data, selected }) => {
 
 const EndNode = ({ data, selected }) => {
   return (
-    <NodeWrapper selected={selected} title="End" icon={StopCircle} colorClass="bg-slate-600">
+    <NodeWrapper selected={selected} title="End" icon={StopCircle} colorClass="bg-slate-600" status={data.nodeStatus}>
       <div className="text-xs text-slate-600">End Workflow</div>
       <Handle type="target" position={Position.Top} className="w-3 h-3 bg-slate-400" />
     </NodeWrapper>
@@ -421,7 +439,7 @@ const EndNode = ({ data, selected }) => {
 };
 
 const CampaignTriggerNode = ({ data, selected }) => (
-  <NodeWrapper selected={selected} title="Campaign Sent" icon={Megaphone} colorClass="bg-purple-600">
+  <NodeWrapper selected={selected} title="Campaign Sent" icon={Megaphone} colorClass="bg-purple-600" status={data.nodeStatus}>
     <div className="text-xs text-slate-600 mb-1">
       Campaign: <b>{data.campaignName || 'Select campaign...'}</b>
     </div>
@@ -444,7 +462,7 @@ const CampaignConditionNode = ({ data, selected }) => {
   ];
   const count = conditions.length;
   return (
-    <NodeWrapper selected={selected} title="Campaign Condition" icon={Filter} colorClass="bg-violet-600">
+    <NodeWrapper selected={selected} title="Campaign Condition" icon={Filter} colorClass="bg-violet-600" status={data.nodeStatus}>
       <div className="text-xs text-slate-500 mb-1.5">{timeLabel}</div>
       <div className="space-y-1 mb-3">
         {conditions.map((cond, i) => (
@@ -470,7 +488,7 @@ const CampaignConditionNode = ({ data, selected }) => {
 const IncomingWebhookNode = ({ data, selected }) => {
   const paramCount = data.paramMapping ? Object.keys(data.paramMapping).length : 0;
   return (
-    <NodeWrapper selected={selected} title="Incoming Webhook" icon={Link} colorClass="bg-cyan-600">
+    <NodeWrapper selected={selected} title="Incoming Webhook" icon={Link} colorClass="bg-cyan-600" status={data.nodeStatus}>
       <div className="text-xs text-slate-500 mb-1">Trigger: any HTTP POST</div>
       {paramCount > 0 && (
         <div className="text-[11px] bg-cyan-50 border border-cyan-100 rounded px-2 py-1 text-cyan-700">
@@ -496,7 +514,7 @@ const NewContactCreatedNode = ({ data, selected }) => {
     ? Object.values(data.fieldMapping).filter(Boolean).length
     : NEW_CONTACT_FIELDS.length;
   return (
-    <NodeWrapper selected={selected} title="New Contact Created" icon={UserCheck} colorClass="bg-emerald-600">
+    <NodeWrapper selected={selected} title="New Contact Created" icon={UserCheck} colorClass="bg-emerald-600" status={data.nodeStatus}>
       <div className="text-xs text-slate-500 mb-1">Trigger: contact is created</div>
       <div className="text-[11px] bg-emerald-50 border border-emerald-100 rounded px-2 py-1 text-emerald-700">
         {mappedCount} field{mappedCount !== 1 ? 's' : ''} mapped
@@ -934,6 +952,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
   const [draggingNodeId, setDraggingNodeId] = useState(null);
   const [expandedNodeId, setExpandedNodeId] = useState(null);
   const [branchTarget, setBranchTarget] = useState(null);
+  const [socket, setSocket] = useState(null);
 
   // Test/Run State
   const [isRunModalOpen, setIsRunModalOpen] = useState(false);
@@ -975,6 +994,62 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
       document.head.appendChild(styleEl);
     }
   }, []);
+
+  React.useEffect(() => {
+    const s = connectSocket({ userId: null, teamIds: [] });
+    setSocket(s);
+    const wfId = initialWorkflow?.id;
+    const onStart = (ev) => {
+      if (ev.workflowId !== wfId) return;
+      setNodes((nds) => nds.map((n) => ({ ...n, data: { ...n.data, nodeStatus: undefined } })));
+      setIsRunning(true);
+    };
+    const onStepStart = (ev) => {
+      if (ev.workflowId !== wfId) return;
+      setNodes((nds) =>
+        nds.map((n) => (n.id === ev.nodeId ? { ...n, data: { ...n.data, nodeStatus: 'running' } } : n))
+      );
+    };
+    const onStepWait = (ev) => {
+      if (ev.workflowId !== wfId) return;
+      setNodes((nds) =>
+        nds.map((n) => (n.id === ev.nodeId ? { ...n, data: { ...n.data, nodeStatus: 'waiting' } } : n))
+      );
+    };
+    const onStepComplete = (ev) => {
+      if (ev.workflowId !== wfId) return;
+      setNodes((nds) =>
+        nds.map((n) => (n.id === ev.nodeId ? { ...n, data: { ...n.data, nodeStatus: 'completed' } } : n))
+      );
+    };
+    const onStepError = (ev) => {
+      if (ev.workflowId !== wfId) return;
+      setNodes((nds) =>
+        nds.map((n) => (n.id === ev.nodeId ? { ...n, data: { ...n.data, nodeStatus: 'error' } } : n))
+      );
+    };
+    const onComplete = (ev) => {
+      if (ev.workflowId !== wfId) return;
+      setIsRunning(false);
+    };
+    s.on('workflow:run:start', onStart);
+    s.on('workflow:step:start', onStepStart);
+    s.on('workflow:step:wait', onStepWait);
+    s.on('workflow:step:complete', onStepComplete);
+    s.on('workflow:step:error', onStepError);
+    s.on('workflow:run:complete', onComplete);
+    return () => {
+      try {
+        s.off('workflow:run:start', onStart);
+        s.off('workflow:step:start', onStepStart);
+        s.off('workflow:step:wait', onStepWait);
+        s.off('workflow:step:complete', onStepComplete);
+        s.off('workflow:step:error', onStepError);
+        s.off('workflow:run:complete', onComplete);
+        s.disconnect();
+      } catch {}
+    };
+  }, [initialWorkflow, setNodes]);
 
   React.useEffect(() => {
     const fetchTemplates = async () => {
@@ -1086,6 +1161,24 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
     fetchEmailTemplates();
   }, []);
 
+  const [availableLeadStages, setAvailableLeadStages] = useState([]);
+  const [loadingLeadStages, setLoadingLeadStages] = useState(false);
+  React.useEffect(() => {
+    const fetchLeadStages = async () => {
+      setLoadingLeadStages(true);
+      try {
+        const res = await getLeadStages();
+        if (res && Array.isArray(res.stages)) setAvailableLeadStages(res.stages);
+        else setAvailableLeadStages([]);
+      } catch (e) {
+        console.error('Failed to load lead stages:', e);
+        setAvailableLeadStages([]);
+      } finally {
+        setLoadingLeadStages(false);
+      }
+    };
+    fetchLeadStages();
+  }, []);
   const handleAddNotificationAction = useCallback(() => {
     const newNode = {
       id: `notification_${Math.random().toString(36).substr(2, 9)}`,
@@ -1137,6 +1230,10 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
         }
         if (actionType === 'add_to_label') {
           newNode.data.actionValue = '';
+        }
+        if (actionType === 'update_lead_stage') {
+          newNode.data.actionValue = '';
+          newNode.data.leadStageName = '';
         }
         if (actionType === 'start_workflow') {
           newNode.data.actionValue = '';
@@ -1565,6 +1662,10 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
           }
           if (actionType === 'add_to_label') {
             data.actionValue = '';
+          }
+          if (actionType === 'update_lead_stage') {
+            data.actionValue = '';
+            data.leadStageName = '';
           }
           if (actionType === 'send_email') {
             data.actionValue = '';
@@ -2662,6 +2763,27 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
             {viewMode === 'canvas' && (
               <div className="pt-3 pb-1">
                 <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">System Actions</h3>
+              </div>
+            )}
+            {viewMode === 'canvas' && (
+              <div
+                className="flex items-center gap-3 p-3 rounded-md bg-slate-50 border border-slate-200 cursor-pointer hover:bg-slate-100 transition-colors"
+                draggable
+                onDragStart={(e) => {
+                    e.dataTransfer.setData('application/reactflow', 'action');
+                    e.dataTransfer.setData('application/actiontype', 'update_lead_stage');
+                    e.dataTransfer.effectAllowed = 'move';
+                }}
+                onClick={() => handleAddNodeFromPalette('action', 'update_lead_stage')}
+                title="Update the conversation's lead stage"
+              >
+                <div className="w-9 h-9 rounded-md bg-slate-700 flex items-center justify-center shrink-0">
+                  <ListChecks size={16} className="text-white" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-slate-800">Update Lead Stage</div>
+                  <div className="text-xs text-slate-600">Set to New/Contacted/Enrolled...</div>
+                </div>
               </div>
             )}
 
@@ -5004,7 +5126,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
               {selectedNode.type === 'action' && (
                 <div className="space-y-3">
                   {/* Hide redundant dropdown if actionType is already specific */}
-                  {['assign_agent', 'update_chat_status', 'add_to_label', 'send_email', 'send_sms_otp', 'start_workflow'].includes(selectedNode.data.actionType) ? (
+                  {['assign_agent', 'update_chat_status', 'add_to_label', 'send_email', 'send_sms_otp', 'start_workflow', 'update_lead_stage'].includes(selectedNode.data.actionType) ? (
                     <div className="space-y-1 pb-2 border-b border-slate-100">
                       <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide">Action Type</label>
                       <div className="text-sm font-semibold text-slate-800 flex items-center gap-2">
@@ -5014,6 +5136,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                         {selectedNode.data.actionType === 'send_email' && <Mail size={16} className="text-blue-600" />}
                         {selectedNode.data.actionType === 'send_sms_otp' && <MessageSquare size={16} className="text-fuchsia-600" />}
                         {selectedNode.data.actionType === 'start_workflow' && <WorkflowIcon size={16} className="text-indigo-600" />}
+                        {selectedNode.data.actionType === 'update_lead_stage' && <ListChecks size={16} className="text-slate-700" />}
                         {selectedNode.data.actionType === 'assign_agent'
                           ? 'Assign Agent'
                           : selectedNode.data.actionType === 'update_chat_status'
@@ -5024,7 +5147,9 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                                 ? 'Send Email'
                                 : selectedNode.data.actionType === 'send_sms_otp'
                                   ? 'Send SMS OTP'
-                                  : 'Start Workflow'}
+                                  : selectedNode.data.actionType === 'update_lead_stage'
+                                    ? 'Update Lead Stage'
+                                    : 'Start Workflow'}
                       </div>
                     </div>
                   ) : (
@@ -5059,6 +5184,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                         <option value="send_email">Send Email</option>
                         <option value="send_sms_otp">Send SMS OTP</option>
                         <option value="update_chat_status">Update Chat Status</option>
+                        <option value="update_lead_stage">Update Lead Stage</option>
                       </select>
                     </>
                   )}
@@ -5346,6 +5472,30 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                           onChange={(e) => updateNodeData('saveVariable', e.target.value)}
                         />
                       </div>
+                    </div>
+                  ) : selectedNode.data.actionType === 'update_lead_stage' ? (
+                    <div className="space-y-1">
+                      <label className="text-xs text-slate-500">Lead Stage</label>
+                      <select
+                        className="w-full border border-slate-300 rounded-md p-2 text-sm"
+                        value={selectedNode.data.actionValue || ''}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          const st = availableLeadStages.find((s) => String(s.id) === String(value));
+                          updateNodeFields(selectedNode.id, {
+                            actionValue: value,
+                            leadStageName: st ? st.name : '',
+                          });
+                        }}
+                      >
+                        <option value="">Select stage...</option>
+                        {availableLeadStages.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.name}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-[10px] text-slate-500">Updates this conversation's lead stage.</p>
                     </div>
                   ) : selectedNode.data.actionType === 'update_chat_status' ? (
                     <div className="space-y-1">
