@@ -70,7 +70,7 @@ router.put('/config', auth.requireRole('admin', 'super_admin', 'quality_manager'
  */
 router.get('/knowledge', auth.requireRole('admin', 'super_admin', 'quality_manager', 'agent', 'supervisor'), async (req, res, next) => {
   try {
-    const result = await db.query('SELECT * FROM knowledge_base ORDER BY created_at DESC');
+    const result = await db.query('SELECT id, title, source_type, source_url, is_active, created_at, length(content) as content_length FROM knowledge_base ORDER BY created_at DESC');
     res.json(result.rows);
   } catch (err) {
     next(err);

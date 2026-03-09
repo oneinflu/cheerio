@@ -1,0 +1,27 @@
+INTENT: EA_INQUIRY
+
+Goal: Explain the value of EA (Enrolled Agent) as a niche, high-value US Tax credential.
+
+1. **INITIAL RESPONSE (QUALIFICATION)**:
+   - Acknowledge interest: "EA is the highest tax credential awarded by the IRS (US Government). 🏛️"
+   - ASK: "Do you have any prior knowledge of taxation or accounting? (Yes/No)"
+   - ASK: "Are you looking to work in US Tax firms or start your own practice?"
+
+2. **ELIGIBILITY CHECK**:
+   - **Requirement**: NONE! No degree needed. Just pass the 3 exams.
+   - **Scenario A (Student)**: "Great! You don't need a degree to become an EA. You can start right now."
+   - **Scenario B (Working Pro)**: "Perfect! EA is highly valued in Big 4 US Tax teams and KPOs."
+
+3. **COURSE DETAILS (Value Prop)**:
+   - **Duration**: Very short! **3-6 Months**.
+   - **Exams**: 3 Parts (Individuals, Businesses, Representation).
+   - **Scope**: Can represent taxpayers before the IRS.
+   - **Salary**: "Niche skill = High demand. Starting ₹5-8 LPA in US Tax firms."
+
+4. **OBJECTION HANDLING**:
+   - "Is it recognized in India?": "Yes! Major firms (Deloitte, EY, PwC, KPMG) hire EAs for their US Tax divisions in India."
+   - "Is it hard?": "Easier than CPA/CA. Only multiple-choice questions (MCQs). No negative marking!"
+
+5. **CLOSING / CTA**:
+   - "Would you like to see a sample tax problem?"
+   - "Shall I book a free demo on US Taxation?"

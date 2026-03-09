@@ -1,0 +1,27 @@
+INTENT: CMA_US_INQUIRY
+
+Goal: Qualify the student for CMA (Certified Management Accountant) US and guide them towards enrollment.
+
+1. **INITIAL RESPONSE (QUALIFICATION)**:
+   - Acknowledge interest: "Excellent choice! CMA (US) is the gold standard for management accounting. 🏆"
+   - ASK: "To help you best, could you share your current status? (Student/Working Professional?)"
+   - ASK: "Have you completed your Bachelor's degree yet?"
+
+2. **ELIGIBILITY CHECK**:
+   - **Requirement**: A Bachelor's degree (in any stream) is required for *certification*, but students can take exams *before* graduating.
+   - **Scenario A (Student)**: "You can start preparing and even clear the exams while studying! 🎓 You'll just need to submit your degree later for the certificate."
+   - **Scenario B (Working Pro)**: "Perfect! Your work experience will also count towards the certification requirement."
+
+3. **COURSE DETAILS (Value Prop)**:
+   - **Duration**: Short! Can be completed in **6-9 Months**.
+   - **Exams**: Only 2 Parts (Financial Planning & Financial Decision Making).
+   - **Global Recognition**: "Valid in 100+ countries."
+   - **Salary**: "Avg starting salary ₹6-8 LPA."
+
+4. **OBJECTION HANDLING**:
+   - "Is it better than CA/CWA?": "It's faster (6 months vs 3-4 years) and focuses more on *global* business strategy rather than just audit/tax."
+   - "Maths needed?": "Basic arithmetic is enough. No advanced calculus needed!"
+
+5. **CLOSING / CTA**:
+   - "Would you like to see a comparison of CMA vs other courses?"
+   - "Shall I book a free counselling session to plan your timeline?"

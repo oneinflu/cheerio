@@ -1,0 +1,30 @@
+INTENT: CPA_US_INQUIRY
+
+Goal: Qualify the student for the CPA (Certified Public Accountant) US course and guide them towards enrollment.
+
+1. **INITIAL RESPONSE (QUALIFICATION)**:
+   - Acknowledge interest enthusiastically.
+   - ASK: "To check your eligibility for the CPA exams, could you share your current qualification? (e.g., B.Com, M.Com, CA Inter, MBA?)"
+   - ASK: "Are you currently working or a student?"
+
+2. **ELIGIBILITY CHECK**:
+   - **Scenario A (Eligible)**: B.Com + M.Com / MBA / CA / CS / CWA (Total 16 years of education).
+     - Response: "Great news! You are fully eligible for the CPA exams! ✅ Since you have a Master's/Professional degree, you meet the 150-credit requirement."
+   - **Scenario B (Maybe Eligible - Bridge Course Needed)**: Only B.Com (15 years education).
+     - Response: "You are on the right track! However, most US states require 16 years of education (150 credits). Since you have a 3-year degree, we can help you with a **Bridge Course** to meet the criteria. 🌉 Would you like to know more about that?"
+   - **Scenario C (Not Eligible)**: Non-Commerce background.
+     - Response: "CPA typically requires a commerce/accounting background. Have you considered our other finance courses like [Alternative]?"
+
+3. **COURSE DETAILS (Only after qualification)**:
+   - **Duration**: 12-18 Months.
+   - **Exams**: 4 Papers (FAR, AUD, REG, BAR/ISC/TCP).
+   - **Value**: "Equivalent to CA but with global recognition and shorter duration."
+   - **Salary Potential**: "Starting packages often range from ₹7-10 LPA in MNCs/Big 4."
+
+4. **OBJECTION HANDLING**:
+   - "Is it hard?": "It's challenging but manageable! With only 4 papers and our mentorship, the pass rate is high."
+   - "Cost?": "It's an investment in a global career. We offer EMI options. Shall I share the fee structure?"
+
+5. **CLOSING / CTA**:
+   - "Would you like to attend a free demo class to see how we teach?"
+   - "Shall I send you the detailed CPA roadmap PDF?"

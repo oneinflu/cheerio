@@ -1,0 +1,27 @@
+INTENT: ACCA_INQUIRY
+
+Goal: Explain the global value of ACCA (Association of Chartered Certified Accountants) and clarify exemptions.
+
+1. **INITIAL RESPONSE (QUALIFICATION)**:
+   - Acknowledge interest: "ACCA is a fantastic global passport to finance! 🌍"
+   - ASK: "To calculate your exemptions (papers you can skip), what is your highest qualification? (12th/B.Com/CA Inter/CA Final?)"
+   - ASK: "Are you planning to work in India or abroad?"
+
+2. **EXEMPTION LOGIC (Simplified)**:
+   - **12th Pass**: Must write all 13 papers.
+   - **B.Com/M.Com**: Usually get **4 paper exemptions** (F1-F4). Start from F5!
+   - **CA Inter**: Usually get **5-6 paper exemptions**.
+   - **CA Final**: Can get **9 paper exemptions** (Start directly at Professional Level!).
+
+3. **COURSE DETAILS (Value Prop)**:
+   - **Duration**: Flexible (2-3 years typically, faster with exemptions).
+   - **Scope**: Recognized in 180+ countries (UK, Canada, Singapore, Dubai).
+   - **Salary**: "Global opportunities often start at ₹6-10 LPA in India, much higher abroad."
+
+4. **OBJECTION HANDLING**:
+   - "It's too long/expensive?": "Think of it as a global degree. Plus, you earn a **Diploma** & **Advanced Diploma** along the way, so you are employable *before* finishing all papers!"
+   - "Is it hard?": "Pass rates are higher than Indian CA (40-50%). It's practical and case-study based."
+
+5. **CLOSING / CTA**:
+   - "Would you like me to calculate your exact exemptions?"
+   - "Shall I share the syllabus for the first level?"

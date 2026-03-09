@@ -88,19 +88,46 @@ async function handleIncomingMessage(conversationId, messageText) {
  */
 async function retrieveContext(query) {
   try {
-    // In a real implementation, generate embedding for 'query' and search 'knowledge_base'
-    // For now, we'll just fetch the most recent text content as context or do a simple ILIKE
-    // This is a placeholder for vector search.
+    // Basic Keyword Search (Better than just fetching latest)
+    // We split query into keywords and try to match content
+    const keywords = query.split(' ').filter(w => w.length > 3).map(w => `%${w}%`);
     
-    const res = await db.query(
-      `SELECT content, title FROM knowledge_base 
-       WHERE is_active = true 
-       ORDER BY created_at DESC LIMIT 3`
-    );
+    let res;
+    if (keywords.length > 0) {
+        // Construct dynamic ILIKE query
+        const conditions = keywords.map((_, i) => `content ILIKE $${i + 1}`).join(' OR ');
+        res = await db.query(
+            `SELECT content, title, source_url FROM knowledge_base 
+             WHERE is_active = true AND (${conditions})
+             ORDER BY created_at DESC LIMIT 3`,
+            keywords
+        );
+    } else {
+        // Fallback to latest
+        res = await db.query(
+            `SELECT content, title, source_url FROM knowledge_base 
+             WHERE is_active = true 
+             ORDER BY created_at DESC LIMIT 3`
+        );
+    }
     
+    // If keyword search fails, fetch *everything* (up to a limit) to ensure we have context
+    // This is crucial for small knowledge bases where "latest" might not be relevant
+    if (res.rows.length === 0) {
+        res = await db.query(
+            `SELECT content, title, source_url FROM knowledge_base 
+             WHERE is_active = true 
+             ORDER BY created_at DESC LIMIT 5`
+        );
+    }
+
     if (res.rows.length === 0) return '';
 
-    return res.rows.map(row => `[Source: ${row.title}]\n${row.content?.substring(0, 500)}...`).join('\n\n');
+    return res.rows.map(row => {
+        // Truncate very long content to fit context window
+        const snippet = row.content ? row.content.substring(0, 3000) : ''; 
+        return `[Source: ${row.title} (${row.source_url || 'Upload'})]\n${snippet}...`;
+    }).join('\n\n');
   } catch (e) {
     console.error('[AI Agent] Retrieval error:', e);
     return '';
