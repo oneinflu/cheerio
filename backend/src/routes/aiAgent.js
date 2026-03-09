@@ -12,7 +12,7 @@ const upload = multer({ storage: multer.memoryStorage() });
  * GET /api/ai-agent/config
  * Get current AI configuration
  */
-router.get('/config', auth.requireRole('admin', 'super_admin'), async (req, res, next) => {
+router.get('/config', auth.requireRole('admin', 'super_admin', 'quality_manager', 'agent', 'supervisor'), async (req, res, next) => {
   try {
     const result = await db.query('SELECT * FROM ai_agent_config LIMIT 1');
     if (result.rows.length === 0) {
@@ -30,7 +30,7 @@ router.get('/config', auth.requireRole('admin', 'super_admin'), async (req, res,
  * PUT /api/ai-agent/config
  * Update AI configuration (status, prompt, model)
  */
-router.put('/config', auth.requireRole('admin', 'super_admin'), async (req, res, next) => {
+router.put('/config', auth.requireRole('admin', 'super_admin', 'quality_manager', 'agent', 'supervisor'), async (req, res, next) => {
   try {
     const { is_active, system_prompt, model_name, temperature } = req.body;
     
@@ -68,7 +68,7 @@ router.put('/config', auth.requireRole('admin', 'super_admin'), async (req, res,
  * GET /api/ai-agent/knowledge
  * List all knowledge sources
  */
-router.get('/knowledge', auth.requireRole('admin', 'super_admin'), async (req, res, next) => {
+router.get('/knowledge', auth.requireRole('admin', 'super_admin', 'quality_manager', 'agent', 'supervisor'), async (req, res, next) => {
   try {
     const result = await db.query('SELECT * FROM knowledge_base ORDER BY created_at DESC');
     res.json(result.rows);
@@ -83,7 +83,7 @@ const aiService = require('../services/aiService');
  * POST /api/ai-agent/test
  * Test the AI with a message (supports streaming)
  */
-router.post('/test', auth.requireRole('admin', 'super_admin'), async (req, res, next) => {
+router.post('/test', auth.requireRole('admin', 'super_admin', 'quality_manager', 'agent', 'supervisor'), async (req, res, next) => {
   try {
     const { message, stream } = req.body;
     if (!message) return res.status(400).json({ error: 'Message is required' });
@@ -143,7 +143,7 @@ router.post('/test', auth.requireRole('admin', 'super_admin'), async (req, res, 
  * POST /api/ai-agent/knowledge/text
  * Add text content (website URL or raw text)
  */
-router.post('/knowledge/text', auth.requireRole('admin', 'super_admin'), async (req, res, next) => {
+router.post('/knowledge/text', auth.requireRole('admin', 'super_admin', 'quality_manager', 'agent', 'supervisor'), async (req, res, next) => {
   try {
     const { title, content, source_url, source_type } = req.body;
     
@@ -178,7 +178,7 @@ router.post('/knowledge/text', auth.requireRole('admin', 'super_admin'), async (
  * POST /api/ai-agent/knowledge/upload
  * Upload PDF/Document
  */
-router.post('/knowledge/upload', auth.requireRole('admin', 'super_admin'), upload.single('file'), async (req, res, next) => {
+router.post('/knowledge/upload', auth.requireRole('admin', 'super_admin', 'quality_manager', 'agent', 'supervisor'), upload.single('file'), async (req, res, next) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
     
@@ -218,7 +218,7 @@ router.post('/knowledge/upload', auth.requireRole('admin', 'super_admin'), uploa
  * DELETE /api/ai-agent/knowledge/:id
  * Remove knowledge source
  */
-router.delete('/knowledge/:id', auth.requireRole('admin', 'super_admin'), async (req, res, next) => {
+router.delete('/knowledge/:id', auth.requireRole('admin', 'super_admin', 'quality_manager', 'agent', 'supervisor'), async (req, res, next) => {
   try {
     const { id } = req.params;
     await db.query('DELETE FROM knowledge_base WHERE id = $1', [id]);
