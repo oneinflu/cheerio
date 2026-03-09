@@ -10,6 +10,7 @@ import {
   updateWorkflow,
   deleteWorkflow,
   deleteLeadStage,
+  createLeadStage,
 } from '../api';
 import { Plus, X, GripVertical, MoreHorizontal } from 'lucide-react';
 
@@ -82,7 +83,79 @@ function CreateWorkflowModal({ isOpen, onClose, onSubmit, stageName }) {
   );
 }
 
-export default function WorkflowsKanban({ currentUser, onOpenBuilder, onOpenSettings }) {
+function CreateStageModal({ isOpen, onClose, onSubmit }) {
+  const [name, setName] = useState('');
+  const [color, setColor] = useState('#0f172a');
+  const [isClosed, setIsClosed] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  if (!isOpen) return null;
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+    setLoading(true);
+    try {
+      await onSubmit({ name: name.trim(), color: color || null, is_closed: isClosed });
+      setName('');
+      setColor('#0f172a');
+      setIsClosed(false);
+      onClose();
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all scale-100">
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+          <h3 className="text-lg font-semibold text-slate-900">Create Stage</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">
+            <X size={20} />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Stage name</label>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. New, Contacted, Qualified"
+              autoFocus
+              className="w-full"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Color</label>
+            <input
+              type="color"
+              className="h-10 w-16 p-0 border border-slate-200 rounded"
+              value={color}
+              onChange={(e) => setColor(e.target.value)}
+            />
+          </div>
+          <label className="flex items-center gap-2 text-sm text-slate-700">
+            <input type="checkbox" checked={isClosed} onChange={(e) => setIsClosed(e.target.checked)} />
+            Closed stage
+          </label>
+          <div className="flex justify-end gap-3 pt-2">
+            <Button type="button" variant="ghost" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={!name.trim() || loading}>
+              {loading ? 'Creating...' : 'Create Stage'}
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+export default function WorkflowsKanban({ currentUser, onOpenBuilder }) {
   const teamId = useMemo(() => {
     if (!currentUser) return null;
     const ids = currentUser.teamIds || [];
@@ -94,6 +167,7 @@ export default function WorkflowsKanban({ currentUser, onOpenBuilder, onOpenSett
   const [error, setError] = useState(null);
   const [dragItem, setDragItem] = useState(null);
   const [createModal, setCreateModal] = useState({ isOpen: false, stageId: null, stageName: null });
+  const [isStageModalOpen, setIsStageModalOpen] = useState(false);
   const [openStageMenuId, setOpenStageMenuId] = useState(null);
   const [openWorkflowMenuId, setOpenWorkflowMenuId] = useState(null);
 
@@ -194,6 +268,11 @@ export default function WorkflowsKanban({ currentUser, onOpenBuilder, onOpenSett
     }
   };
 
+  const handleCreateStageSubmit = async (payload) => {
+    await createLeadStage(payload, teamId);
+    await load();
+  };
+
   const handleToggleWorkflowStatus = async (workflowId, nextStatus) => {
     try {
       await updateWorkflow(workflowId, { status: nextStatus });
@@ -288,10 +367,10 @@ export default function WorkflowsKanban({ currentUser, onOpenBuilder, onOpenSett
                           e.preventDefault();
                           e.stopPropagation();
                           setOpenStageMenuId(null);
-                          if (onOpenSettings) onOpenSettings();
+                          setIsStageModalOpen(true);
                         }}
                       >
-                        Manage stages
+                        Add stage
                       </button>
                       <button
                         className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50"
@@ -431,7 +510,7 @@ export default function WorkflowsKanban({ currentUser, onOpenBuilder, onOpenSett
           <div className="w-80 flex-shrink-0 flex flex-col h-full opacity-60 hover:opacity-100 transition-opacity">
             <div className="h-10 mb-3"></div>
             <button 
-              onClick={() => onOpenSettings && onOpenSettings()}
+              onClick={() => setIsStageModalOpen(true)}
               className="flex-1 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 hover:bg-slate-100 hover:border-slate-400 flex flex-col items-center justify-center text-slate-500 transition-all gap-2"
             >
               <Plus size={24} />
@@ -446,6 +525,11 @@ export default function WorkflowsKanban({ currentUser, onOpenBuilder, onOpenSett
         onClose={() => setCreateModal({ ...createModal, isOpen: false })}
         onSubmit={handleCreateSubmit}
         stageName={createModal.stageName}
+      />
+      <CreateStageModal
+        isOpen={isStageModalOpen}
+        onClose={() => setIsStageModalOpen(false)}
+        onSubmit={handleCreateStageSubmit}
       />
     </div>
   );

@@ -903,7 +903,6 @@ export default function App() {
             <WorkflowsKanban
               currentUser={currentUser}
               onOpenBuilder={(wf) => setEditingWorkflow(wf)}
-              onOpenSettings={() => setActivePage('settings')}
             />
           )
         )}
