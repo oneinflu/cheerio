@@ -19,6 +19,7 @@ export default function SettingsPage({ currentUser }) {
   const [loadingStages, setLoadingStages] = useState(false);
   const [stagesError, setStagesError] = useState(null);
   const [savingStageId, setSavingStageId] = useState(null);
+  const [addingStage, setAddingStage] = useState(false);
 
   const [timezone, setTimezone] = useState('Asia/Kolkata');
   const [workingHours, setWorkingHours] = useState({
@@ -101,12 +102,20 @@ export default function SettingsPage({ currentUser }) {
   const handleAddStage = async () => {
     if (!teamId) return;
     try {
+      setAddingStage(true);
       const name = `Stage ${leadStages.length + 1}`;
       const created = await createLeadStage({ name }, teamId);
       if (created && created.id) {
         setLeadStages((prev) => [...prev, created]);
+        setStagesError(null);
+      } else {
+        setStagesError('Failed to add stage');
       }
-    } catch (err) {}
+    } catch (err) {
+      setStagesError('Failed to add stage');
+    } finally {
+      setAddingStage(false);
+    }
   };
 
   const handleStageChange = (id, field, value) => {
@@ -267,8 +276,8 @@ export default function SettingsPage({ currentUser }) {
               )}
             </div>
 
-            <Button type="button" variant="outline" size="sm" onClick={handleAddStage}>
-              Add Stage
+            <Button type="button" variant="outline" size="sm" onClick={handleAddStage} disabled={addingStage}>
+              {addingStage ? 'Adding...' : 'Add Stage'}
             </Button>
           </CardContent>
         </Card>
