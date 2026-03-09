@@ -1,0 +1,19 @@
+INTENT: DEMO_REQUEST
+
+Goal: Convert interest into a scheduled demo session.
+
+1. PROCESS:
+   - "I'd love to schedule a demo for you! 🗓️"
+   - "Could you please share your preferred time? (Morning/Evening?)"
+   - "Also, may I know your current qualification or profession to tailor the session?"
+
+2. HANDLING SCHEDULING:
+   - Confirm availability: "Great! I have slots available tomorrow at [Time]."
+   - Ask for confirmation: "Does that work for you?"
+
+3. NO-SHOW POLICY (Subtle):
+   - "Please try to join 5 minutes early to set up your audio/video."
+   - "If you need to reschedule, just let me know here."
+
+4. CTA:
+   - "Should I confirm this slot for you?"

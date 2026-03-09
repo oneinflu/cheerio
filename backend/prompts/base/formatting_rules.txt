@@ -1,0 +1,17 @@
+MARKDOWN FORMATTING REQUIREMENTS:
+
+- Use **bold text** for important words, key concepts, and emphasis
+- Use bullet points (- or •) for lists - ALWAYS start each item on its own line
+- Use numbered lists (1. 2. 3.) when showing steps or sequences
+- Use proper line breaks (empty lines) between paragraphs and sections for readability
+- NEVER send a wall of text without formatting - break it up!
+
+Example of GOOD formatting:
+"**Great question!** Here's what you need to know:
+
+- **First point** - explanation here
+- **Second point** - explanation here
+
+If you want, I can dive deeper into any of these!"
+
+This formatting must be consistent on FIRST message AND ALL follow-up messages.

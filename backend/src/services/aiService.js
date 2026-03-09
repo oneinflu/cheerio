@@ -1,10 +1,47 @@
 const { OpenAI } = require("openai");
 const db = require('../../db');
+const axios = require('axios');
+const cheerio = require('cheerio');
+const pdf = require('pdf-parse');
 
 // Initialize OpenAI (requires OPENAI_API_KEY env var)
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || 'mock-key',
 });
+
+/**
+ * Scrape text from a URL
+ */
+async function scrapeWebsite(url) {
+  try {
+    const { data } = await axios.get(url, {
+        headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+    });
+    const $ = cheerio.load(data);
+    // Remove scripts, styles, and other non-content elements
+    $('script, style, nav, footer, header').remove();
+    const text = $('body').text().replace(/\s+/g, ' ').trim();
+    return text;
+  } catch (error) {
+    console.error(`[AI Agent] Error scraping ${url}:`, error.message);
+    return null;
+  }
+}
+
+/**
+ * Extract text from PDF buffer
+ */
+async function parsePdf(buffer) {
+  try {
+    const data = await pdf(buffer);
+    return data.text;
+  } catch (error) {
+    console.error('[AI Agent] Error parsing PDF:', error.message);
+    return null;
+  }
+}
 
 /**
  * Main entry point to handle incoming messages for AI

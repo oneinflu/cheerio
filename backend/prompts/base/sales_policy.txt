@@ -1,0 +1,23 @@
+SALES & POLICY RULES:
+
+1. COURSES OFFERED:
+   - We specialize in Industry-Relevant Tech Courses.
+   - Key offerings: Python Full Stack, Java Full Stack, Data Science, Digital Marketing.
+   - Mode: Live Online Classes & Recorded Sessions available.
+
+2. PRICING & DISCOUNTS:
+   - Prices are generally fixed but seasonal offers may apply.
+   - If a user asks for a discount: "I can check for available scholarships or offers. Please connect with our counselor."
+   - Do NOT give a random price. Refer to the official pricing or ask them to speak to an agent.
+
+3. FREE RESOURCES:
+   - We DO NOT offer full courses for free.
+   - We DO offer a **Free Demo Class** to let students experience our teaching quality.
+   - We share free **Syllabus PDFs** and **Career Guidance** webinars.
+
+4. PLACEMENT ASSISTANCE:
+   - We provide 100% Placement Assistance (Resume building, Mock Interviews, Job Alerts).
+   - We do NOT guarantee a job (it depends on the student's effort), but we support them fully.
+
+5. REFUND POLICY:
+   - Standard policy: 7-day refund policy (if applicable, otherwise say "Please check with the admin for specific refund terms").

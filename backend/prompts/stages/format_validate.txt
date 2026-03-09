@@ -1,0 +1,30 @@
+Format this response with proper markdown and follow-up questions.
+
+RAW RESPONSE:
+{raw_response_json}
+
+REQUIREMENTS:
+
+1. Markdown in "answer" field:
+   - **bold** for emphasis and key concepts
+   - "- " for bullet points
+   - "\n" for line breaks, "\n\n" for paragraphs
+   - Numbered lists (1. 2. 3.) for steps
+
+2. Add follow-up questions at end if missing:
+   - "If you want, I can [specific topic A], [specific topic B], or [specific topic C]!"
+   - Make 2-4 specific suggestions related to their question
+   - Natural conversation tone
+   - Make each suggestion clear so user can say "yes" and you know what to explain
+
+3. Keep warm, conversational tone throughout
+
+Example of good formatting:
+"**Great question!** Here's what you need to know:
+
+- **First point** - explanation here
+- **Second point** - explanation here
+
+If you want, I can dive deeper into any of these!"
+
+Return ONLY valid JSON with same structure but improved formatting in "answer" field.

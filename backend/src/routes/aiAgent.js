@@ -77,6 +77,8 @@ router.get('/knowledge', auth.requireRole('admin', 'super_admin'), async (req, r
   }
 });
 
+const aiService = require('../services/aiService');
+
 /**
  * POST /api/ai-agent/knowledge/text
  * Add text content (website URL or raw text)
@@ -84,18 +86,27 @@ router.get('/knowledge', auth.requireRole('admin', 'super_admin'), async (req, r
 router.post('/knowledge/text', auth.requireRole('admin', 'super_admin'), async (req, res, next) => {
   try {
     const { title, content, source_url, source_type } = req.body;
-    if (!title || !source_type) {
-        return res.status(400).json({ error: 'Title and source_type are required' });
+    
+    let finalContent = content;
+    
+    // If it's a website, scrape it
+    if (source_type === 'website' && source_url) {
+       console.log(`[AI Agent] Scraping website: ${source_url}`);
+       const scraped = await aiService.scrapeWebsite(source_url);
+       if (scraped) {
+         finalContent = scraped;
+       } else {
+         // Fallback if scraping fails (or just store URL)
+         finalContent = `Website URL: ${source_url} (Content extraction failed)`;
+       }
     }
 
     const result = await db.query(
       `INSERT INTO knowledge_base (title, content, source_url, source_type)
        VALUES ($1, $2, $3, $4)
        RETURNING *`,
-      [title, content, source_url, source_type]
+      [title, finalContent, source_url, source_type]
     );
-    
-    // TODO: Trigger async embedding generation here
     
     res.json(result.rows[0]);
   } catch (err) {
@@ -112,17 +123,29 @@ router.post('/knowledge/upload', auth.requireRole('admin', 'super_admin'), uploa
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
     
     const { title } = req.body;
-    // In a real app, upload to S3/Cloud storage. Here we'll store small content or mock URL.
-    // For MVP, we might extract text immediately if possible, or just store metadata.
+    let extractedText = '';
+    let sourceType = 'text';
     
-    // Simulating extraction or storage
+    if (req.file.mimetype === 'application/pdf') {
+       extractedText = await aiService.parsePdf(req.file.buffer);
+       sourceType = 'pdf';
+    } else {
+       // Assume text-based
+       extractedText = req.file.buffer.toString('utf-8');
+    }
+
+    if (!extractedText || extractedText.trim().length === 0) {
+        extractedText = 'Content extraction failed or empty file.';
+    }
+
+    // In a real app, upload to S3/Cloud storage. Here we'll store extracted text.
     const fakeUrl = `uploads/${req.file.originalname}`;
     
     const result = await db.query(
       `INSERT INTO knowledge_base (title, source_url, source_type, content)
-       VALUES ($1, $2, 'pdf', 'Content extraction pending...')
+       VALUES ($1, $2, $3, $4)
        RETURNING *`,
-      [title || req.file.originalname, fakeUrl]
+      [title || req.file.originalname, fakeUrl, sourceType, extractedText]
     );
 
     res.json(result.rows[0]);

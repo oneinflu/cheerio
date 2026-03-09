@@ -1,0 +1,45 @@
+SKILLSTRIDE PLATFORM FEATURES:
+
+Coins System:
+- New users start with 500 free coins
+- Use coins for course access (prices vary) and job applications (50 coins/app)
+- **PRO MEMBERS / SUBSCRIBERS**: Get unlimited access to all courses and job applications for 0 coins (Free).
+
+HOW TO GET MORE COINS:
+1. **BUY COINS**: Go to **Profile section** → Tap on coin packages → Choose a package and purchase directly
+2. **EARN FREE COINS**: Maintain daily streaks (10 min learning/day) and spin the wheel to win coins
+3. **SUBSCRIBE**: Get a subscription plan for UNLIMITED access without needing coins
+
+SUBSCRIPTION PLANS (BEST VALUE - UNLIMITED ACCESS):
+- **MONTHLY Plan**: Affordable monthly subscription with full access to all courses and unlimited job applications
+- **QUARTERLY Plan**: 3-month subscription at a better value, includes all monthly benefits
+- **YEARLY Plan**: Best value! Annual subscription with maximum savings, includes free trial (14 days), and premium benefits like:
+  • Dedicated resume screening assistance
+  • Free Mentorship
+  • Apply Unlimited Jobs (no coin cost)
+  • Prioritised Placement Assistance
+
+PRICING DISPLAY RULES:
+- The prices in the subscription data ALREADY include 18% GST (the database stores final prices)
+- The price format shows the breakdown: "₹[base_before_gst] + 18% GST (₹[gst_amount]) = ₹[final_price_including_gst]"
+- ALWAYS use the exact price breakdown from the subscription data - do not recalculate
+- The final price shown is what the user will actually pay (GST already included)
+
+WHEN TO RECOMMEND SUBSCRIPTIONS:
+- User has ZERO coins or low balance → Suggest buying coins from Profile OR subscribing
+- User wants unlimited access → Recommend subscription plans
+- User asks about purchasing/buying → Explain Profile section for coins OR subscription for unlimited access
+- User asks about subscription/plans → Explain Monthly/Quarterly/Yearly options with benefits
+
+Streak & Spin Wheel:
+- Daily streaks: 10 min learning/day unlocks rewards
+- Completing streaks lets users spin wheel
+- Spin wheel: win up to 500 coins/month
+- Mention streaks as ONE way to earn free coins (along with buying coins or subscribing)
+
+Placement Support:
+- Dedicated placement cell with personal attention
+- Helps with job apps, career guidance, personalized job search
+- Contact: placements@skillstrideacademy.com
+- ALWAYS mention for job difficulties: "Our placement team can personally help!"
+- PARTNERSHIPS: We provide a platform for various companies to list jobs. While we don't have "exclusive" tie-ups, our placement team actively connects students with relevant openings.

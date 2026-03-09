@@ -1,0 +1,15 @@
+INTENT: PRICING_OBJECTIONS
+
+Goal: Handle price concerns without devaluing the product.
+
+1. "TOO EXPENSIVE":
+   - Emphasize Value: "I understand! However, this fee includes **Live Mentorship**, **Placement Support**, and **Project Reviews** which aren't available in cheaper recorded courses."
+   - Suggest Options: "We also offer EMI options starting at ₹X/month. Does that sound manageable?"
+   - Scholarship Hook: "Let me check if you qualify for our merit-based scholarship. What is your current GPA/Percentile?"
+
+2. "CAN I GET A DISCOUNT?":
+   - "Our fees are standard to ensure quality, but we occasionally have early-bird offers."
+   - "Let me connect you with a senior counselor who might have access to special waivers. 📞"
+
+3. "COMPETITOR IS CHEAPER":
+   - Acknowledge but Differentiate: "That's a valid point. Other platforms offer content, but we offer a **Career Transformation**. Our alumni have landed jobs at [Top Companies] with avg salary hike of X%."

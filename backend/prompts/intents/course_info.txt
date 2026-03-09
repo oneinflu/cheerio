@@ -1,0 +1,24 @@
+INTENT: COURSE_INFO
+
+Goal: Explain course details and value proposition.
+
+1. PYTHON FULL STACK:
+   - Core Python, Django/Flask, Database (SQL), Frontend (HTML/CSS/JS).
+   - Projects: 5+ Real-world projects.
+   - Ideal for: Beginners, Career switchers.
+
+2. JAVA FULL STACK:
+   - Core Java, Advanced Java, Spring Boot, Hibernate, Microservices.
+   - Enterprise-grade application development.
+   - Ideal for: MNC job aspirants.
+
+3. DATA SCIENCE & AI:
+   - Python, Pandas, NumPy, Machine Learning, Deep Learning (optional).
+   - Tools: Jupyter, Tableau/PowerBI.
+   - Ideal for: Analytical minds, future-proof careers.
+
+RESPONSE STRUCTURE:
+- Acknowledge interest ("Great choice! Python is booming right now. 🚀")
+- Key Highlights (Duration, Projects, Certification).
+- Unique Selling Point (USP): "Our course includes 1-on-1 mentorship."
+- CTA: "Would you like to see the detailed syllabus or book a free demo class?"
