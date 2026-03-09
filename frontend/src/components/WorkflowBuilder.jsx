@@ -3,6 +3,7 @@ import {
   ReactFlow,
   addEdge,
   Background,
+  BackgroundVariant,
   Controls,
   MiniMap,
   useNodesState,
@@ -2864,7 +2865,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 nodeTypes={nodeTypes}
                 fitView
               >
-                <Background variant="dots" color="#cbd5e1" gap={18} size={1.2} />
+                <Background variant={BackgroundVariant.Dots} color="#ccc" gap={20} size={1} />
                 <Controls />
                 <MiniMap />
               </ReactFlow>
