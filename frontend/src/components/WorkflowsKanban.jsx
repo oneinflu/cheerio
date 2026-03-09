@@ -300,6 +300,30 @@ export default function WorkflowsKanban({ currentUser, onOpenBuilder }) {
     }
   };
 
+  const handleDuplicateWorkflow = async (stageId, workflowId) => {
+    try {
+      const wf = await getWorkflow(workflowId);
+      const steps = wf && wf.steps ? wf.steps : { nodes: [], edges: [], trigger: '' };
+      const nameBase = (wf && wf.name ? wf.name : 'Workflow').trim();
+      const copyName = `${nameBase} (Copy)`;
+      const created = await createWorkflow({
+        name: copyName,
+        description: (wf && wf.description) || '',
+        status: 'inactive',
+        steps,
+        stageId,
+      });
+      setOpenWorkflowMenuId(null);
+      await load();
+      if (created && created.id && onOpenBuilder) {
+        const createdFull = await getWorkflow(created.id);
+        if (createdFull && createdFull.id) onOpenBuilder(createdFull);
+      }
+    } catch (e) {
+      setError('Failed to duplicate workflow');
+    }
+  };
+
   if (loading && columns.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center h-full bg-slate-50">
@@ -454,6 +478,16 @@ export default function WorkflowsKanban({ currentUser, onOpenBuilder }) {
                                 }}
                               >
                                 {w.status === 'active' ? 'Deactivate' : 'Activate'}
+                              </button>
+                              <button
+                                className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  handleDuplicateWorkflow(col.stage.id, w.id);
+                                }}
+                              >
+                                Duplicate
                               </button>
                               <button
                                 className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50"
