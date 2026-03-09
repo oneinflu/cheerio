@@ -955,6 +955,27 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
   const recognitionRef = useRef(null);
 
   React.useEffect(() => {
+    let styleEl = document.getElementById('workflow-builder-reactflow-style');
+    if (!styleEl) {
+      styleEl = document.createElement('style');
+      styleEl.id = 'workflow-builder-reactflow-style';
+      styleEl.textContent = `
+        .react-flow__handle {
+          width: 14px;
+          height: 14px;
+          border: 2px solid #ffffff;
+          box-shadow: 0 2px 6px rgba(15, 23, 42, 0.25);
+        }
+        .react-flow__handle-source { background: #3b82f6; }
+        .react-flow__handle-target { background: #64748b; }
+        .react-flow__handle-connecting { background: #22c55e; }
+        .react-flow__handle-valid { background: #22c55e; }
+      `;
+      document.head.appendChild(styleEl);
+    }
+  }, []);
+
+  React.useEffect(() => {
     const fetchTemplates = async () => {
       setLoadingTemplates(true);
       try {
@@ -1116,6 +1137,10 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
         if (actionType === 'add_to_label') {
           newNode.data.actionValue = '';
         }
+        if (actionType === 'start_workflow') {
+          newNode.data.actionValue = '';
+          newNode.data.targetWorkflowName = '';
+        }
         if (actionType === 'send_email') {
           newNode.data.actionValue = '';
           newNode.data.emailTemplateId = '';
@@ -1127,6 +1152,120 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
           newNode.data.otpDigits = 6;
           newNode.data.saveVariable = 'otp';
         }
+      }
+      if (type === 'trigger') {
+        newNode.data = {
+          label: 'WhatsApp Incoming',
+          triggerType: 'incoming_whatsapp',
+          keywords: '',
+        };
+      }
+      if (type === 'campaign_trigger') {
+        newNode.data = {
+          label: 'Campaign Sent',
+          triggerType: 'campaign_sent',
+          campaignId: '',
+          campaignName: '',
+        };
+      }
+      if (type === 'incoming_webhook') {
+        newNode.data = {
+          label: 'Incoming Webhook',
+          triggerType: 'incoming_webhook',
+          paramMapping: {},
+          lastPayload: null,
+        };
+      }
+      if (type === 'new_contact') {
+        const defaultMapping = {};
+        NEW_CONTACT_FIELDS.forEach((f) => {
+          defaultMapping[f.key] = f.defaultVar;
+        });
+        newNode.data = {
+          label: 'New Contact Created',
+          triggerType: 'new_contact_created',
+          fieldMapping: defaultMapping,
+        };
+      }
+      if (type === 'send_template') {
+        newNode.data = {
+          label: 'Send Template',
+          template: '',
+          languageCode: 'en_US',
+          variables: {},
+          components: [],
+          buttons: [],
+          headerType: 'none',
+          headerUrl: '',
+          headerFileName: '',
+        };
+      }
+      if (type === 'send_message') {
+        newNode.data = {
+          label: 'Send Message',
+          message: '',
+        };
+      }
+      if (type === 'response_message') {
+        newNode.data = {
+          label: 'Response Message',
+          message: '',
+          buttons: [],
+          skipReply: false,
+          saveVariable: '',
+          headerType: 'none',
+          headerUrl: '',
+          headerFileName: '',
+        };
+      }
+      if (type === 'feedback') {
+        newNode.data = {
+          label: 'Feedback Collection',
+          question: 'Your feedback matters! Please rate this chat on scale of 1-5',
+          buttonStyle: 'numbers',
+        };
+      }
+      if (type === 'xolox_event') {
+        newNode.data = {
+          label: 'XOLOX Event',
+          eventName: 'Lead Create',
+          webhookUrl: '',
+          method: 'POST',
+          payloadFields: [
+            { field: 'name', variable: '{{name}}' },
+            { field: 'phone', variable: '{{phone}}' },
+            { field: 'email', variable: '{{email}}' },
+            { field: 'source', variable: '{{source}}' },
+          ],
+          successCondition: 'status_2xx',
+          successField: '',
+          successValue: 'true',
+        };
+      }
+      if (type === 'notification') {
+        newNode.data = { message: 'Alert team!' };
+      }
+      if (type === 'payment_request') {
+        newNode.data = {
+          label: 'Payment Request',
+          requestType: 'course',
+          amount: '15000',
+          course: 'CPA US',
+          papers: ['FAR'],
+          packageName: 'Full Course',
+          validityTerms: '12 Months',
+          paymentSummary: 'Standard course enrollment fee',
+          headerText: '💳 Secure Payment Request',
+          buttonText: 'Pay Now',
+          footerText: 'Official Razorpay link',
+        };
+      }
+      if (type === 'payment_reminder') {
+        newNode.data = {
+          label: 'Payment Reminder',
+          duration: '24',
+          unit: 'hours',
+        };
       }
       if (type === 'delay') {
         newNode.data.label = 'Time Delay';
@@ -2272,7 +2411,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
             )}
             {viewMode === 'canvas' && (
               <div
-                className="flex items-center gap-2 p-2 rounded-md bg-green-50 border border-green-200 cursor-pointer hover:bg-green-100 transition-colors"
+                className="flex items-center gap-3 p-3 rounded-md bg-green-50 border border-green-200 cursor-pointer hover:bg-green-100 transition-colors"
                 draggable
                 onDragStart={(e) => {
                     e.dataTransfer.setData('application/reactflow', 'trigger');
@@ -2281,57 +2420,72 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 onClick={() => handleAddNodeFromPalette('trigger')}
                 title="Triggers when a specific keyword is received"
               >
-                <div className="w-7 h-7 rounded-md bg-green-600 flex items-center justify-center shrink-0">
-                  <MessageSquare size={14} className="text-white" />
+                <div className="w-9 h-9 rounded-md bg-green-600 flex items-center justify-center shrink-0">
+                  <MessageSquare size={16} className="text-white" />
                 </div>
                 <div className="min-w-0">
-                  <div className="text-xs font-semibold text-green-800">Whatsapp Incoming</div>
-                  <div className="text-[10px] text-green-600">Keyword match trigger</div>
+                  <div className="text-sm font-semibold text-green-800">Whatsapp Incoming</div>
+                  <div className="text-xs text-green-600">Keyword match trigger</div>
                 </div>
               </div>
             )}
             {viewMode === 'canvas' && (
               <div
-                className="flex items-center gap-2 p-2 rounded-md bg-purple-50 border border-purple-200 cursor-pointer hover:bg-purple-100 transition-colors"
+                className="flex items-center gap-3 p-3 rounded-md bg-purple-50 border border-purple-200 cursor-pointer hover:bg-purple-100 transition-colors"
+                draggable
+                onDragStart={(e) => {
+                    e.dataTransfer.setData('application/reactflow', 'campaign_trigger');
+                    e.dataTransfer.effectAllowed = 'move';
+                }}
                 onClick={handleAddCampaignTrigger}
                 title="Adds Campaign Sent trigger + Condition node pre-wired"
               >
-                <div className="w-7 h-7 rounded-md bg-purple-600 flex items-center justify-center shrink-0">
-                  <Megaphone size={14} className="text-white" />
+                <div className="w-9 h-9 rounded-md bg-purple-600 flex items-center justify-center shrink-0">
+                  <Megaphone size={16} className="text-white" />
                 </div>
                 <div className="min-w-0">
-                  <div className="text-xs font-semibold text-purple-800">Campaign Sent</div>
-                  <div className="text-[10px] text-purple-500">Adds trigger + condition</div>
+                  <div className="text-sm font-semibold text-purple-800">Campaign Sent</div>
+                  <div className="text-xs text-purple-500">Adds trigger + condition</div>
                 </div>
               </div>
             )}
             {viewMode === 'canvas' && (
               <div
-                className="flex items-center gap-2 p-2 rounded-md bg-cyan-50 border border-cyan-200 cursor-pointer hover:bg-cyan-100 transition-colors"
+                className="flex items-center gap-3 p-3 rounded-md bg-cyan-50 border border-cyan-200 cursor-pointer hover:bg-cyan-100 transition-colors"
+                draggable
+                onDragStart={(e) => {
+                    e.dataTransfer.setData('application/reactflow', 'incoming_webhook');
+                    e.dataTransfer.effectAllowed = 'move';
+                }}
                 onClick={handleAddWebhookTrigger}
                 title="HTTP POST webhook that triggers this workflow"
               >
-                <div className="w-7 h-7 rounded-md bg-cyan-600 flex items-center justify-center shrink-0">
-                  <Link size={14} className="text-white" />
+                <div className="w-9 h-9 rounded-md bg-cyan-600 flex items-center justify-center shrink-0">
+                  <Link size={16} className="text-white" />
                 </div>
                 <div className="min-w-0">
-                  <div className="text-xs font-semibold text-cyan-800">Incoming Webhook</div>
-                  <div className="text-[10px] text-cyan-500">HTTP POST → workflow</div>
+                  <div className="text-sm font-semibold text-cyan-800">Incoming Webhook</div>
+                  <div className="text-xs text-cyan-500">HTTP POST → workflow</div>
                 </div>
               </div>
             )}
             {viewMode === 'canvas' && (
               <div
-                className="flex items-center gap-2 p-2 rounded-md bg-emerald-50 border border-emerald-200 cursor-pointer hover:bg-emerald-100 transition-colors"
+                className="flex items-center gap-3 p-3 rounded-md bg-emerald-50 border border-emerald-200 cursor-pointer hover:bg-emerald-100 transition-colors"
+                draggable
+                onDragStart={(e) => {
+                    e.dataTransfer.setData('application/reactflow', 'new_contact');
+                    e.dataTransfer.effectAllowed = 'move';
+                }}
                 onClick={handleAddNewContactTrigger}
                 title="Triggers when a new contact is created"
               >
-                <div className="w-7 h-7 rounded-md bg-emerald-600 flex items-center justify-center shrink-0">
-                  <UserCheck size={14} className="text-white" />
+                <div className="w-9 h-9 rounded-md bg-emerald-600 flex items-center justify-center shrink-0">
+                  <UserCheck size={16} className="text-white" />
                 </div>
                 <div className="min-w-0">
-                  <div className="text-xs font-semibold text-emerald-800">New Contact Created</div>
-                  <div className="text-[10px] text-emerald-500">Contact added → workflow</div>
+                  <div className="text-sm font-semibold text-emerald-800">New Contact Created</div>
+                  <div className="text-xs text-emerald-500">Contact added → workflow</div>
                 </div>
               </div>
             )}
@@ -2346,7 +2500,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
             {/* XOLOX CRM integration */}
             {viewMode === 'canvas' && (
               <div
-                className="flex items-center gap-2 p-2 rounded-md bg-indigo-50 border border-indigo-200 cursor-pointer hover:bg-indigo-100 transition-colors"
+                className="flex items-center gap-3 p-3 rounded-md bg-indigo-50 border border-indigo-200 cursor-pointer hover:bg-indigo-100 transition-colors"
                 draggable
                 onDragStart={(e) => {
                     e.dataTransfer.setData('application/reactflow', 'action');
@@ -2356,27 +2510,32 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 onClick={() => handleAddNodeFromPalette('action', 'start_workflow')}
                 title="Trigger another workflow"
               >
-                <div className="w-7 h-7 rounded-md bg-indigo-600 flex items-center justify-center shrink-0">
-                  <WorkflowIcon size={14} className="text-white" />
+                <div className="w-9 h-9 rounded-md bg-indigo-600 flex items-center justify-center shrink-0">
+                  <WorkflowIcon size={16} className="text-white" />
                 </div>
                 <div className="min-w-0">
-                  <div className="text-xs font-semibold text-indigo-800">Start Workflow</div>
-                  <div className="text-[10px] text-indigo-600">Chain another flow</div>
+                  <div className="text-sm font-semibold text-indigo-800">Start Workflow</div>
+                  <div className="text-xs text-indigo-600">Chain another flow</div>
                 </div>
               </div>
             )}
             {viewMode === 'canvas' && (
               <div
-                className="flex items-center gap-2 p-2 rounded-md bg-orange-50 border border-orange-200 cursor-pointer hover:bg-orange-100 transition-colors"
+                className="flex items-center gap-3 p-3 rounded-md bg-orange-50 border border-orange-200 cursor-pointer hover:bg-orange-100 transition-colors"
+                draggable
+                onDragStart={(e) => {
+                    e.dataTransfer.setData('application/reactflow', 'xolox_event');
+                    e.dataTransfer.effectAllowed = 'move';
+                }}
                 onClick={handleAddXoloxEvent}
                 title="Send data to XOLOX CRM webhook; branches on success/fail"
               >
-                <div className="w-7 h-7 rounded-md bg-orange-600 flex items-center justify-center shrink-0">
-                  <Globe size={14} className="text-white" />
+                <div className="w-9 h-9 rounded-md bg-orange-600 flex items-center justify-center shrink-0">
+                  <Globe size={16} className="text-white" />
                 </div>
                 <div className="min-w-0">
-                  <div className="text-xs font-semibold text-orange-800">XOLOX Event</div>
-                  <div className="text-[10px] text-orange-500">CRM webhook → YES / NO</div>
+                  <div className="text-sm font-semibold text-orange-800">XOLOX Event</div>
+                  <div className="text-xs text-orange-500">CRM webhook → YES / NO</div>
                 </div>
               </div>
             )}
@@ -2384,16 +2543,21 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
             {/* Send Template action */}
             {viewMode === 'canvas' && (
               <div
-                className="flex items-center gap-2 p-2 rounded-md bg-green-50 border border-green-200 cursor-pointer hover:bg-green-100 transition-colors"
+                className="flex items-center gap-3 p-3 rounded-md bg-green-50 border border-green-200 cursor-pointer hover:bg-green-100 transition-colors"
+                draggable
+                onDragStart={(e) => {
+                    e.dataTransfer.setData('application/reactflow', 'send_template');
+                    e.dataTransfer.effectAllowed = 'move';
+                }}
                 onClick={handleAddSendTemplateAction}
                 title="Send a WhatsApp template with variables and optional media header"
               >
-                <div className="w-7 h-7 rounded-md bg-green-600 flex items-center justify-center shrink-0">
-                  <MessageSquare size={14} className="text-white" />
+                <div className="w-9 h-9 rounded-md bg-green-600 flex items-center justify-center shrink-0">
+                  <MessageSquare size={16} className="text-white" />
                 </div>
                 <div className="min-w-0">
-                  <div className="text-xs font-semibold text-green-800">Send Template</div>
-                  <div className="text-[10px] text-green-600">WhatsApp template + media</div>
+                  <div className="text-sm font-semibold text-green-800">Send Template</div>
+                  <div className="text-xs text-green-600">WhatsApp template + media</div>
                 </div>
               </div>
             )}
@@ -2401,23 +2565,28 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
             {/* Response Message action */}
             {viewMode === 'canvas' && (
               <div
-                className="flex items-center gap-2 p-2 rounded-md bg-teal-50 border border-teal-200 cursor-pointer hover:bg-teal-100 transition-colors"
+                className="flex items-center gap-3 p-3 rounded-md bg-teal-50 border border-teal-200 cursor-pointer hover:bg-teal-100 transition-colors"
+                draggable
+                onDragStart={(e) => {
+                    e.dataTransfer.setData('application/reactflow', 'response_message');
+                    e.dataTransfer.effectAllowed = 'move';
+                }}
                 onClick={handleAddResponseMessageAction}
                 title="Send a direct message with optional media and quick reply options"
               >
-                <div className="w-7 h-7 rounded-md bg-teal-600 flex items-center justify-center shrink-0">
-                  <MessageCircle size={14} className="text-white" />
+                <div className="w-9 h-9 rounded-md bg-teal-600 flex items-center justify-center shrink-0">
+                  <MessageCircle size={16} className="text-white" />
                 </div>
                 <div className="min-w-0">
-                  <div className="text-xs font-semibold text-teal-800">Response Message</div>
-                  <div className="text-[10px] text-teal-600">Direct message + Quick replies</div>
+                  <div className="text-sm font-semibold text-teal-800">Response Message</div>
+                  <div className="text-xs text-teal-600">Direct message + Quick replies</div>
                 </div>
               </div>
             )}
 
             {viewMode === 'canvas' && (
               <div
-                className="flex items-center gap-2 p-2 rounded-md bg-blue-50 border border-blue-200 cursor-pointer hover:bg-blue-100 transition-colors"
+                className="flex items-center gap-3 p-3 rounded-md bg-blue-50 border border-blue-200 cursor-pointer hover:bg-blue-100 transition-colors"
                 draggable
                 onDragStart={(e) => {
                     e.dataTransfer.setData('application/reactflow', 'action');
@@ -2427,19 +2596,19 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 onClick={() => handleAddNodeFromPalette('action', 'send_email')}
                 title="Send an email using a selected template"
               >
-                <div className="w-7 h-7 rounded-md bg-blue-600 flex items-center justify-center shrink-0">
-                  <Mail size={14} className="text-white" />
+                <div className="w-9 h-9 rounded-md bg-blue-600 flex items-center justify-center shrink-0">
+                  <Mail size={16} className="text-white" />
                 </div>
                 <div className="min-w-0">
-                  <div className="text-xs font-semibold text-blue-800">Send Email</div>
-                  <div className="text-[10px] text-blue-600">ZeptoMail template</div>
+                  <div className="text-sm font-semibold text-blue-800">Send Email</div>
+                  <div className="text-xs text-blue-600">ZeptoMail template</div>
                 </div>
               </div>
             )}
 
             {viewMode === 'canvas' && (
               <div
-                className="flex items-center gap-2 p-2 rounded-md bg-fuchsia-50 border border-fuchsia-200 cursor-pointer hover:bg-fuchsia-100 transition-colors"
+                className="flex items-center gap-3 p-3 rounded-md bg-fuchsia-50 border border-fuchsia-200 cursor-pointer hover:bg-fuchsia-100 transition-colors"
                 draggable
                 onDragStart={(e) => {
                     e.dataTransfer.setData('application/reactflow', 'action');
@@ -2449,12 +2618,12 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 onClick={() => handleAddNodeFromPalette('action', 'send_sms_otp')}
                 title="Send OTP SMS with configurable digit count"
               >
-                <div className="w-7 h-7 rounded-md bg-fuchsia-600 flex items-center justify-center shrink-0">
-                  <MessageSquare size={14} className="text-white" />
+                <div className="w-9 h-9 rounded-md bg-fuchsia-600 flex items-center justify-center shrink-0">
+                  <MessageSquare size={16} className="text-white" />
                 </div>
                 <div className="min-w-0">
-                  <div className="text-xs font-semibold text-fuchsia-800">Send SMS OTP</div>
-                  <div className="text-[10px] text-fuchsia-600">Fast2SMS OTP route</div>
+                  <div className="text-sm font-semibold text-fuchsia-800">Send SMS OTP</div>
+                  <div className="text-xs text-fuchsia-600">Fast2SMS OTP route</div>
                 </div>
               </div>
             )}
@@ -2462,16 +2631,21 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
             {/* Feedback Collection action */}
             {viewMode === 'canvas' && (
               <div
-                className="flex items-center gap-2 p-2 rounded-md bg-yellow-50 border border-yellow-200 cursor-pointer hover:bg-yellow-100 transition-colors"
+                className="flex items-center gap-3 p-3 rounded-md bg-yellow-50 border border-yellow-200 cursor-pointer hover:bg-yellow-100 transition-colors"
+                draggable
+                onDragStart={(e) => {
+                    e.dataTransfer.setData('application/reactflow', 'feedback');
+                    e.dataTransfer.effectAllowed = 'move';
+                }}
                 onClick={handleAddFeedbackAction}
                 title="Collect CSAT feedback from customers at the end of a flow"
               >
-                <div className="w-7 h-7 rounded-md bg-yellow-600 flex items-center justify-center shrink-0">
-                  <Star size={14} className="text-white" />
+                <div className="w-9 h-9 rounded-md bg-yellow-600 flex items-center justify-center shrink-0">
+                  <Star size={16} className="text-white" />
                 </div>
                 <div className="min-w-0">
-                  <div className="text-xs font-semibold text-yellow-800">Feedback Collection</div>
-                  <div className="text-[10px] text-yellow-600">Track customer CSAT</div>
+                  <div className="text-sm font-semibold text-yellow-800">Feedback Collection</div>
+                  <div className="text-xs text-yellow-600">Track customer CSAT</div>
                 </div>
               </div>
             )}
@@ -2485,16 +2659,21 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
             {/* Payment Request action */}
             {viewMode === 'canvas' && (
               <div
-                className="flex items-center gap-2 p-2 rounded-md bg-indigo-50 border border-indigo-200 cursor-pointer hover:bg-indigo-100 transition-colors"
+                className="flex items-center gap-3 p-3 rounded-md bg-indigo-50 border border-indigo-200 cursor-pointer hover:bg-indigo-100 transition-colors"
+                draggable
+                onDragStart={(e) => {
+                    e.dataTransfer.setData('application/reactflow', 'payment_request');
+                    e.dataTransfer.effectAllowed = 'move';
+                }}
                 onClick={handleAddPaymentRequestAction}
                 title="Send a payment request for courses or webinars"
               >
-                <div className="w-7 h-7 rounded-md bg-indigo-600 flex items-center justify-center shrink-0">
-                  <CreditCard size={14} className="text-white" />
+                <div className="w-9 h-9 rounded-md bg-indigo-600 flex items-center justify-center shrink-0">
+                  <CreditCard size={16} className="text-white" />
                 </div>
                 <div className="min-w-0">
-                  <div className="text-xs font-semibold text-indigo-800">Payment Request</div>
-                  <div className="text-[10px] text-indigo-600">Course & webinar fees</div>
+                  <div className="text-sm font-semibold text-indigo-800">Payment Request</div>
+                  <div className="text-xs text-indigo-600">Course & webinar fees</div>
                 </div>
               </div>
             )}
@@ -2502,16 +2681,21 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
             {/* Payment Reminder action */}
             {viewMode === 'canvas' && (
               <div
-                className="flex items-center gap-2 p-2 rounded-md bg-orange-50 border border-orange-200 cursor-pointer hover:bg-orange-100 transition-colors"
+                className="flex items-center gap-3 p-3 rounded-md bg-orange-50 border border-orange-200 cursor-pointer hover:bg-orange-100 transition-colors"
+                draggable
+                onDragStart={(e) => {
+                    e.dataTransfer.setData('application/reactflow', 'payment_reminder');
+                    e.dataTransfer.effectAllowed = 'move';
+                }}
                 onClick={handleAddPaymentReminderAction}
                 title="Follow up on pending payments with specific conditions"
               >
-                <div className="w-7 h-7 rounded-md bg-orange-600 flex items-center justify-center shrink-0">
-                  <BellRing size={14} className="text-white" />
+                <div className="w-9 h-9 rounded-md bg-orange-600 flex items-center justify-center shrink-0">
+                  <BellRing size={16} className="text-white" />
                 </div>
                 <div className="min-w-0">
-                  <div className="text-xs font-semibold text-orange-800">Payment Reminder</div>
-                  <div className="text-[10px] text-orange-600">Follow up on unpaid</div>
+                  <div className="text-sm font-semibold text-orange-800">Payment Reminder</div>
+                  <div className="text-xs text-orange-600">Follow up on unpaid</div>
                 </div>
               </div>
             )}
@@ -2519,22 +2703,27 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
             {/* Internal Alert action */}
             {viewMode === 'canvas' && (
               <div
-                className="flex items-center gap-2 p-2 rounded-md bg-orange-50 border border-orange-200 cursor-pointer hover:bg-orange-100 transition-colors"
+                className="flex items-center gap-3 p-3 rounded-md bg-orange-50 border border-orange-200 cursor-pointer hover:bg-orange-100 transition-colors"
+                draggable
+                onDragStart={(e) => {
+                    e.dataTransfer.setData('application/reactflow', 'notification');
+                    e.dataTransfer.effectAllowed = 'move';
+                }}
                 onClick={handleAddNotificationAction}
                 title="Send an internal alert to agents when this point is reached"
               >
-                <div className="w-7 h-7 rounded-md bg-orange-500 flex items-center justify-center shrink-0">
-                  <Bell size={14} className="text-white" />
+                <div className="w-9 h-9 rounded-md bg-orange-500 flex items-center justify-center shrink-0">
+                  <Bell size={16} className="text-white" />
                 </div>
                 <div className="min-w-0">
-                  <div className="text-xs font-semibold text-orange-800">Internal Alert</div>
-                  <div className="text-[10px] text-orange-600">Notify your team</div>
+                  <div className="text-sm font-semibold text-orange-800">Internal Alert</div>
+                  <div className="text-xs text-orange-600">Notify your team</div>
                 </div>
               </div>
             )}
             {viewMode === 'canvas' && (
               <div
-                className="flex items-center gap-2 p-2 rounded-md bg-orange-50 border border-orange-200 cursor-pointer hover:bg-orange-100 transition-colors"
+                className="flex items-center gap-3 p-3 rounded-md bg-orange-50 border border-orange-200 cursor-pointer hover:bg-orange-100 transition-colors"
                 draggable
                 onDragStart={(e) => {
                     e.dataTransfer.setData('application/reactflow', 'action');
@@ -2544,18 +2733,18 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 onClick={() => handleAddNodeFromPalette('action', 'assign_agent')}
                 title="Assign conversation to an agent (Round Robin or Direct)"
               >
-                <div className="w-7 h-7 rounded-md bg-orange-500 flex items-center justify-center shrink-0">
-                  <UserCheck size={14} className="text-white" />
+                <div className="w-9 h-9 rounded-md bg-orange-500 flex items-center justify-center shrink-0">
+                  <UserCheck size={16} className="text-white" />
                 </div>
                 <div className="min-w-0">
-                  <div className="text-xs font-semibold text-orange-800">Assign Agent</div>
-                  <div className="text-[10px] text-orange-600">Route to team member</div>
+                  <div className="text-sm font-semibold text-orange-800">Assign Agent</div>
+                  <div className="text-xs text-orange-600">Route to team member</div>
                 </div>
               </div>
             )}
             {viewMode === 'canvas' && (
               <div
-                className="flex items-center gap-2 p-2 rounded-md bg-orange-50 border border-orange-200 cursor-pointer hover:bg-orange-100 transition-colors"
+                className="flex items-center gap-3 p-3 rounded-md bg-orange-50 border border-orange-200 cursor-pointer hover:bg-orange-100 transition-colors"
                 draggable
                 onDragStart={(e) => {
                     e.dataTransfer.setData('application/reactflow', 'delay');
@@ -2564,18 +2753,18 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 onClick={() => handleAddNodeFromPalette('delay')}
                 title="Wait before executing the next node"
               >
-                <div className="w-7 h-7 rounded-md bg-orange-500 flex items-center justify-center shrink-0">
-                  <Clock size={14} className="text-white" />
+                <div className="w-9 h-9 rounded-md bg-orange-500 flex items-center justify-center shrink-0">
+                  <Clock size={16} className="text-white" />
                 </div>
                 <div className="min-w-0">
-                  <div className="text-xs font-semibold text-orange-800">Time Delay</div>
-                  <div className="text-[10px] text-orange-600">Run next step later</div>
+                  <div className="text-sm font-semibold text-orange-800">Time Delay</div>
+                  <div className="text-xs text-orange-600">Run next step later</div>
                 </div>
               </div>
             )}
             {viewMode === 'canvas' && (
               <div
-                className="flex items-center gap-2 p-2 rounded-md bg-slate-50 border border-slate-200 cursor-pointer hover:bg-slate-100 transition-colors"
+                className="flex items-center gap-3 p-3 rounded-md bg-slate-50 border border-slate-200 cursor-pointer hover:bg-slate-100 transition-colors"
                 draggable
                 onDragStart={(e) => {
                     e.dataTransfer.setData('application/reactflow', 'end');
@@ -2584,18 +2773,18 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 onClick={() => handleAddNodeFromPalette('end')}
                 title="Terminate the workflow here"
               >
-                <div className="w-7 h-7 rounded-md bg-slate-600 flex items-center justify-center shrink-0">
-                  <StopCircle size={14} className="text-white" />
+                <div className="w-9 h-9 rounded-md bg-slate-600 flex items-center justify-center shrink-0">
+                  <StopCircle size={16} className="text-white" />
                 </div>
                 <div className="min-w-0">
-                  <div className="text-xs font-semibold text-slate-800">End Flow</div>
-                  <div className="text-[10px] text-slate-600">Stop execution</div>
+                  <div className="text-sm font-semibold text-slate-800">End Flow</div>
+                  <div className="text-xs text-slate-600">Stop execution</div>
                 </div>
               </div>
             )}
             {viewMode === 'canvas' && (
               <div
-                className="flex items-center gap-2 p-2 rounded-md bg-cyan-50 border border-cyan-200 cursor-pointer hover:bg-cyan-100 transition-colors"
+                className="flex items-center gap-3 p-3 rounded-md bg-cyan-50 border border-cyan-200 cursor-pointer hover:bg-cyan-100 transition-colors"
                 draggable
                 onDragStart={(e) => {
                     e.dataTransfer.setData('application/reactflow', 'action');
@@ -2605,18 +2794,18 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 onClick={() => handleAddNodeFromPalette('action', 'update_chat_status')}
                 title="Change conversation status (open / snoozed / closed)"
               >
-                <div className="w-7 h-7 rounded-md bg-cyan-600 flex items-center justify-center shrink-0">
-                  <MessageCircle size={14} className="text-white" />
+                <div className="w-9 h-9 rounded-md bg-cyan-600 flex items-center justify-center shrink-0">
+                  <MessageCircle size={16} className="text-white" />
                 </div>
                 <div className="min-w-0">
-                  <div className="text-xs font-semibold text-cyan-800">Update Chat Status</div>
-                  <div className="text-[10px] text-cyan-600">Open / Snooze / Close</div>
+                  <div className="text-sm font-semibold text-cyan-800">Update Chat Status</div>
+                  <div className="text-xs text-cyan-600">Open / Snooze / Close</div>
                 </div>
               </div>
             )}
             {viewMode === 'canvas' && (
               <div
-                className="flex items-center gap-2 p-2 rounded-md bg-emerald-50 border border-emerald-200 cursor-pointer hover:bg-emerald-100 transition-colors"
+                className="flex items-center gap-3 p-3 rounded-md bg-emerald-50 border border-emerald-200 cursor-pointer hover:bg-emerald-100 transition-colors"
                 draggable
                 onDragStart={(e) => {
                     e.dataTransfer.setData('application/reactflow', 'action');
@@ -2626,18 +2815,18 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 onClick={() => handleAddNodeFromPalette('action', 'add_to_label')}
                 title="Add contact to a label (group)"
               >
-                <div className="w-7 h-7 rounded-md bg-emerald-600 flex items-center justify-center shrink-0">
-                  <Tag size={14} className="text-white" />
+                <div className="w-9 h-9 rounded-md bg-emerald-600 flex items-center justify-center shrink-0">
+                  <Tag size={16} className="text-white" />
                 </div>
                 <div className="min-w-0">
-                  <div className="text-xs font-semibold text-emerald-800">Add To Label</div>
-                  <div className="text-[10px] text-emerald-600">Select group</div>
+                  <div className="text-sm font-semibold text-emerald-800">Add To Label</div>
+                  <div className="text-xs text-emerald-600">Select group</div>
                 </div>
               </div>
             )}
             {viewMode === 'canvas' && (
               <div
-                className="flex items-center gap-2 p-2 rounded-md bg-violet-50 border border-violet-200 cursor-pointer hover:bg-violet-100 transition-colors"
+                className="flex items-center gap-3 p-3 rounded-md bg-violet-50 border border-violet-200 cursor-pointer hover:bg-violet-100 transition-colors"
                 draggable
                 onDragStart={(e) => {
                     e.dataTransfer.setData('application/reactflow', 'attribute_condition');
@@ -2646,12 +2835,12 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 onClick={() => handleAddNodeFromPalette('attribute_condition')}
                 title="Route based on contact attributes with AND/OR groups"
               >
-                <div className="w-7 h-7 rounded-md bg-violet-600 flex items-center justify-center shrink-0">
-                  <GitBranch size={14} className="text-white" />
+                <div className="w-9 h-9 rounded-md bg-violet-600 flex items-center justify-center shrink-0">
+                  <GitBranch size={16} className="text-white" />
                 </div>
                 <div className="min-w-0">
-                  <div className="text-xs font-semibold text-violet-800">Custom Attributes</div>
-                  <div className="text-[10px] text-violet-600">Multi-branch with default</div>
+                  <div className="text-sm font-semibold text-violet-800">Custom Attributes</div>
+                  <div className="text-xs text-violet-600">Multi-branch with default</div>
                 </div>
               </div>
             )}
@@ -2675,7 +2864,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 nodeTypes={nodeTypes}
                 fitView
               >
-                <Background color="#f1f5f9" gap={16} />
+                <Background variant="dots" color="#cbd5e1" gap={18} size={1.2} />
                 <Controls />
                 <MiniMap />
               </ReactFlow>
