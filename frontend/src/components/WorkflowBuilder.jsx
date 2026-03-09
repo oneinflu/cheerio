@@ -2346,6 +2346,27 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
             {/* XOLOX CRM integration */}
             {viewMode === 'canvas' && (
               <div
+                className="flex items-center gap-2 p-2 rounded-md bg-indigo-50 border border-indigo-200 cursor-pointer hover:bg-indigo-100 transition-colors"
+                draggable
+                onDragStart={(e) => {
+                    e.dataTransfer.setData('application/reactflow', 'action');
+                    e.dataTransfer.setData('application/actiontype', 'start_workflow');
+                    e.dataTransfer.effectAllowed = 'move';
+                }}
+                onClick={() => handleAddNodeFromPalette('action', 'start_workflow')}
+                title="Trigger another workflow"
+              >
+                <div className="w-7 h-7 rounded-md bg-indigo-600 flex items-center justify-center shrink-0">
+                  <WorkflowIcon size={14} className="text-white" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold text-indigo-800">Start Workflow</div>
+                  <div className="text-[10px] text-indigo-600">Chain another flow</div>
+                </div>
+              </div>
+            )}
+            {viewMode === 'canvas' && (
+              <div
                 className="flex items-center gap-2 p-2 rounded-md bg-orange-50 border border-orange-200 cursor-pointer hover:bg-orange-100 transition-colors"
                 onClick={handleAddXoloxEvent}
                 title="Send data to XOLOX CRM webhook; branches on success/fail"
@@ -4782,7 +4803,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
               {selectedNode.type === 'action' && (
                 <div className="space-y-3">
                   {/* Hide redundant dropdown if actionType is already specific */}
-                  {['assign_agent', 'update_chat_status', 'add_to_label', 'send_email', 'send_sms_otp'].includes(selectedNode.data.actionType) ? (
+                  {['assign_agent', 'update_chat_status', 'add_to_label', 'send_email', 'send_sms_otp', 'start_workflow'].includes(selectedNode.data.actionType) ? (
                     <div className="space-y-1 pb-2 border-b border-slate-100">
                       <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide">Action Type</label>
                       <div className="text-sm font-semibold text-slate-800 flex items-center gap-2">
@@ -4791,6 +4812,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                         {selectedNode.data.actionType === 'add_to_label' && <Tag size={16} className="text-emerald-600" />}
                         {selectedNode.data.actionType === 'send_email' && <Mail size={16} className="text-blue-600" />}
                         {selectedNode.data.actionType === 'send_sms_otp' && <MessageSquare size={16} className="text-fuchsia-600" />}
+                        {selectedNode.data.actionType === 'start_workflow' && <WorkflowIcon size={16} className="text-indigo-600" />}
                         {selectedNode.data.actionType === 'assign_agent'
                           ? 'Assign Agent'
                           : selectedNode.data.actionType === 'update_chat_status'
@@ -4799,7 +4821,9 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                               ? 'Add To Label'
                               : selectedNode.data.actionType === 'send_email'
                                 ? 'Send Email'
-                                : 'Send SMS OTP'}
+                                : selectedNode.data.actionType === 'send_sms_otp'
+                                  ? 'Send SMS OTP'
+                                  : 'Start Workflow'}
                       </div>
                     </div>
                   ) : (
