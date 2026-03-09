@@ -60,14 +60,19 @@ async function handleIncomingMessage(conversationId, messageText) {
     if (convRes.rows.length === 0) return null;
     
     const conv = convRes.rows[0];
+    
+    // RULE: AI stops ONLY if a human is assigned OR AI is explicitly disabled
     if (conv.assignee_user_id) {
-      // Human assigned, AI should not reply
+      console.log(`[AI Agent] Skipping conversation ${conversationId} (Human Assigned: ${conv.assignee_user_id})`);
       return null; 
     }
+    
     if (conv.is_ai_active === false) {
-      // Explicitly disabled for this chat
+      console.log(`[AI Agent] Skipping conversation ${conversationId} (AI Disabled Manually)`);
       return null;
     }
+
+    console.log(`[AI Agent] Processing message for conversation ${conversationId}`);
 
     // 3. Retrieve Context (RAG)
     const context = await retrieveContext(messageText);

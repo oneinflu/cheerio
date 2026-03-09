@@ -25,7 +25,7 @@ import LandingPage from './components/LandingPage.jsx';
 import AiAgentPage from './components/AiAgentPage.jsx';
 import { connectSocket } from './socket.js';
 import { getInbox, getMessages, claimConversation, reassignConversation, forceReassignConversation, releaseConversation, markAsRead, resolveConversation, deleteConversation, blockConversation, unblockConversation, pinConversation, updateWorkflow, getTeamUser, getTeamUsers, reassignExternalLead } from './api.js';
-import { LayoutDashboard, MessageSquare, Users, Megaphone, Settings, LogOut, Search, Bell, FileText, Workflow, Shield, ChevronsUpDown, Check, Zap, GitBranch, Instagram, ChevronDown, ChevronRight, Mail, Bot } from 'lucide-react';
+import { LayoutDashboard, MessageSquare, Users, Megaphone, Settings, LogOut, Search, Bell, FileText, Workflow, Shield, ChevronsUpDown, Check, Zap, GitBranch, Instagram, ChevronDown, ChevronRight, Mail, Bot, ArrowRight } from 'lucide-react';
 import { Button } from './components/ui/Button';
 import { Badge } from './components/ui/Badge';
 import { Card, CardHeader, CardTitle, CardContent } from './components/ui/Card';
@@ -1018,15 +1018,19 @@ export default function App() {
               {selectedConversation && !isAssigned && selectedConversation.is_ai_active && (
                  <div className="bg-purple-50 border-b border-purple-100 px-4 py-2 flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                       <Bot size={16} className="text-purple-600 animate-pulse" />
+                       <div className="relative">
+                         <Bot size={16} className="text-purple-600" />
+                         <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-green-500 rounded-full border border-white animate-pulse"></span>
+                       </div>
                        <span className="text-xs font-medium text-purple-700">AI is handling this conversation</span>
                     </div>
                     <Button 
                        size="sm" 
-                       className="h-7 text-xs bg-purple-600 hover:bg-purple-700 text-white border-none shadow-sm"
+                       className="h-7 text-xs bg-purple-600 hover:bg-purple-700 text-white border-none shadow-sm gap-2"
                        onClick={() => handleAssign(currentUser.id)}
                     >
-                       Enter Chat
+                       <span>Take Over</span>
+                       <ArrowRight size={12} />
                     </Button>
                  </div>
               )}
