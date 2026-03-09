@@ -900,7 +900,11 @@ export default function App() {
               onSave={handleWorkflowSave}
             />
           ) : (
-            <WorkflowsKanban currentUser={currentUser} />
+            <WorkflowsKanban
+              currentUser={currentUser}
+              onOpenBuilder={(wf) => setEditingWorkflow(wf)}
+              onOpenSettings={() => setActivePage('settings')}
+            />
           )
         )}
 

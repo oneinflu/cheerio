@@ -385,6 +385,12 @@ export async function getWorkflows() {
   return res.json();
 }
 
+export async function getWorkflow(id) {
+  const headers = getAuthHeaders();
+  const res = await fetch(`/api/workflows/${id}`, { headers });
+  return res.json();
+}
+
 export async function getWorkflowsKanban(teamId) {
   const headers = getAuthHeaders();
   const qs = teamId ? `?teamId=${encodeURIComponent(teamId)}` : '';

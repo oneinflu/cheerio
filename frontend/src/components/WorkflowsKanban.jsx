@@ -2,9 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Badge } from './ui/Badge';
-import { getWorkflowsKanban, reorderStageWorkflows, createWorkflow } from '../api';
+import { getWorkflow, getWorkflowsKanban, reorderStageWorkflows, createWorkflow } from '../api';
 import { Plus, X, GripVertical, MoreHorizontal } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 
 function CreateWorkflowModal({ isOpen, onClose, onSubmit, stageName }) {
   const [name, setName] = useState('');
@@ -75,8 +74,7 @@ function CreateWorkflowModal({ isOpen, onClose, onSubmit, stageName }) {
   );
 }
 
-export default function WorkflowsKanban({ currentUser }) {
-  const navigate = useNavigate();
+export default function WorkflowsKanban({ currentUser, onOpenBuilder, onOpenSettings }) {
   const teamId = useMemo(() => {
     if (!currentUser) return null;
     const ids = currentUser.teamIds || [];
@@ -86,7 +84,7 @@ export default function WorkflowsKanban({ currentUser }) {
   const [columns, setColumns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [dragItem, setDragItem] = useState(null); // { workflowId, fromStageId }
+  const [dragItem, setDragItem] = useState(null);
   const [createModal, setCreateModal] = useState({ isOpen: false, stageId: null, stageName: null });
 
   const load = async () => {
@@ -124,7 +122,6 @@ export default function WorkflowsKanban({ currentUser }) {
     if (!dragItem) return;
     const { workflowId, fromStageId } = dragItem;
     
-    // Optimistic update
     const newColumns = [...columns];
     const sourceCol = newColumns.find(c => c.stage.id === fromStageId);
     const destCol = newColumns.find(c => c.stage.id === toStageId);
@@ -138,12 +135,12 @@ export default function WorkflowsKanban({ currentUser }) {
       }
     }
 
-    const moves = [{ workflowId, toStageId, toPosition: toIndex + 1 }]; // API uses 1-based position usually, or verify backend
+    const moves = [{ workflowId, toStageId, toPosition: toIndex + 1 }];
     try {
       await reorderStageWorkflows(moves);
     } catch (e) {
       console.error("Failed to save reorder", e);
-      load(); // Revert on error
+      load();
     }
     setDragItem(null);
   };
@@ -154,7 +151,12 @@ export default function WorkflowsKanban({ currentUser }) {
 
   const handleCreateSubmit = async (data) => {
     if (!createModal.stageId) return;
-    await createWorkflow({ ...data, stageId: createModal.stageId, status: 'active', steps: [] });
+    await createWorkflow({
+      ...data,
+      stageId: createModal.stageId,
+      status: 'active',
+      steps: { nodes: [], edges: [], trigger: '' },
+    });
     await load();
   };
 
@@ -185,9 +187,15 @@ export default function WorkflowsKanban({ currentUser }) {
       
       <div className="flex-1 overflow-x-auto overflow-y-hidden p-6">
         <div className="flex gap-6 h-full pb-2">
+          {error && (
+            <div className="w-full">
+              <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {error}
+              </div>
+            </div>
+          )}
           {columns.map((col) => (
             <div key={col.stage.id} className="w-80 flex-shrink-0 flex flex-col h-full max-h-full">
-              {/* Column Header */}
               <div className="flex items-center justify-between mb-3 px-1">
                 <div className="flex items-center gap-2">
                   <div 
@@ -206,7 +214,6 @@ export default function WorkflowsKanban({ currentUser }) {
                 </button>
               </div>
 
-              {/* Column Body */}
               <div 
                 className="flex-1 bg-slate-100/50 rounded-xl border border-slate-200/60 p-2 flex flex-col gap-2 overflow-y-auto custom-scrollbar relative group"
                 onDragOver={handleDragOver}
@@ -226,14 +233,21 @@ export default function WorkflowsKanban({ currentUser }) {
                     }}
                     onDragOver={(e) => {
                       e.preventDefault();
-                      e.stopPropagation(); // Stop bubbling to column
+                      e.stopPropagation();
                     }}
                     onDrop={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
                       handleDrop(col.stage.id, idx);
                     }}
-                    onClick={() => navigate(`/workflows/${w.id}`)}
+                    onClick={async () => {
+                      try {
+                        const wf = await getWorkflow(w.id);
+                        if (wf && wf.id && onOpenBuilder) onOpenBuilder(wf);
+                      } catch (e) {
+                        console.error(e);
+                      }
+                    }}
                   >
                     <div className="flex justify-between items-start mb-2">
                       <div className="font-medium text-slate-800 text-sm leading-snug hover:text-blue-600 transition-colors">
@@ -269,7 +283,6 @@ export default function WorkflowsKanban({ currentUser }) {
                   </div>
                 )}
                 
-                {/* Add Button at bottom of list */}
                 <button
                   onClick={() => openCreateModal(col.stage.id, col.stage.name)}
                   className="w-full py-2 flex items-center justify-center gap-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50/50 rounded-lg border border-transparent hover:border-blue-100 transition-all text-sm font-medium mt-auto shrink-0"
@@ -281,11 +294,10 @@ export default function WorkflowsKanban({ currentUser }) {
             </div>
           ))}
           
-          {/* Add Stage Placeholder */}
           <div className="w-80 flex-shrink-0 flex flex-col h-full opacity-60 hover:opacity-100 transition-opacity">
             <div className="h-10 mb-3"></div>
             <button 
-              onClick={() => navigate('/settings/lead-stages')}
+              onClick={() => onOpenSettings && onOpenSettings()}
               className="flex-1 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 hover:bg-slate-100 hover:border-slate-400 flex flex-col items-center justify-center text-slate-500 transition-all gap-2"
             >
               <Plus size={24} />

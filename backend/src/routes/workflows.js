@@ -156,7 +156,6 @@ router.put('/kanban/reorder', auth.requireRole('admin', 'supervisor'), async (re
       const { workflowId, toStageId, toPosition } = mv;
       if (!workflowId || !toStageId || typeof toPosition !== 'number') continue;
       
-      // Ensure workflow belongs to only this stage (Kanban move)
       await db.query(
         `DELETE FROM lead_stage_workflows WHERE workflow_id = $1 AND stage_id != $2`,
         [workflowId, toStageId]
