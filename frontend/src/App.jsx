@@ -480,6 +480,13 @@ export default function App() {
     }
   };
 
+  const handleLeadStageUpdated = (conversationId, leadStage) => {
+    if (!conversationId) return;
+    setConversations((prev) =>
+      prev.map((c) => (c.id === conversationId ? { ...c, leadStage: leadStage || null } : c))
+    );
+  };
+
   const handleToggleBlock = async () => {
     if (!selectedConversation) return;
     const conversationId = selectedConversation.id;
@@ -1101,7 +1108,10 @@ export default function App() {
                 </div>
 
                 <div className="p-4 pb-2 flex-none">
-                  <CustomerCard conversationId={selectedId} />
+                  <CustomerCard
+                    conversationId={selectedId}
+                    onLeadStageUpdated={(leadStage) => handleLeadStageUpdated(selectedId, leadStage)}
+                  />
                 </div>
                 <div className="flex-1 flex flex-col min-h-0 p-4 pt-2">
                   <NotesPanel conversationId={selectedId} currentUser={currentUser} socket={socket} />

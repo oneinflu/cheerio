@@ -17,6 +17,14 @@ const auth = require('../middlewares/auth');
 const db = require('../../db');
 const axios = require('axios');
 
+function resolveTeamId(req) {
+  if (req.query && req.query.teamId) return req.query.teamId;
+  if (req.user && Array.isArray(req.user.teamIds) && req.user.teamIds.length > 0) {
+    return req.user.teamIds[0];
+  }
+  return null;
+}
+
 /**
  * GET /api/conversations/:conversationId/contact
  * Returns contact details (name, number, course)
@@ -25,9 +33,14 @@ router.get('/:conversationId/contact', auth.requireRole('admin', 'super_admin', 
   try {
     const { conversationId } = req.params;
     const result = await db.query(
-      `SELECT ct.id as contact_id, ct.display_name, ct.external_id, ct.profile
+      `SELECT ct.id as contact_id, ct.display_name, ct.external_id, ct.profile,
+              c.lead_stage_id,
+              ls.name AS lead_stage_name,
+              ls.color AS lead_stage_color,
+              ls.is_closed AS lead_stage_is_closed
        FROM conversations c
        JOIN contacts ct ON ct.id = c.contact_id
+       LEFT JOIN lead_stages ls ON ls.id = c.lead_stage_id
        WHERE c.id = $1`,
       [conversationId]
     );
@@ -43,7 +56,75 @@ router.get('/:conversationId/contact', auth.requireRole('admin', 'super_admin', 
       course: profile.course || '',
       preferredLanguage: profile.preferred_language || '',
       blocked: profile.blocked === true,
+      leadStage: row.lead_stage_id
+        ? {
+          id: row.lead_stage_id,
+          name: row.lead_stage_name,
+          color: row.lead_stage_color,
+          isClosed: row.lead_stage_is_closed === true,
+        }
+        : null,
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * PUT /api/conversations/:conversationId/lead-stage
+ * Updates the lead stage for this conversation.
+ */
+router.put('/:conversationId/lead-stage', auth.requireRole('admin', 'super_admin', 'quality_manager', 'agent', 'supervisor'), async (req, res, next) => {
+  try {
+    const { conversationId } = req.params;
+    const teamId = resolveTeamId(req);
+    if (!teamId) {
+      return res.status(400).json({ error: 'teamId required' });
+    }
+
+    const stageId = Object.prototype.hasOwnProperty.call(req.body || {}, 'stageId')
+      ? req.body.stageId
+      : null;
+
+    if (stageId) {
+      const stageRes = await db.query(
+        `SELECT id, name, color, is_closed
+         FROM lead_stages
+         WHERE id = $1 AND team_id = $2`,
+        [stageId, teamId]
+      );
+      if (stageRes.rowCount === 0) {
+        return res.status(400).json({ error: 'Invalid lead stage' });
+      }
+
+      const upd = await db.query(
+        `UPDATE conversations
+         SET lead_stage_id = $1
+         WHERE id = $2
+         RETURNING id`,
+        [stageId, conversationId]
+      );
+      if (upd.rowCount === 0) return res.status(404).json({ error: 'Conversation not found' });
+      return res.json({
+        conversationId,
+        leadStage: {
+          id: stageRes.rows[0].id,
+          name: stageRes.rows[0].name,
+          color: stageRes.rows[0].color,
+          isClosed: stageRes.rows[0].is_closed === true,
+        },
+      });
+    }
+
+    const upd = await db.query(
+      `UPDATE conversations
+       SET lead_stage_id = NULL
+       WHERE id = $1
+       RETURNING id`,
+      [conversationId]
+    );
+    if (upd.rowCount === 0) return res.status(404).json({ error: 'Conversation not found' });
+    return res.json({ conversationId, leadStage: null });
   } catch (err) {
     next(err);
   }

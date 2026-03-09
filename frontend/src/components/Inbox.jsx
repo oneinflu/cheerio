@@ -145,6 +145,23 @@ export default function Inbox({ conversations, selectedId, onSelect, onPin, onRe
                    <Badge variant={c.assigneeUserId ? "secondary" : "outline"} className="text-[10px] px-1.5 h-5">
                      {c.assigneeUserId ? 'Assigned' : 'Unassigned'}
                    </Badge>
+                   {c.leadStage && c.leadStage.name && (
+                     <span
+                       className="inline-flex items-center gap-1.5 h-5 px-1.5 rounded border text-[10px] font-medium"
+                       style={{
+                         borderColor: (c.leadStage.color || '#0f172a') + '33',
+                         backgroundColor: (c.leadStage.color || '#0f172a') + '14',
+                         color: c.leadStage.color || '#0f172a',
+                       }}
+                       title={c.leadStage.isClosed ? 'Closed stage' : 'Open stage'}
+                     >
+                       <span
+                         className="h-2 w-2 rounded-full"
+                         style={{ backgroundColor: c.leadStage.color || '#0f172a' }}
+                       />
+                       {c.leadStage.name}
+                     </span>
+                   )}
                    <Badge 
                      variant="outline" 
                      className={cn(

@@ -5,8 +5,9 @@ import { Input } from './ui/Input';
 import { Button } from './ui/Button';
 import { User, Copy, Check } from 'lucide-react';
 import { useToast } from './ui/use-toast';
+import { getLeadStages, updateConversationLeadStage } from '../api';
 
-export default function CustomerCard({ conversationId }) {
+export default function CustomerCard({ conversationId, onLeadStageUpdated }) {
   const { toast } = useToast();
   const LANGUAGE_LABELS = {
     en: 'English',
@@ -21,19 +22,25 @@ export default function CustomerCard({ conversationId }) {
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [leadStages, setLeadStages] = useState([]);
+  const [loadingStages, setLoadingStages] = useState(false);
+  const [savingStage, setSavingStage] = useState(false);
   const [formData, setFormData] = useState({
     contactId: '',
     name: '',
     number: '',
     course: '',
     preferredLanguage: '',
-    blocked: false
+    blocked: false,
+    leadStageId: ''
   });
 
   useEffect(() => {
     if (!conversationId) return;
     setFetching(true);
-    fetch(`/api/conversations/${conversationId}/contact`)
+    const token = localStorage.getItem('accessToken');
+    const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+    fetch(`/api/conversations/${conversationId}/contact`, { headers })
       .then(res => {
         if (!res.ok) throw new Error('Failed to fetch contact');
         return res.json();
@@ -45,11 +52,29 @@ export default function CustomerCard({ conversationId }) {
           number: data.number || '',
           course: data.course || '',
           preferredLanguage: data.preferredLanguage || '',
-          blocked: !!data.blocked
+          blocked: !!data.blocked,
+          leadStageId: data.leadStage && data.leadStage.id ? data.leadStage.id : ''
         });
       })
       .catch(err => console.error(err))
       .finally(() => setFetching(false));
+  }, [conversationId]);
+
+  useEffect(() => {
+    if (!conversationId) return;
+    const load = async () => {
+      setLoadingStages(true);
+      try {
+        const res = await getLeadStages();
+        if (res && Array.isArray(res.stages)) setLeadStages(res.stages);
+        else setLeadStages([]);
+      } catch (err) {
+        setLeadStages([]);
+      } finally {
+        setLoadingStages(false);
+      }
+    };
+    load();
   }, [conversationId]);
 
   const handleCopyNumber = () => {
@@ -86,6 +111,23 @@ export default function CustomerCard({ conversationId }) {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleLeadStageChange = async (value) => {
+    const nextId = value || '';
+    setFormData((prev) => ({ ...prev, leadStageId: nextId }));
+    if (!conversationId) return;
+    setSavingStage(true);
+    try {
+      const res = await updateConversationLeadStage(conversationId, nextId || null);
+      if (res && Object.prototype.hasOwnProperty.call(res, 'leadStage') && onLeadStageUpdated) {
+        onLeadStageUpdated(res.leadStage || null);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSavingStage(false);
     }
   };
 
@@ -148,6 +190,27 @@ export default function CustomerCard({ conversationId }) {
                 disabled
                 className="h-8 bg-slate-50 mt-1 text-slate-500"
               />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-500">Lead Stage</label>
+              <div className="mt-1 flex items-center gap-2">
+                <select
+                  className="flex h-8 w-full rounded-md border border-slate-200 bg-white px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950"
+                  value={formData.leadStageId || ''}
+                  onChange={(e) => handleLeadStageChange(e.target.value)}
+                  disabled={loadingStages}
+                >
+                  <option value="">No stage</option>
+                  {leadStages.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+                {savingStage && (
+                  <span className="text-[10px] text-slate-400 whitespace-nowrap">Saving...</span>
+                )}
+              </div>
             </div>
             <div>
               <label className="text-xs font-medium text-slate-500">Course</label>

@@ -18,7 +18,7 @@ router.get('/settings/lead-stages', auth.requireRole('admin', 'supervisor'), asy
     if (!teamId) {
       return res.status(400).json({ error: 'teamId required' });
     }
-    const result = await db.query(
+    let result = await db.query(
       `
       SELECT id, name, color, position, is_closed
       FROM lead_stages
@@ -27,6 +27,32 @@ router.get('/settings/lead-stages', auth.requireRole('admin', 'supervisor'), asy
       `,
       [teamId]
     );
+    if (result.rowCount === 0) {
+      const defaults = [
+        { name: 'New', color: '#0ea5e9', position: 1, is_closed: false },
+        { name: 'Contacted', color: '#6366f1', position: 2, is_closed: false },
+        { name: 'Qualified', color: '#22c55e', position: 3, is_closed: false },
+        { name: 'Enrolled', color: '#16a34a', position: 4, is_closed: true },
+        { name: 'Lost', color: '#ef4444', position: 5, is_closed: true },
+      ];
+      await db.query(
+        `
+        INSERT INTO lead_stages (team_id, name, color, position, is_closed)
+        SELECT $1, x.name, x.color, x.position, x.is_closed
+        FROM jsonb_to_recordset($2::jsonb) AS x(name text, color text, position int, is_closed boolean)
+        `,
+        [teamId, JSON.stringify(defaults)]
+      );
+      result = await db.query(
+        `
+        SELECT id, name, color, position, is_closed
+        FROM lead_stages
+        WHERE team_id = $1
+        ORDER BY position ASC, created_at ASC
+        `,
+        [teamId]
+      );
+    }
     res.json({ teamId, stages: result.rows });
   } catch (err) {
     next(err);
@@ -244,4 +270,3 @@ router.put('/settings/working-hours', auth.requireRole('admin', 'supervisor'), a
 });
 
 module.exports = router;
-

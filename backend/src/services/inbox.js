@@ -134,6 +134,7 @@ async function listConversations(teamId, userId, userRole, filter = 'open') {
     SELECT c.id,
            c.status,
            c.lead_id,
+           c.lead_stage_id,
            c.last_message_at,
            ct.display_name,
            ct.external_id AS contact_external_id,
@@ -141,6 +142,9 @@ async function listConversations(teamId, userId, userRole, filter = 'open') {
            ch.type as channel_type,
            ch.external_id AS channel_external_id,
            ca.assignee_user_id,
+           ls.name AS lead_stage_name,
+           ls.color AS lead_stage_color,
+           ls.is_closed AS lead_stage_is_closed,
            (pc.conversation_id IS NOT NULL) AS is_pinned,
            (
              SELECT COUNT(*)::int
@@ -154,6 +158,8 @@ async function listConversations(teamId, userId, userRole, filter = 'open') {
     JOIN channels ch ON ch.id = c.channel_id
     LEFT JOIN conversation_assignments ca
       ON ca.conversation_id = c.id AND ca.released_at IS NULL
+    LEFT JOIN lead_stages ls
+      ON ls.id = c.lead_stage_id
     LEFT JOIN pinned_conversations pc
       ON pc.conversation_id = c.id AND pc.user_id = $${pinnedUserParamIdx}
     WHERE 1=1 ${whereClause}
@@ -237,6 +243,14 @@ async function listConversations(teamId, userId, userRole, filter = 'open') {
       id: r.id,
       status: derivedStatus,
       leadId: r.lead_id,
+      leadStage: r.lead_stage_id
+        ? {
+          id: r.lead_stage_id,
+          name: r.lead_stage_name,
+          color: r.lead_stage_color,
+          isClosed: r.lead_stage_is_closed === true,
+        }
+        : null,
       lastMessageAt: r.last_message_at,
       contactName: r.display_name || 'Unknown',
       contactExternalId: r.contact_external_id,

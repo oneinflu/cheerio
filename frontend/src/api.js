@@ -97,6 +97,17 @@ export async function markAsRead(conversationId) {
   return res.json();
 }
 
+export async function updateConversationLeadStage(conversationId, stageId, teamId) {
+  const headers = getAuthHeaders();
+  const qs = teamId ? `?teamId=${encodeURIComponent(teamId)}` : '';
+  const res = await fetch(`/api/conversations/${conversationId}/lead-stage${qs}`, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify({ stageId }),
+  });
+  return res.json();
+}
+
 export async function getNotes(conversationId) {
   const headers = getAuthHeaders();
   const res = await fetch(`/api/conversations/${conversationId}/notes?actorRole=agent`, { headers });

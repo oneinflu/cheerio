@@ -160,6 +160,23 @@ async function runMigrations() {
           console.log('[migrate] lead_stages and team_working_hours tables already exist.');
         }
 
+        // Check if lead_stage_id column exists in conversations
+        const leadStageColRes = await client.query(`
+          SELECT column_name
+          FROM information_schema.columns
+          WHERE table_name='conversations' AND column_name='lead_stage_id'
+        `);
+
+        if (leadStageColRes.rowCount === 0) {
+          console.log('[migrate] Adding lead_stage_id column to conversations...');
+          await client.query('BEGIN');
+          await runSQLFile(client, path.join(__dirname, '..', 'db', 'migrations', '0019_add_lead_stage_to_conversations.sql'));
+          await client.query('COMMIT');
+          console.log('[migrate] Applied conversations lead_stage_id migration.');
+        } else {
+          console.log('[migrate] conversations lead_stage_id column already exists.');
+        }
+
         const flowsTableRes = await client.query(`
           SELECT EXISTS (
             SELECT FROM information_schema.tables 
