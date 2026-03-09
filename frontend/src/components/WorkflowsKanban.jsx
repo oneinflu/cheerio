@@ -155,6 +155,75 @@ function CreateStageModal({ isOpen, onClose, onSubmit }) {
   );
 }
 
+function EditWorkflowModal({ isOpen, onClose, onSubmit, workflow }) {
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (workflow) {
+      setName(workflow.name || '');
+      setDescription(workflow.description || '');
+    }
+  }, [workflow]);
+
+  if (!isOpen) return null;
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+    setLoading(true);
+    try {
+      await onSubmit({ ...workflow, name, description });
+      onClose();
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all scale-100">
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+          <h3 className="text-lg font-semibold text-slate-900">Edit Workflow</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">
+            <X size={20} />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Name</label>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. New Lead Follow-up"
+              autoFocus
+              className="w-full"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Optional description..."
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 min-h-[80px]"
+            />
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
+            <Button type="submit" disabled={!name.trim() || loading}>
+              {loading ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export default function WorkflowsKanban({ currentUser, onOpenBuilder }) {
   const teamId = useMemo(() => {
     if (!currentUser) return null;
@@ -170,6 +239,7 @@ export default function WorkflowsKanban({ currentUser, onOpenBuilder }) {
   const [isStageModalOpen, setIsStageModalOpen] = useState(false);
   const [openStageMenuId, setOpenStageMenuId] = useState(null);
   const [openWorkflowMenuId, setOpenWorkflowMenuId] = useState(null);
+  const [editWorkflow, setEditWorkflow] = useState(null);
 
   const load = async () => {
     try {
@@ -297,6 +367,19 @@ export default function WorkflowsKanban({ currentUser, onOpenBuilder }) {
       await load();
     } catch (e) {
       setError('Failed to delete workflow');
+    }
+  };
+
+  const handleEditWorkflowSubmit = async (updatedData) => {
+    try {
+      await updateWorkflow(updatedData.id, {
+        name: updatedData.name,
+        description: updatedData.description
+      });
+      await load();
+      setEditWorkflow(null);
+    } catch (e) {
+      setError('Failed to update workflow');
     }
   };
 
@@ -473,6 +556,17 @@ export default function WorkflowsKanban({ currentUser, onOpenBuilder }) {
                                 onClick={(e) => {
                                   e.preventDefault();
                                   e.stopPropagation();
+                                  setEditWorkflow(w);
+                                  setOpenWorkflowMenuId(null);
+                                }}
+                              >
+                                Edit details
+                              </button>
+                              <button
+                                className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
                                   const nextStatus = w.status === 'active' ? 'inactive' : 'active';
                                   handleToggleWorkflowStatus(w.id, nextStatus);
                                 }}
@@ -564,6 +658,12 @@ export default function WorkflowsKanban({ currentUser, onOpenBuilder }) {
         isOpen={isStageModalOpen}
         onClose={() => setIsStageModalOpen(false)}
         onSubmit={handleCreateStageSubmit}
+      />
+      <EditWorkflowModal 
+        isOpen={!!editWorkflow}
+        onClose={() => setEditWorkflow(null)}
+        onSubmit={handleEditWorkflowSubmit}
+        workflow={editWorkflow}
       />
     </div>
   );
