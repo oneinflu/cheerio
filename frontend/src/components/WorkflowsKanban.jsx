@@ -2,7 +2,15 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Badge } from './ui/Badge';
-import { getWorkflow, getWorkflowsKanban, reorderStageWorkflows, createWorkflow } from '../api';
+import {
+  getWorkflow,
+  getWorkflowsKanban,
+  reorderStageWorkflows,
+  createWorkflow,
+  updateWorkflow,
+  deleteWorkflow,
+  deleteLeadStage,
+} from '../api';
 import { Plus, X, GripVertical, MoreHorizontal } from 'lucide-react';
 
 function CreateWorkflowModal({ isOpen, onClose, onSubmit, stageName }) {
@@ -86,6 +94,8 @@ export default function WorkflowsKanban({ currentUser, onOpenBuilder, onOpenSett
   const [error, setError] = useState(null);
   const [dragItem, setDragItem] = useState(null);
   const [createModal, setCreateModal] = useState({ isOpen: false, stageId: null, stageName: null });
+  const [openStageMenuId, setOpenStageMenuId] = useState(null);
+  const [openWorkflowMenuId, setOpenWorkflowMenuId] = useState(null);
 
   const load = async () => {
     try {
@@ -108,6 +118,18 @@ export default function WorkflowsKanban({ currentUser, onOpenBuilder, onOpenSett
   useEffect(() => {
     load();
   }, [teamId]);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.target && typeof e.target.closest === 'function') {
+        if (e.target.closest('[data-kanban-menu]')) return;
+      }
+      setOpenStageMenuId(null);
+      setOpenWorkflowMenuId(null);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   const handleDragStart = (workflowId, fromStageId) => {
     setDragItem({ workflowId, fromStageId });
@@ -160,6 +182,45 @@ export default function WorkflowsKanban({ currentUser, onOpenBuilder, onOpenSett
     await load();
   };
 
+  const handleDeleteStage = async (stage) => {
+    const ok = window.confirm(`Delete stage "${stage.name}"?`);
+    if (!ok) return;
+    try {
+      await deleteLeadStage(stage.id, teamId);
+      setOpenStageMenuId(null);
+      await load();
+    } catch (e) {
+      setError('Failed to delete stage');
+    }
+  };
+
+  const handleToggleWorkflowStatus = async (workflowId, nextStatus) => {
+    try {
+      await updateWorkflow(workflowId, { status: nextStatus });
+      setColumns((prev) =>
+        prev.map((c) => ({
+          ...c,
+          workflows: c.workflows.map((w) => (w.id === workflowId ? { ...w, status: nextStatus } : w)),
+        }))
+      );
+      setOpenWorkflowMenuId(null);
+    } catch (e) {
+      setError('Failed to update workflow');
+    }
+  };
+
+  const handleDeleteWorkflow = async (workflowId) => {
+    const ok = window.confirm('Delete this workflow?');
+    if (!ok) return;
+    try {
+      await deleteWorkflow(workflowId);
+      setOpenWorkflowMenuId(null);
+      await load();
+    } catch (e) {
+      setError('Failed to delete workflow');
+    }
+  };
+
   if (loading && columns.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center h-full bg-slate-50">
@@ -207,9 +268,44 @@ export default function WorkflowsKanban({ currentUser, onOpenBuilder, onOpenSett
                     {col.workflows.length}
                   </span>
                 </div>
-                <button className="text-slate-400 hover:text-slate-600">
-                  <MoreHorizontal size={16} />
-                </button>
+                <div className="relative" data-kanban-menu>
+                  <button
+                    className="text-slate-400 hover:text-slate-600 p-1 rounded-md hover:bg-slate-100 transition-colors"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setOpenStageMenuId((v) => (v === col.stage.id ? null : col.stage.id));
+                      setOpenWorkflowMenuId(null);
+                    }}
+                  >
+                    <MoreHorizontal size={16} />
+                  </button>
+                  {openStageMenuId === col.stage.id && (
+                    <div className="absolute right-0 top-7 z-20 w-44 rounded-lg border border-slate-200 bg-white shadow-lg overflow-hidden">
+                      <button
+                        className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setOpenStageMenuId(null);
+                          if (onOpenSettings) onOpenSettings();
+                        }}
+                      >
+                        Manage stages
+                      </button>
+                      <button
+                        className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleDeleteStage(col.stage);
+                        }}
+                      >
+                        Delete stage
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div 
@@ -251,8 +347,48 @@ export default function WorkflowsKanban({ currentUser, onOpenBuilder, onOpenSett
                       <div className="font-medium text-slate-800 text-sm leading-snug hover:text-blue-600 transition-colors">
                         {w.name}
                       </div>
-                      <div className="text-slate-300 group-hover/card:text-slate-400 cursor-move">
-                        <GripVertical size={14} />
+                      <div className="flex items-center gap-1">
+                        <div className="text-slate-300 group-hover/card:text-slate-400 cursor-move">
+                          <GripVertical size={14} />
+                        </div>
+                        <div className="relative opacity-0 group-hover/card:opacity-100 transition-opacity" data-kanban-menu>
+                          <button
+                            className="text-slate-400 hover:text-slate-600 p-1 rounded-md hover:bg-slate-100 transition-colors"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setOpenWorkflowMenuId((v) => (v === w.id ? null : w.id));
+                              setOpenStageMenuId(null);
+                            }}
+                          >
+                            <MoreHorizontal size={14} />
+                          </button>
+                          {openWorkflowMenuId === w.id && (
+                            <div className="absolute right-0 top-7 z-20 w-44 rounded-lg border border-slate-200 bg-white shadow-lg overflow-hidden">
+                              <button
+                                className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  const nextStatus = w.status === 'active' ? 'inactive' : 'active';
+                                  handleToggleWorkflowStatus(w.id, nextStatus);
+                                }}
+                              >
+                                {w.status === 'active' ? 'Deactivate' : 'Activate'}
+                              </button>
+                              <button
+                                className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  handleDeleteWorkflow(w.id);
+                                }}
+                              >
+                                Delete workflow
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                     
