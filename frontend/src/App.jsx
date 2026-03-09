@@ -22,13 +22,20 @@ import GuestChat from './components/GuestChat.jsx';
 import InstagramPage from './components/InstagramPage.jsx';
 import GalleryPage from './components/GalleryPage.jsx';
 import LandingPage from './components/LandingPage.jsx';
+import AiAgentPage from './components/AiAgentPage.jsx';
 import { connectSocket } from './socket.js';
 import { getInbox, getMessages, claimConversation, reassignConversation, forceReassignConversation, releaseConversation, markAsRead, resolveConversation, deleteConversation, blockConversation, unblockConversation, pinConversation, updateWorkflow, getTeamUser, getTeamUsers, reassignExternalLead } from './api.js';
-import { LayoutDashboard, MessageSquare, Users, Megaphone, Settings, LogOut, Search, Bell, FileText, Workflow, Shield, ChevronsUpDown, Check, Zap, GitBranch, Instagram, ChevronDown, ChevronRight, Mail } from 'lucide-react';
+import { LayoutDashboard, MessageSquare, Users, Megaphone, Settings, LogOut, Search, Bell, FileText, Workflow, Shield, ChevronsUpDown, Check, Zap, GitBranch, Instagram, ChevronDown, ChevronRight, Mail, Bot } from 'lucide-react';
 import { Button } from './components/ui/Button';
 import { Badge } from './components/ui/Badge';
 import { Card, CardHeader, CardTitle, CardContent } from './components/ui/Card';
 import { Toaster } from './components/ui/Toaster';
+
+// The full list of valid pages in the app
+const validPages = [
+  'inbox', 'dashboard', 'contacts', 'labels', 'campaigns', 'templates', 
+  'workflows', 'settings', 'profile', 'flows', 'payments', 'ai-agent'
+];
 
 export default function App() {
   const [storedUser, setStoredUser] = useState(() => {
@@ -41,7 +48,6 @@ export default function App() {
   });
   const [isLoggedIn, setIsLoggedIn] = useState(!!storedUser);
   const [socket, setSocket] = useState(null);
-  const validPages = ['dashboard', 'inbox', 'contacts', 'labels', 'campaigns', 'team-members', 'templates', 'email-templates', 'create-template', 'flows', 'workflows', 'rules', 'instagram', 'gallery', 'settings'];
 
   const [activePage, setActivePage] = useState(() => {
     const fullPath = window.location.pathname.substring(1);
@@ -788,6 +794,20 @@ export default function App() {
               </Button>
 
               <Button
+                variant={activePage === 'ai-agent' ? 'secondary' : 'ghost'}
+                className="w-full flex items-center justify-start h-10 px-0 rounded-lg overflow-hidden shrink-0"
+                onClick={() => setActivePage('ai-agent')}
+                title="AI Agent"
+              >
+                <div className="w-10 h-10 flex items-center justify-center shrink-0">
+                  <Bot size={20} />
+                </div>
+                <span className="ml-3 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100">
+                  AI Agent
+                </span>
+              </Button>
+
+              <Button
                 variant={activePage === 'rules' ? 'secondary' : 'ghost'}
                 className="w-full flex items-center justify-start h-10 px-0 rounded-lg overflow-hidden shrink-0"
                 onClick={() => setActivePage('rules')}
@@ -911,6 +931,7 @@ export default function App() {
 
         {activePage === 'instagram' && <InstagramPage />}
         {activePage === 'gallery' && <GalleryPage />}
+        {activePage === 'ai-agent' && <AiAgentPage />}
 
         {activePage === 'team-members' && <TeamMembersPage />}
         {activePage === 'contacts' && <ContactsPage />}
@@ -991,6 +1012,23 @@ export default function App() {
                     </div>
                   </div>
                 </div>
+              )}
+
+              {/* AI Status Banner & Takeover */}
+              {selectedConversation && !isAssigned && selectedConversation.is_ai_active && (
+                 <div className="bg-purple-50 border-b border-purple-100 px-4 py-2 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                       <Bot size={16} className="text-purple-600 animate-pulse" />
+                       <span className="text-xs font-medium text-purple-700">AI is handling this conversation</span>
+                    </div>
+                    <Button 
+                       size="sm" 
+                       className="h-7 text-xs bg-purple-600 hover:bg-purple-700 text-white border-none shadow-sm"
+                       onClick={() => handleAssign(currentUser.id)}
+                    >
+                       Enter Chat
+                    </Button>
+                 </div>
               )}
 
               <div className="flex-1 overflow-hidden relative">

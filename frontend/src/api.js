@@ -871,3 +871,57 @@ export async function createPaymentLink(data) {
   });
   return res.json();
 }
+
+// ─── AI Agent ─────────────────────────────────────────────────────────────────
+
+export async function getAiConfig() {
+  const res = await fetch('/api/ai-agent/config', { headers: getAuthHeaders() });
+  return res.json();
+}
+
+export async function updateAiConfig(data) {
+  const res = await fetch('/api/ai-agent/config', {
+    method: 'PUT',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
+export async function getAiKnowledge() {
+  const res = await fetch('/api/ai-agent/knowledge', { headers: getAuthHeaders() });
+  return res.json();
+}
+
+export async function addAiTextKnowledge(data) {
+  const res = await fetch('/api/ai-agent/knowledge/text', {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
+export async function deleteAiKnowledge(id) {
+  const res = await fetch(`/api/ai-agent/knowledge/${id}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+  });
+  return res.json();
+}
+
+export async function uploadAiDocument(file, title) {
+  const formData = new FormData();
+  formData.append('file', file);
+  if (title) formData.append('title', title);
+  
+  const headers = getAuthHeaders();
+  delete headers['Content-Type']; // Let browser set multipart boundary
+
+  const res = await fetch('/api/ai-agent/knowledge/upload', {
+    method: 'POST',
+    headers,
+    body: formData,
+  });
+  return res.json();
+}

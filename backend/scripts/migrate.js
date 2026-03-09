@@ -401,6 +401,24 @@ async function runMigrations() {
           console.log('[migrate] whatsapp_templates table already exists.');
         }
 
+        // 0020 – ai_agent_rag table
+        const aiAgentRes = await client.query(`
+          SELECT EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE  table_schema = 'public'
+            AND    table_name   = 'ai_agent_config'
+          );
+        `);
+        if (!aiAgentRes.rows[0].exists) {
+          console.log('[migrate] Adding AI Agent tables...');
+          await client.query('BEGIN');
+          await runSQLFile(client, path.join(__dirname, '..', 'db', 'migrations', '0020_ai_agent_rag.sql'));
+          await client.query('COMMIT');
+          console.log('[migrate] Applied 0020_ai_agent_rag migration.');
+        } else {
+          console.log('[migrate] AI Agent tables already exist.');
+        }
+
         return;
 
 

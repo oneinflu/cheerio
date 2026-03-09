@@ -1,0 +1,148 @@
+'use strict';
+const express = require('express');
+const router = express.Router();
+const db = require('../../db');
+const auth = require('../middlewares/auth');
+const multer = require('multer');
+const upload = multer({ storage: multer.memoryStorage() });
+
+// ─── AI Config ───────────────────────────────────────────────────────────────
+
+/**
+ * GET /api/ai-agent/config
+ * Get current AI configuration
+ */
+router.get('/config', auth.requireRole('admin', 'super_admin'), async (req, res, next) => {
+  try {
+    const result = await db.query('SELECT * FROM ai_agent_config LIMIT 1');
+    if (result.rows.length === 0) {
+      // Create default if missing
+      const ins = await db.query('INSERT INTO ai_agent_config (is_active) VALUES (false) RETURNING *');
+      return res.json(ins.rows[0]);
+    }
+    res.json(result.rows[0]);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * PUT /api/ai-agent/config
+ * Update AI configuration (status, prompt, model)
+ */
+router.put('/config', auth.requireRole('admin', 'super_admin'), async (req, res, next) => {
+  try {
+    const { is_active, system_prompt, model_name, temperature } = req.body;
+    
+    // Update the single config row
+    const result = await db.query(
+      `UPDATE ai_agent_config 
+       SET is_active = COALESCE($1, is_active),
+           system_prompt = COALESCE($2, system_prompt),
+           model_name = COALESCE($3, model_name),
+           temperature = COALESCE($4, temperature),
+           updated_at = NOW()
+       RETURNING *`,
+      [is_active, system_prompt, model_name, temperature]
+    );
+    
+    if (result.rowCount === 0) {
+        // Fallback insert
+        const ins = await db.query(
+            `INSERT INTO ai_agent_config (is_active, system_prompt, model_name, temperature) 
+             VALUES ($1, $2, $3, $4) RETURNING *`,
+            [is_active || false, system_prompt || '', model_name || 'gpt-4-turbo', temperature || 0.7]
+        );
+        return res.json(ins.rows[0]);
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── Knowledge Base ──────────────────────────────────────────────────────────
+
+/**
+ * GET /api/ai-agent/knowledge
+ * List all knowledge sources
+ */
+router.get('/knowledge', auth.requireRole('admin', 'super_admin'), async (req, res, next) => {
+  try {
+    const result = await db.query('SELECT * FROM knowledge_base ORDER BY created_at DESC');
+    res.json(result.rows);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/ai-agent/knowledge/text
+ * Add text content (website URL or raw text)
+ */
+router.post('/knowledge/text', auth.requireRole('admin', 'super_admin'), async (req, res, next) => {
+  try {
+    const { title, content, source_url, source_type } = req.body;
+    if (!title || !source_type) {
+        return res.status(400).json({ error: 'Title and source_type are required' });
+    }
+
+    const result = await db.query(
+      `INSERT INTO knowledge_base (title, content, source_url, source_type)
+       VALUES ($1, $2, $3, $4)
+       RETURNING *`,
+      [title, content, source_url, source_type]
+    );
+    
+    // TODO: Trigger async embedding generation here
+    
+    res.json(result.rows[0]);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/ai-agent/knowledge/upload
+ * Upload PDF/Document
+ */
+router.post('/knowledge/upload', auth.requireRole('admin', 'super_admin'), upload.single('file'), async (req, res, next) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    
+    const { title } = req.body;
+    // In a real app, upload to S3/Cloud storage. Here we'll store small content or mock URL.
+    // For MVP, we might extract text immediately if possible, or just store metadata.
+    
+    // Simulating extraction or storage
+    const fakeUrl = `uploads/${req.file.originalname}`;
+    
+    const result = await db.query(
+      `INSERT INTO knowledge_base (title, source_url, source_type, content)
+       VALUES ($1, $2, 'pdf', 'Content extraction pending...')
+       RETURNING *`,
+      [title || req.file.originalname, fakeUrl]
+    );
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * DELETE /api/ai-agent/knowledge/:id
+ * Remove knowledge source
+ */
+router.delete('/knowledge/:id', auth.requireRole('admin', 'super_admin'), async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    await db.query('DELETE FROM knowledge_base WHERE id = $1', [id]);
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+module.exports = router;
