@@ -486,20 +486,17 @@ async function runWorkflow(id, phoneNumber, context = {}) {
           let components = Array.isArray(nodeData.components) ? JSON.parse(JSON.stringify(nodeData.components)) : [];
           const languageCode = nodeData.languageCode || 'en_US';
           
-          // Resolve variables in components
+          // Resolve variables in components while preserving parameter_name for NAMED templates
           components = components.map(comp => {
             if (comp.parameters && Array.isArray(comp.parameters)) {
               comp.parameters = comp.parameters.map(param => {
-                // IMPORTANT: We must NOT include parameter_name in the final payload to Meta.
-                // Meta API expects: { type: "text", text: "Value" }
-                // Extra fields like parameter_name cause rejection (100: Invalid parameter).
-                
-                const resolvedText = param.text ? resolvePlaceholders(param.text, context) : '';
-                
-                // Return clean object for Meta
                 if (param.type === 'text') {
-                    return { type: 'text', text: resolvedText };
+                  const resolvedText = param.text ? resolvePlaceholders(param.text, context) : '';
+                  const next = { type: 'text', text: resolvedText };
+                  if (param.parameter_name) next.parameter_name = param.parameter_name;
+                  return next;
                 }
+                // Non-text media parameters (image/video/document) pass through
                 return param;
               });
             }

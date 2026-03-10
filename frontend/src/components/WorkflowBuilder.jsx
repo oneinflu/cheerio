@@ -804,27 +804,72 @@ const extractTemplatePlaceholders = (bodyText) => {
   return vars;
 };
 
-const buildTemplateComponentsPayload = (tmpl, variables) => {
+const buildTemplateComponentsPayload = (tmpl, variables, header) => {
   if (!tmpl || !tmpl.bodyText) return [];
   const keys = extractTemplatePlaceholders(tmpl.bodyText);
-  if (keys.length === 0) return [];
-  const bodyParams = keys.map((k) => {
-    const value = (variables && variables[k]) || '';
-    const param = {
-      type: 'text',
-      text: value,
-    };
-    if (tmpl.parameterFormat === 'NAMED') {
-      param.parameter_name = k;
+  const components = [];
+
+  // Header media/text (if template has header format and header provided)
+  const headerType = header?.headerType || 'none';
+  const headerUrl = header?.headerUrl || '';
+  const headerFileName = header?.headerFileName || '';
+  const hf = (tmpl && tmpl.headerFormat) ? String(tmpl.headerFormat).toUpperCase() : null; // IMAGE | VIDEO | DOCUMENT | TEXT | null
+
+  if (hf && hf !== 'NONE') {
+    if (hf === 'IMAGE' && headerType === 'image' && headerUrl) {
+      components.push({
+        type: 'header',
+        parameters: [{ type: 'image', image: { link: headerUrl } }],
+      });
+    } else if (hf === 'VIDEO' && headerType === 'video' && headerUrl) {
+      components.push({
+        type: 'header',
+        parameters: [{ type: 'video', video: { link: headerUrl } }],
+      });
+    } else if (hf === 'DOCUMENT' && headerType === 'document' && headerUrl) {
+      const doc = { link: headerUrl };
+      if (headerFileName) doc.filename = headerFileName;
+      components.push({
+        type: 'header',
+        parameters: [{ type: 'document', document: doc }],
+      });
+    } else if (hf === 'TEXT') {
+      // If header text exists (and includes variables), derive from variables map if keys exist
+      // Many TEXT headers don't require parameters; skip unless keys indicate placeholders
+      const headerKeys = extractTemplatePlaceholders(tmpl.headerText || '');
+      if (headerKeys.length > 0) {
+        components.push({
+          type: 'header',
+          parameters: headerKeys.map((k) => ({
+            type: 'text',
+            text: (variables && variables[k]) || '',
+            ...(tmpl.parameterFormat === 'NAMED' ? { parameter_name: k } : {}),
+          })),
+        });
+      }
     }
-    return param;
-  });
-  return [
-    {
+  }
+
+  // Body parameters
+  if (keys.length > 0) {
+    const bodyParams = keys.map((k) => {
+      const value = (variables && variables[k]) || '';
+      const param = {
+        type: 'text',
+        text: value,
+      };
+      if (tmpl.parameterFormat === 'NAMED') {
+        param.parameter_name = k;
+      }
+      return param;
+    });
+    components.push({
       type: 'body',
       parameters: bodyParams,
-    },
-  ];
+    });
+  }
+
+  return components;
 };
 
 /**
@@ -1087,6 +1132,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
             .map((t) => {
               const bodyComp = t.components && t.components.find((c) => c.type === 'BODY');
               const buttonsComp = t.components && t.components.find((c) => c.type === 'BUTTONS');
+              const headerComp = t.components && t.components.find((c) => c.type === 'HEADER');
               const examples = {};
               if (bodyComp && bodyComp.example) {
                 if (t.parameter_format === 'NAMED' && bodyComp.example.body_text_named_params) {
@@ -1108,6 +1154,8 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 bodyText: bodyComp ? bodyComp.text : '',
                 buttons: buttonsComp ? buttonsComp.buttons : [],
                 parameterFormat: t.parameter_format || 'POSITIONAL',
+                headerFormat: headerComp ? (headerComp.format || 'NONE') : 'NONE',
+                headerText: headerComp && headerComp.text ? headerComp.text : '',
                 examples,
               };
             });
@@ -4121,7 +4169,15 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 const headerType = d.headerType || 'none';
 
                 // ── Helpers ────────────────────────────────────────
-                const setHeader = (fields) => updateNodeFields(selectedNode.id, fields);
+                const setHeader = (fields) => {
+                  const hdr = {
+                    headerType: fields.headerType ?? (d.headerType || 'none'),
+                    headerUrl: fields.headerUrl ?? (d.headerUrl || ''),
+                    headerFileName: fields.headerFileName ?? (d.headerFileName || ''),
+                  };
+                  const nextComps = tmpl ? buildTemplateComponentsPayload(tmpl, d.variables || {}, hdr) : (d.components || []);
+                  updateNodeFields(selectedNode.id, { ...fields, components: nextComps });
+                };
 
                 // Compute upstream variables (same BFS as XOLOX panel)
                 const upstreamVars = getUpstreamVariables(selectedNode.id, nodes, edges);
@@ -4148,7 +4204,12 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                             extractTemplatePlaceholders(found.bodyText || '').forEach(k => {
                               nextVars[k] = (found.examples && found.examples[k]) || '';
                             });
-                            components = buildTemplateComponentsPayload(found, nextVars);
+                            const hdr = {
+                              headerType: d.headerType || 'none',
+                              headerUrl: d.headerUrl || '',
+                              headerFileName: d.headerFileName || '',
+                            };
+                            components = buildTemplateComponentsPayload(found, nextVars, hdr);
                           }
                           if (!selectedNode) return;
                           setNodes(nds => nds.map(node => {
@@ -4296,7 +4357,12 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                                 value={vars[k] || ''}
                                 onChange={(e) => {
                                   const nextVars = { ...vars, [k]: e.target.value };
-                                  const nextComps = buildTemplateComponentsPayload(tmpl, nextVars);
+                                  const hdr = {
+                                    headerType: d.headerType || 'none',
+                                    headerUrl: d.headerUrl || '',
+                                    headerFileName: d.headerFileName || '',
+                                  };
+                                  const nextComps = buildTemplateComponentsPayload(tmpl, nextVars, hdr);
                                   updateNodeFields(selectedNode.id, { variables: nextVars, components: nextComps });
                                 }}
                                 onFocus={() => setTemplateFocusedVarKey(k)}
@@ -4327,7 +4393,12 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                               onClick={() => {
                                 if (templateFocusedVarKey) {
                                   const nextVars = { ...vars, [templateFocusedVarKey]: v };
-                                  const nextComps = buildTemplateComponentsPayload(tmpl, nextVars);
+                                  const hdr = {
+                                    headerType: d.headerType || 'none',
+                                    headerUrl: d.headerUrl || '',
+                                    headerFileName: d.headerFileName || '',
+                                  };
+                                  const nextComps = buildTemplateComponentsPayload(tmpl, nextVars, hdr);
                                   updateNodeFields(selectedNode.id, { variables: nextVars, components: nextComps });
                                 } else {
                                   navigator.clipboard?.writeText(v);
