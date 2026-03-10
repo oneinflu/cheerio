@@ -214,8 +214,10 @@ function EditWorkflowModal({ isOpen, onClose, onSubmit, workflow }) {
       setDescription(workflow.description || '');
       // Ensure we're reading steps correctly, handling potential nulls
       const steps = workflow.steps || {};
-      setTriggerLabel(steps.triggerLabel || '');
-      setTriggerCourse(steps.triggerCourse || '');
+      
+      // Look for triggerLabel/triggerCourse in steps OR root level (if API structure varies)
+      setTriggerLabel(steps.triggerLabel || workflow.triggerLabel || '');
+      setTriggerCourse(steps.triggerCourse || workflow.triggerCourse || '');
     } else {
       // Reset when closed or no workflow
       setName('');
@@ -704,6 +706,21 @@ export default function WorkflowsKanban({ currentUser, onOpenBuilder }) {
                                 onClick={(e) => {
                                   e.preventDefault();
                                   e.stopPropagation();
+                                  // Pass course and label to builder if available
+                                  const steps = w.steps || {};
+                                  const triggerLabel = steps.triggerLabel || w.triggerLabel;
+                                  const triggerCourse = steps.triggerCourse || w.triggerCourse;
+                                  onOpenBuilder(w.id, triggerLabel, triggerCourse);
+                                  setOpenWorkflowMenuId(null);
+                                }}
+                              >
+                                Open builder
+                              </button>
+                              <button
+                                className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
                                   const nextStatus = w.status === 'active' ? 'inactive' : 'active';
                                   handleToggleWorkflowStatus(w.id, nextStatus);
                                 }}
@@ -742,32 +759,29 @@ export default function WorkflowsKanban({ currentUser, onOpenBuilder }) {
                       </div>
                     )}
 
-                    {/* Tags/Filters Display */}
-                    {(w.steps?.triggerLabel || w.steps?.triggerCourse) && (
-                      <div className="flex flex-wrap gap-1 mb-2">
-                        {w.steps?.triggerLabel && (
-                          <div className="flex items-center gap-1 bg-purple-50 text-purple-700 px-1.5 py-0.5 rounded text-[10px] font-medium border border-purple-100">
-                            <span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span>
-                            {w.steps.triggerLabel}
-                          </div>
-                        )}
-                        {w.steps?.triggerCourse && (
-                          <div className="flex items-center gap-1 bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded text-[10px] font-medium border border-blue-100">
-                            <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
-                            {w.steps.triggerCourse}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    
-                    <div className="flex items-center justify-between mt-auto pt-1">
+                    <div className="flex items-center gap-2 mt-2">
                       <Badge 
                         variant="outline" 
                         className={`text-[10px] px-1.5 py-0 h-5 ${w.status === 'active' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-slate-50 text-slate-500'}`}
                       >
                         {w.status}
                       </Badge>
-                      <span className="text-[10px] text-slate-400 font-mono">#{idx + 1}</span>
+                      
+                      {/* Show Course Tag */}
+                      {(w.steps?.triggerCourse || w.triggerCourse) && (
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 bg-blue-50 text-blue-700 border-blue-200 truncate max-w-[80px]">
+                          {w.steps?.triggerCourse || w.triggerCourse}
+                        </Badge>
+                      )}
+
+                      {/* Show Label Tag */}
+                      {(w.steps?.triggerLabel || w.triggerLabel) && (
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 bg-purple-50 text-purple-700 border-purple-200 truncate max-w-[80px]">
+                          {w.steps?.triggerLabel || w.triggerLabel}
+                        </Badge>
+                      )}
+                      
+                      <span className="text-[10px] text-slate-400 font-mono ml-auto">#{idx + 1}</span>
                     </div>
                   </div>
                 ))}
