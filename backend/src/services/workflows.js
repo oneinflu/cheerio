@@ -85,6 +85,48 @@ async function ensureConversation(phoneNumber) {
   return createConv.rows[0].id;
 }
 
+// Ensure a contact exists and update basic fields; returns contact_id
+async function ensureContact({ external_id, name, email, attributes }) {
+  let contactRes = await db.query('SELECT id, channel_id, display_name, profile FROM contacts WHERE external_id = $1', [external_id]);
+  if (contactRes.rowCount === 0) {
+    const alt = external_id.startsWith('+') ? external_id.slice(1) : `+${external_id}`;
+    contactRes = await db.query('SELECT id, channel_id, display_name, profile FROM contacts WHERE external_id = $1', [alt]);
+  }
+
+  if (contactRes.rowCount === 0) {
+    const chanRes = await db.query("SELECT id FROM channels WHERE type='whatsapp' LIMIT 1");
+    if (chanRes.rowCount === 0) throw new Error('No WhatsApp channel configured');
+    const channelId = chanRes.rows[0].id;
+    const ins = await db.query(
+      `INSERT INTO contacts (id, channel_id, external_id, display_name, profile)
+       VALUES (gen_random_uuid(), $1, $2, $3, $4::jsonb)
+       RETURNING id`,
+      [channelId, external_id, name || 'User', JSON.stringify({ email: email || '', attributes: attributes || {} })]
+    );
+    return ins.rows[0].id;
+  }
+
+  const contactId = contactRes.rows[0].id;
+  const displayName = name || contactRes.rows[0].display_name || 'User';
+  const attrJson = JSON.stringify(attributes || {});
+
+  await db.query(
+    `
+    UPDATE contacts
+    SET display_name = $2,
+        profile = COALESCE(profile, '{}'::jsonb) ||
+                 jsonb_build_object(
+                   'email', COALESCE($3, (profile->>'email')),
+                   'attributes', (COALESCE(profile->'attributes','{}'::jsonb) || $4::jsonb)
+                 )
+    WHERE id = $1
+    `,
+    [contactId, displayName, email || null, attrJson]
+  );
+
+  return contactId;
+}
+
 
 async function listWorkflows() {
   const res = await db.query(`
