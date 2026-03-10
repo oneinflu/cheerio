@@ -4230,6 +4230,26 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                           {tmpl.bodyText}
                         </div>
                       )}
+                      {tmpl && (
+                        <div className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
+                          <div className="bg-slate-50 border border-slate-200 rounded px-2 py-1.5">
+                            <span className="text-slate-500">Parameter Format:</span>{' '}
+                            <span className="font-semibold text-slate-700">{tmpl.parameterFormat}</span>
+                          </div>
+                          <div className="bg-slate-50 border border-slate-200 rounded px-2 py-1.5">
+                            <span className="text-slate-500">Header Format:</span>{' '}
+                            <span className="font-semibold text-slate-700">{tmpl.headerFormat}</span>
+                          </div>
+                          <div className="bg-slate-50 border border-slate-200 rounded px-2 py-1.5">
+                            <span className="text-slate-500">Language:</span>{' '}
+                            <span className="font-semibold text-slate-700">{tmpl.language}</span>
+                          </div>
+                          <div className="bg-slate-50 border border-slate-200 rounded px-2 py-1.5">
+                            <span className="text-slate-500">Category:</span>{' '}
+                            <span className="font-semibold text-slate-700">{tmpl.category || '—'}</span>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* ② Media Header (only when template has a header component) */}
@@ -4335,7 +4355,9 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                     {/* ③ Template variables with upstream chips */}
                     <div>
                       <div className="flex items-center justify-between mb-1">
-                        <label className="text-sm font-medium text-slate-700">Variables</label>
+                        <label className="text-sm font-medium text-slate-700">
+                          Variables{tmpl ? (tmpl.parameterFormat === 'POSITIONAL' ? ' (POSITIONAL — order matters)' : ' (NAMED)') : ''}
+                        </label>
                         {templateFocusedVarKey && (
                           <span className="text-[10px] text-green-600 font-medium">→ inserting into {`{{${templateFocusedVarKey}}}`}</span>
                         )}
