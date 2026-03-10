@@ -141,7 +141,7 @@ async function finalizeOutboundMessage(clientConn, messageId, conversationId, ex
     await clientConn.query(
       `
       UPDATE messages
-      SET external_message_id = $1, delivery_status = 'sent', sent_at = NOW()
+      SET external_message_id = $1, delivery_status = 'accepted', sent_at = NOW()
       WHERE id = $2
       `,
       [externalMessageId, messageId]
@@ -281,7 +281,7 @@ async function sendText(conversationId, text) {
 
     await finalizeOutboundMessage(clientConn, messageId, details.conversationId, externalId, true);
     await clientConn.query('COMMIT');
-    emitStatus(details.conversationId, messageId, 'sent', { externalMessageId: externalId });
+    emitStatus(details.conversationId, messageId, 'accepted', { externalMessageId: externalId });
     return { conversationId: details.conversationId, messageId, externalMessageId: externalId };
   } catch (err) {
     try {
@@ -358,7 +358,7 @@ async function sendMedia(conversationId, kind, link, caption) {
 
     await finalizeOutboundMessage(clientConn, messageId, details.conversationId, externalId, true);
     await clientConn.query('COMMIT');
-    emitStatus(details.conversationId, messageId, 'sent', { externalMessageId: externalId });
+    emitStatus(details.conversationId, messageId, 'accepted', { externalMessageId: externalId });
     return { conversationId: details.conversationId, messageId, externalMessageId: externalId };
   } catch (err) {
     try {
@@ -430,7 +430,7 @@ async function sendTemplate(conversationId, name, languageCode, components) {
 
     await finalizeOutboundMessage(clientConn, messageId, details.conversationId, externalId, true);
     await clientConn.query('COMMIT');
-    emitStatus(details.conversationId, messageId, 'sent', { externalMessageId: externalId });
+    emitStatus(details.conversationId, messageId, 'accepted', { externalMessageId: externalId });
     return { conversationId: details.conversationId, messageId, externalMessageId: externalId };
   } catch (err) {
     try {
@@ -502,7 +502,7 @@ async function sendInteractive(conversationId, interactive) {
 
     await finalizeOutboundMessage(clientConn, messageId, details.conversationId, externalId, true);
     await clientConn.query('COMMIT');
-    emitStatus(details.conversationId, messageId, 'sent', { externalMessageId: externalId });
+    emitStatus(details.conversationId, messageId, 'accepted', { externalMessageId: externalId });
     return { conversationId: details.conversationId, messageId, externalMessageId: externalId };
   } catch (err) {
     try {

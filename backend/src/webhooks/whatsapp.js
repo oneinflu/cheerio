@@ -123,6 +123,7 @@ router.post('/', async (req, res, next) => {
               };
 
               const ts = st.timestamp ? new Date(Number(st.timestamp) * 1000) : null;
+              const sentAt = status === 'sent' ? ts : null;
               const deliveredAt = status === 'delivered' ? ts : null;
               const readAt = status === 'read' ? ts : null;
 
@@ -130,13 +131,14 @@ router.post('/', async (req, res, next) => {
                 `
                 UPDATE messages
                 SET delivery_status = $2,
-                    delivered_at = COALESCE($3, delivered_at),
-                    read_at = COALESCE($4, read_at),
-                    raw_payload = jsonb_set(COALESCE(raw_payload, '{}'::jsonb), '{meta_status}', $5::jsonb, true)
+                    sent_at = COALESCE($3, sent_at),
+                    delivered_at = COALESCE($4, delivered_at),
+                    read_at = COALESCE($5, read_at),
+                    raw_payload = jsonb_set(COALESCE(raw_payload, '{}'::jsonb), '{meta_status}', $6::jsonb, true)
                 WHERE external_message_id = $1
                 RETURNING id, conversation_id
                 `,
-                [externalMessageId, status, deliveredAt, readAt, JSON.stringify(metaStatus)]
+                [externalMessageId, status, sentAt, deliveredAt, readAt, JSON.stringify(metaStatus)]
               );
 
               if (io && upd.rowCount > 0) {

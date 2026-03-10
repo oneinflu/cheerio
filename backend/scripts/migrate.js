@@ -54,6 +54,24 @@ async function runMigrations() {
           console.log('[migrate] Applied password migration.');
         }
 
+        const deliveryAcceptedRes = await client.query(
+          `
+          SELECT 1
+          FROM pg_type t
+          JOIN pg_enum e ON e.enumtypid = t.oid
+          WHERE t.typname = 'delivery_status'
+            AND e.enumlabel = 'accepted'
+          LIMIT 1
+          `
+        );
+        if (deliveryAcceptedRes.rowCount === 0) {
+          console.log('[migrate] Adding accepted to delivery_status enum...');
+          await client.query('BEGIN');
+          await runSQLFile(client, path.join(__dirname, '..', 'db', 'migrations', '0021_add_delivery_status_accepted.sql'));
+          await client.query('COMMIT');
+          console.log('[migrate] Applied delivery_status accepted migration.');
+        }
+
         // Check if lead_id column exists in conversations
         const leadColRes = await client.query(`
           SELECT column_name 
