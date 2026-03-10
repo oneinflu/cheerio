@@ -20,6 +20,7 @@
 const express = require('express');
 const db = require('../../db');
 const auth = require('../middlewares/auth');
+const workflows = require('../services/workflows');
 
 // ─── Public router (mounted WITHOUT /api, no auth middleware) ────────────────
 const publicRouter = express.Router();
@@ -27,7 +28,7 @@ const publicRouter = express.Router();
 /**
  * POST /webhooks/workflow/:workflowId
  * Called by any external system. No auth needed.
- * Accepts any JSON body and stores it.
+ * Accepts any JSON body, stores it, and triggers the workflow if it has an incoming_webhook node.
  */
 publicRouter.post('/:workflowId', async (req, res) => {
     try {
@@ -56,6 +57,37 @@ publicRouter.post('/:workflowId', async (req, res) => {
         } catch (dbErr) {
             // Silently ignore — workflow might not exist, that's OK
             console.warn('[webhook] Could not store event:', dbErr.message);
+        }
+
+        try {
+            const wf = await workflows.getWorkflow(workflowId);
+            const steps = wf && wf.steps ? wf.steps : null;
+            const nodes = steps && Array.isArray(steps.nodes) ? steps.nodes : [];
+            const hasIncomingWebhookNode = nodes.some((n) => n && n.type === 'incoming_webhook');
+
+            if (wf && hasIncomingWebhookNode) {
+                const phoneRaw = payload.phone || payload.mobile || payload.whatsapp || payload.contact || '';
+                const name = payload.name || payload.full_name || payload.username || '';
+                const email = payload.email || payload.mail || '';
+
+                const normalizedPhone = String(phoneRaw || '').replace(/[+\s-]/g, '');
+                const context = { ...payload };
+                if (name) context.name = name;
+                if (email) context.email = email;
+                if (normalizedPhone) context.phone = normalizedPhone;
+
+                if (normalizedPhone) {
+                    workflows
+                        .runWorkflow(workflowId, normalizedPhone, context)
+                        .catch((err) => {
+                            console.error(`[webhook] Failed to run workflow ${workflowId}:`, err.message);
+                        });
+                } else {
+                    console.warn(`[webhook] Skipping workflow ${workflowId}: no phone provided in payload`);
+                }
+            }
+        } catch (runErr) {
+            console.error('[webhook] Workflow trigger error:', runErr.message);
         }
 
         return res.json({ received: true, workflow_id: workflowId });

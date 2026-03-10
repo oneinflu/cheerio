@@ -957,6 +957,9 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
   // Test/Run State
   const [isRunModalOpen, setIsRunModalOpen] = useState(false);
   const [runPhoneNumber, setRunPhoneNumber] = useState('');
+  const [isWebhookTestModalOpen, setIsWebhookTestModalOpen] = useState(false);
+  const [webhookTestFields, setWebhookTestFields] = useState([{ key: 'phone', value: '' }]);
+  const [isWebhookSending, setIsWebhookSending] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
   const [voiceText, setVoiceText] = useState('');
@@ -973,6 +976,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
   const [galleryTarget, setGalleryTarget] = useState(null); // 'header' | null
   const [templateFocusedVarKey, setTemplateFocusedVarKey] = useState(null);
   const recognitionRef = useRef(null);
+  const hasIncomingWebhookTrigger = nodes.some((n) => n && n.type === 'incoming_webhook');
 
   React.useEffect(() => {
     let styleEl = document.getElementById('workflow-builder-reactflow-style');
@@ -2111,6 +2115,73 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
     }
   };
 
+  const openWebhookTestModal = () => {
+    const triggerNode = nodes.find((n) => n && n.type === 'incoming_webhook');
+    const mapping = (triggerNode && triggerNode.data && triggerNode.data.paramMapping) ? triggerNode.data.paramMapping : {};
+    const mappedKeys = Object.keys(mapping || {}).filter(Boolean);
+
+    const base = [
+      { key: 'phone', value: runPhoneNumber || '' },
+      { key: 'name', value: '' },
+      { key: 'email', value: '' },
+    ];
+
+    const extras = mappedKeys
+      .filter((k) => !base.some((b) => b.key === k))
+      .map((k) => ({ key: k, value: '' }));
+
+    setWebhookTestFields([...base, ...extras]);
+    setIsWebhookTestModalOpen(true);
+  };
+
+  const handleWebhookTestRun = async () => {
+    const workflowId = initialWorkflow?.id || null;
+    const isRealId = workflowId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(workflowId);
+    if (!isRealId) {
+      alert('Please save the workflow first to generate a webhook URL.');
+      return;
+    }
+
+    const payload = {};
+    for (const row of webhookTestFields) {
+      const k = (row.key || '').trim();
+      if (!k) continue;
+      payload[k] = row.value;
+    }
+
+    const phone = payload.phone || payload.mobile || payload.whatsapp || payload.contact || '';
+    if (!String(phone).trim()) {
+      alert('Phone is required for webhook test (use key "phone").');
+      return;
+    }
+
+    setIsWebhookSending(true);
+    try {
+      if (onSave) {
+        const json = handleSave();
+        await onSave(json);
+      }
+
+      const webhookUrl = `${window.location.origin}/webhooks/workflow/${workflowId}`;
+      const res = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error((data && (data.error || data.message)) || 'Webhook request failed');
+      }
+
+      setIsWebhookTestModalOpen(false);
+    } catch (err) {
+      console.error('Webhook test failed:', err);
+      alert('Webhook test failed: ' + (err.message || 'Unknown error'));
+    } finally {
+      setIsWebhookSending(false);
+    }
+  };
+
   const handleStartRecording = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
@@ -2422,6 +2493,90 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
           </div>
         </div>
       )}
+      {/* Webhook Test Modal */}
+      {isWebhookTestModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-lg shadow-xl w-[520px] overflow-hidden p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-slate-900">Test Incoming Webhook</h3>
+              <button
+                type="button"
+                className="text-slate-400 hover:text-slate-600"
+                onClick={() => setIsWebhookTestModalOpen(false)}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="text-xs text-slate-500">
+              This sends your payload to the workflow webhook URL and runs the remaining steps.
+            </div>
+
+            <div className="space-y-2">
+              <div className="grid grid-cols-[1fr_1.4fr_32px] gap-2 text-xs font-medium text-slate-600">
+                <div>Key</div>
+                <div>Value</div>
+                <div></div>
+              </div>
+              <div className="space-y-2">
+                {webhookTestFields.map((row, idx) => (
+                  <div key={`${row.key}-${idx}`} className="grid grid-cols-[1fr_1.4fr_32px] gap-2 items-center">
+                    <input
+                      className="w-full border border-slate-300 rounded-md px-2 py-1.5 text-sm"
+                      placeholder="phone / name / course ..."
+                      value={row.key}
+                      onChange={(e) => {
+                        const next = [...webhookTestFields];
+                        next[idx] = { ...next[idx], key: e.target.value };
+                        setWebhookTestFields(next);
+                      }}
+                    />
+                    <input
+                      className="w-full border border-slate-300 rounded-md px-2 py-1.5 text-sm"
+                      placeholder="value"
+                      value={row.value}
+                      onChange={(e) => {
+                        const next = [...webhookTestFields];
+                        next[idx] = { ...next[idx], value: e.target.value };
+                        setWebhookTestFields(next);
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="text-slate-400 hover:text-red-600"
+                      onClick={() => setWebhookTestFields((prev) => prev.filter((_, i) => i !== idx))}
+                      title="Remove"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <div className="flex items-center justify-between pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setWebhookTestFields((prev) => [...prev, { key: '', value: '' }])}
+                >
+                  <Plus size={14} className="mr-2" />
+                  Add field
+                </Button>
+                <div className="text-[11px] text-slate-500">
+                  Required: <span className="font-mono bg-slate-100 px-1 rounded">phone</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="ghost" onClick={() => setIsWebhookTestModalOpen(false)}>Cancel</Button>
+              <Button onClick={handleWebhookTestRun} disabled={isWebhookSending}>
+                {isWebhookSending ? <Loader2 size={16} className="animate-spin mr-2" /> : <Send size={16} className="mr-2" />}
+                {isWebhookSending ? 'Sending...' : 'Run Test'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Run Modal */}
       {isRunModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
@@ -2484,8 +2639,18 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
             <Mic size={16} />
             Add using voice
           </Button>
-          <Button variant="outline" onClick={() => setIsRunModalOpen(true)} className="flex items-center gap-2 text-green-600 border-green-200 hover:bg-green-50">
-            <Play size={16} />
+          <Button
+            variant="outline"
+            onClick={() => {
+              if (hasIncomingWebhookTrigger) {
+                openWebhookTestModal();
+              } else {
+                setIsRunModalOpen(true);
+              }
+            }}
+            className="flex items-center gap-2 text-green-600 border-green-200 hover:bg-green-50"
+          >
+            {hasIncomingWebhookTrigger ? <Link size={16} /> : <Play size={16} />}
             Run Test
           </Button>
           <Button
