@@ -72,11 +72,18 @@ async function getConversationDetails(clientConn, conversationId) {
     throw err;
   }
   const contactRow = contactRes.rows[0];
+  const toWaId = String(contactRow.external_id || '').replace(/[^0-9]/g, '');
+  if (!toWaId) {
+    const err = new Error('Invalid WhatsApp recipient number for conversation');
+    err.status = 400;
+    err.expose = true;
+    throw err;
+  }
   return {
     conversationId: row.id,
     channelId: row.channel_id,
     phoneNumberId: row.phone_number_id,
-    toWaId: contactRow.external_id,
+    toWaId,
     contactProfile: contactRow.profile || {},
   };
 }

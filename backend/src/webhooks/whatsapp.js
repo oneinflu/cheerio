@@ -103,12 +103,64 @@ router.post('/', async (req, res, next) => {
       for (const change of changes) {
         const value = change && change.value ? change.value : {};
         const messages = Array.isArray(value.messages) ? value.messages : [];
+        const statuses = Array.isArray(value.statuses) ? value.statuses : [];
         const metadata = value.metadata || {};
         const phoneNumberId = metadata.phone_number_id; // channel external_id
 
-        // We must have a channel identifier to continue.
+        if (statuses.length > 0) {
+          try {
+            const io = getIO();
+            for (const st of statuses) {
+              const externalMessageId = st && st.id ? String(st.id) : null;
+              const status = st && st.status ? String(st.status) : null;
+              if (!externalMessageId || !status) continue;
+
+              const metaStatus = {
+                status,
+                timestamp: st.timestamp || null,
+                recipient_id: st.recipient_id || null,
+                errors: Array.isArray(st.errors) ? st.errors : null,
+              };
+
+              const ts = st.timestamp ? new Date(Number(st.timestamp) * 1000) : null;
+              const deliveredAt = status === 'delivered' ? ts : null;
+              const readAt = status === 'read' ? ts : null;
+
+              const upd = await db.query(
+                `
+                UPDATE messages
+                SET delivery_status = $2,
+                    delivered_at = COALESCE($3, delivered_at),
+                    read_at = COALESCE($4, read_at),
+                    raw_payload = jsonb_set(COALESCE(raw_payload, '{}'::jsonb), '{meta_status}', $5::jsonb, true)
+                WHERE external_message_id = $1
+                RETURNING id, conversation_id
+                `,
+                [externalMessageId, status, deliveredAt, readAt, JSON.stringify(metaStatus)]
+              );
+
+              if (io && upd.rowCount > 0) {
+                const row = upd.rows[0];
+                io.to(`conversation:${row.conversation_id}`).emit('message:status', {
+                  conversationId: row.conversation_id,
+                  messageId: row.id,
+                  status,
+                  meta: metaStatus,
+                });
+                io.emit('message:status', {
+                  conversationId: row.conversation_id,
+                  messageId: row.id,
+                  status,
+                  meta: metaStatus,
+                });
+              }
+            }
+          } catch (e) {
+            console.error('[WhatsApp Webhook] Failed to process status updates:', e.message);
+          }
+        }
+
         if (!phoneNumberId) {
-          // Missing metadata; skip safely, do not crash the whole batch.
           continue;
         }
 

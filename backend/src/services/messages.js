@@ -5,7 +5,8 @@ const translation = require('./translation');
 async function listMessages(conversationId) {
   const msgs = await db.query(
     `
-    SELECT id, conversation_id, direction, content_type, text_body, raw_payload, created_at, external_message_id
+    SELECT id, conversation_id, direction, content_type, text_body, raw_payload, created_at, external_message_id,
+           delivery_status, sent_at
     FROM messages
     WHERE conversation_id = $1
     ORDER BY created_at ASC
@@ -79,6 +80,8 @@ async function listMessages(conversationId) {
       rawPayload: raw,
       createdAt: m.created_at,
       externalMessageId: m.external_message_id,
+      deliveryStatus: m.delivery_status,
+      sentAt: m.sent_at,
       attachments: attByMsg.get(m.id) || [],
       translation: raw.translation || null,
     };

@@ -853,8 +853,30 @@ export default function Chat({ socket, conversationId, messages, onRefresh, isLo
                       )}
                     </div>
                   )}
-                  <div className="text-[10px] mt-1 text-right opacity-70 text-slate-500">
-                    {new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  <div className="text-[10px] mt-1 text-right opacity-70 text-slate-500 flex items-center justify-end gap-1">
+                    <span>{new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    {isOutbound && m.deliveryStatus && (
+                      <>
+                        <span className="opacity-50">•</span>
+                        <span
+                          className={cn(
+                            "font-medium",
+                            m.deliveryStatus === 'failed' ? 'text-red-600' :
+                            m.deliveryStatus === 'read' ? 'text-blue-600' :
+                            m.deliveryStatus === 'delivered' ? 'text-green-600' :
+                            m.deliveryStatus === 'sending' ? 'text-slate-500' :
+                            'text-slate-600'
+                          )}
+                          title={
+                            m.rawPayload?.meta_status?.errors?.length
+                              ? (m.rawPayload.meta_status.errors[0]?.title || m.rawPayload.meta_status.errors[0]?.message || 'Delivery error')
+                              : ''
+                          }
+                        >
+                          {m.deliveryStatus}
+                        </span>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
