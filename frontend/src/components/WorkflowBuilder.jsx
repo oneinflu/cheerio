@@ -1005,13 +1005,19 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
     const wfId = initialWorkflow?.id;
     const onStart = (ev) => {
       if (ev.workflowId !== wfId) return;
-      setNodes((nds) => nds.map((n) => ({ ...n, data: { ...n.data, nodeStatus: undefined } })));
+      setNodes((nds) => nds.map((n) => ({ ...n, data: { ...n.data, nodeStatus: undefined, nodeError: undefined } })));
+      setSelectedNode((n) => (n ? { ...n, data: { ...n.data, nodeStatus: undefined, nodeError: undefined } } : n));
       setIsRunning(true);
     };
     const onStepStart = (ev) => {
       if (ev.workflowId !== wfId) return;
       setNodes((nds) =>
-        nds.map((n) => (n.id === ev.nodeId ? { ...n, data: { ...n.data, nodeStatus: 'running' } } : n))
+        nds.map((n) => (n.id === ev.nodeId ? { ...n, data: { ...n.data, nodeStatus: 'running', nodeError: undefined } } : n))
+      );
+      setSelectedNode((n) =>
+        n && n.id === ev.nodeId
+          ? { ...n, data: { ...n.data, nodeStatus: 'running', nodeError: undefined } }
+          : n
       );
     };
     const onStepWait = (ev) => {
@@ -1019,17 +1025,32 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
       setNodes((nds) =>
         nds.map((n) => (n.id === ev.nodeId ? { ...n, data: { ...n.data, nodeStatus: 'waiting' } } : n))
       );
+      setSelectedNode((n) =>
+        n && n.id === ev.nodeId
+          ? { ...n, data: { ...n.data, nodeStatus: 'waiting' } }
+          : n
+      );
     };
     const onStepComplete = (ev) => {
       if (ev.workflowId !== wfId) return;
       setNodes((nds) =>
-        nds.map((n) => (n.id === ev.nodeId ? { ...n, data: { ...n.data, nodeStatus: 'completed' } } : n))
+        nds.map((n) => (n.id === ev.nodeId ? { ...n, data: { ...n.data, nodeStatus: 'completed', nodeError: undefined } } : n))
+      );
+      setSelectedNode((n) =>
+        n && n.id === ev.nodeId
+          ? { ...n, data: { ...n.data, nodeStatus: 'completed', nodeError: undefined } }
+          : n
       );
     };
     const onStepError = (ev) => {
       if (ev.workflowId !== wfId) return;
       setNodes((nds) =>
-        nds.map((n) => (n.id === ev.nodeId ? { ...n, data: { ...n.data, nodeStatus: 'error' } } : n))
+        nds.map((n) => (n.id === ev.nodeId ? { ...n, data: { ...n.data, nodeStatus: 'error', nodeError: ev.message || 'Step failed' } } : n))
+      );
+      setSelectedNode((n) =>
+        n && n.id === ev.nodeId
+          ? { ...n, data: { ...n.data, nodeStatus: 'error', nodeError: ev.message || 'Step failed' } }
+          : n
       );
     };
     const onComplete = (ev) => {
@@ -3528,6 +3549,17 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
               <div className="text-xs text-slate-500 mt-1">ID: {selectedNode.id}</div>
               <div className="text-xs text-slate-500">Type: {selectedNode.type}</div>
             </div>
+
+            {selectedNode?.data?.nodeError && (
+              <div className="px-4 pt-4">
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                  <div className="text-xs font-semibold text-red-700 mb-1">Node Error</div>
+                  <div className="text-xs text-red-700 whitespace-pre-wrap break-words">
+                    {selectedNode.data.nodeError}
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="p-4 space-y-6">
               {/* Dynamic Config Forms based on Node Type */}
