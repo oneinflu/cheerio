@@ -166,7 +166,8 @@ async function getJSON(url) {
           if (res.statusCode >= 200 && res.statusCode < 300) {
             return resolve({ status: res.statusCode, data: json });
           }
-          const err = new Error(`WhatsApp API error ${res.statusCode}`);
+          const msg = json.error && json.error.message ? json.error.message : 'Unknown error';
+          const err = new Error(`WhatsApp API error ${res.statusCode}: ${msg}`);
           err.status = res.statusCode;
           err.response = json;
           return reject(err);
