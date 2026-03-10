@@ -23,6 +23,26 @@ function resolvePlaceholders(str, context) {
   });
 }
 
+function buildContextPreview(context) {
+  const out = {};
+  const src = context && typeof context === 'object' ? context : {};
+  const preferred = ['phone', 'name', 'email', 'contact_id', 'course', 'tags'];
+  const keys = [...preferred, ...Object.keys(src)].filter((v, i, a) => a.indexOf(v) === i);
+  for (const k of keys.slice(0, 15)) {
+    if (!Object.prototype.hasOwnProperty.call(src, k)) continue;
+    const v = src[k];
+    if (v === null || v === undefined) continue;
+    let s;
+    if (typeof v === 'string') s = v;
+    else if (typeof v === 'number' || typeof v === 'boolean') s = String(v);
+    else if (Array.isArray(v)) s = v.slice(0, 5).map((x) => String(x)).join(', ');
+    else s = JSON.stringify(v);
+    if (typeof s === 'string' && s.length > 160) s = s.slice(0, 157) + '...';
+    out[k] = s;
+  }
+  return out;
+}
+
 /**
  * Service: Workflows
  * Manage automation workflows.
@@ -516,7 +536,7 @@ async function runWorkflow(id, phoneNumber, context = {}) {
       status: 'started'
     });
     if (io) {
-      io.emit('workflow:step:start', { workflowId: id, phoneNumber, nodeId: currentNode.id, type: currentNode.type, step: stepCount });
+      io.emit('workflow:step:start', { workflowId: id, phoneNumber, nodeId: currentNode.id, type: currentNode.type, step: stepCount, contextPreview: buildContextPreview(context) });
     }
 
     try {
@@ -1276,6 +1296,7 @@ async function runWorkflow(id, phoneNumber, context = {}) {
       }
 
       // 2. Move to Next Node
+      let nextNodeId = null;
       if (currentNode.type === 'condition') {
         const conditionType = currentNode.data.conditionType || 'user_replied';
         console.log(`[WorkflowRunner] Evaluating condition type: ${conditionType}`);
@@ -1334,17 +1355,23 @@ async function runWorkflow(id, phoneNumber, context = {}) {
 
         console.log(`[WorkflowRunner] Condition result: ${result ? 'YES' : 'NO'}`);
 
-        const nextId = result ? currentNode.yes : currentNode.no;
-        currentNode = nextId ? nodes.find(n => n.id === nextId) : null;
+        nextNodeId = result ? currentNode.yes : currentNode.no;
+        if (io && nextNodeId) {
+          io.emit('workflow:step:transition', { workflowId: id, phoneNumber, fromNodeId: currentNode.id, toNodeId: nextNodeId, contextPreview: buildContextPreview(context) });
+        }
+        currentNode = nextNodeId ? nodes.find(n => n.id === nextNodeId) : null;
       } else if (currentNode.type === 'end') {
         currentNode = null;
       } else {
-        const nextId = currentNode.next;
-        currentNode = nextId ? nodes.find(n => n.id === nextId) : null;
+        nextNodeId = currentNode.next;
+        if (io && nextNodeId) {
+          io.emit('workflow:step:transition', { workflowId: id, phoneNumber, fromNodeId: currentNode.id, toNodeId: nextNodeId, contextPreview: buildContextPreview(context) });
+        }
+        currentNode = nextNodeId ? nodes.find(n => n.id === nextNodeId) : null;
       }
       if (io) {
         const last = executionLog[executionLog.length - 1];
-        io.emit('workflow:step:complete', { workflowId: id, phoneNumber, nodeId: last?.nodeId });
+        io.emit('workflow:step:complete', { workflowId: id, phoneNumber, nodeId: last?.nodeId, contextPreview: buildContextPreview(context) });
       }
 
     } catch (err) {

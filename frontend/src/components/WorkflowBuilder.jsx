@@ -1048,16 +1048,28 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
     const s = connectSocket({ userId: null, teamIds: [] });
     setSocket(s);
     const wfId = initialWorkflow?.id;
+    let edgeTimer = null;
+    const clearEdgeTimer = () => {
+      if (edgeTimer) {
+        clearTimeout(edgeTimer);
+        edgeTimer = null;
+      }
+    };
     const onStart = (ev) => {
       if (ev.workflowId !== wfId) return;
       setNodes((nds) => nds.map((n) => ({ ...n, data: { ...n.data, nodeStatus: undefined, nodeError: undefined } })));
       setSelectedNode((n) => (n ? { ...n, data: { ...n.data, nodeStatus: undefined, nodeError: undefined } } : n));
+      setEdges((eds) => eds.map((e) => ({ ...e, animated: false, style: undefined })));
       setIsRunning(true);
     };
     const onStepStart = (ev) => {
       if (ev.workflowId !== wfId) return;
       setNodes((nds) =>
-        nds.map((n) => (n.id === ev.nodeId ? { ...n, data: { ...n.data, nodeStatus: 'running', nodeError: undefined } } : n))
+        nds.map((n) =>
+          n.id === ev.nodeId
+            ? { ...n, data: { ...n.data, nodeStatus: 'running', nodeError: undefined, lastContextPreview: ev.contextPreview || n.data.lastContextPreview } }
+            : n
+        )
       );
       setSelectedNode((n) =>
         n && n.id === ev.nodeId
@@ -1079,7 +1091,11 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
     const onStepComplete = (ev) => {
       if (ev.workflowId !== wfId) return;
       setNodes((nds) =>
-        nds.map((n) => (n.id === ev.nodeId ? { ...n, data: { ...n.data, nodeStatus: 'completed', nodeError: undefined } } : n))
+        nds.map((n) =>
+          n.id === ev.nodeId
+            ? { ...n, data: { ...n.data, nodeStatus: 'completed', nodeError: undefined, lastContextPreview: ev.contextPreview || n.data.lastContextPreview } }
+            : n
+        )
       );
       setSelectedNode((n) =>
         n && n.id === ev.nodeId
@@ -1090,7 +1106,11 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
     const onStepError = (ev) => {
       if (ev.workflowId !== wfId) return;
       setNodes((nds) =>
-        nds.map((n) => (n.id === ev.nodeId ? { ...n, data: { ...n.data, nodeStatus: 'error', nodeError: ev.message || 'Step failed' } } : n))
+        nds.map((n) =>
+          n.id === ev.nodeId
+            ? { ...n, data: { ...n.data, nodeStatus: 'error', nodeError: ev.message || 'Step failed', lastContextPreview: ev.contextPreview || n.data.lastContextPreview } }
+            : n
+        )
       );
       setSelectedNode((n) =>
         n && n.id === ev.nodeId
@@ -1098,15 +1118,36 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
           : n
       );
     };
+    const onTransition = (ev) => {
+      if (ev.workflowId !== wfId) return;
+      const fromId = ev.fromNodeId;
+      const toId = ev.toNodeId;
+      if (!fromId || !toId) return;
+      clearEdgeTimer();
+      setEdges((eds) => {
+        const hit = eds.find((e) => e.source === fromId && e.target === toId);
+        if (!hit) return eds;
+        return eds.map((e) =>
+          e.id === hit.id
+            ? { ...e, animated: true, style: { ...(e.style || {}), stroke: '#22c55e', strokeWidth: 2 } }
+            : { ...e, animated: false, style: e.style ? { ...e.style, strokeWidth: 1 } : e.style }
+        );
+      });
+      edgeTimer = setTimeout(() => {
+        setEdges((eds) => eds.map((e) => ({ ...e, animated: false, style: e.style ? { ...e.style, strokeWidth: 1 } : e.style })));
+      }, 2200);
+    };
     const onComplete = (ev) => {
       if (ev.workflowId !== wfId) return;
       setIsRunning(false);
+      clearEdgeTimer();
     };
     s.on('workflow:run:start', onStart);
     s.on('workflow:step:start', onStepStart);
     s.on('workflow:step:wait', onStepWait);
     s.on('workflow:step:complete', onStepComplete);
     s.on('workflow:step:error', onStepError);
+    s.on('workflow:step:transition', onTransition);
     s.on('workflow:run:complete', onComplete);
     return () => {
       try {
@@ -1115,11 +1156,13 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
         s.off('workflow:step:wait', onStepWait);
         s.off('workflow:step:complete', onStepComplete);
         s.off('workflow:step:error', onStepError);
+        s.off('workflow:step:transition', onTransition);
         s.off('workflow:run:complete', onComplete);
+        clearEdgeTimer();
         s.disconnect();
       } catch {}
     };
-  }, [initialWorkflow, setNodes]);
+  }, [initialWorkflow, setNodes, setEdges]);
 
   React.useEffect(() => {
     const fetchTemplates = async () => {
@@ -3605,6 +3648,17 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                   <div className="text-xs text-red-700 whitespace-pre-wrap break-words">
                     {selectedNode.data.nodeError}
                   </div>
+                </div>
+              </div>
+            )}
+            
+            {selectedNode?.data?.lastContextPreview && (
+              <div className="px-4 pt-4">
+                <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                  <div className="text-xs font-semibold text-slate-700 mb-1">Data In This Step</div>
+                  <pre className="text-[10px] text-slate-600 whitespace-pre-wrap break-words leading-relaxed">
+                    {JSON.stringify(selectedNode.data.lastContextPreview, null, 2)}
+                  </pre>
                 </div>
               </div>
             )}
