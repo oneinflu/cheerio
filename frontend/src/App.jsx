@@ -190,6 +190,25 @@ export default function App() {
         data = res;
       }
       setTeamMembers(data);
+
+      // Self-heal user role if out of sync
+      const me = data.find(m => String(m.id) === String(storedUser.id) || String(m._id) === String(storedUser.id));
+      if (me && me.role) {
+        const roleMap = {
+          'super_admin': 'super_admin',
+          'admin': 'admin',
+          'team_lead': 'supervisor',
+          'agent': 'agent',
+          'quality_manager': 'quality_manager'
+        };
+        const mappedRole = roleMap[me.role] || me.role || 'agent';
+        // Check if there is a mismatch on the role that requires an update
+        if (mappedRole !== storedUser.role) {
+          const updated = { ...storedUser, role: mappedRole };
+          localStorage.setItem('user', JSON.stringify(updated));
+          setStoredUser(updated);
+        }
+      }
     }).catch(err => console.error("Failed to fetch team members", err));
   }, [storedUser]);
 
@@ -742,7 +761,7 @@ export default function App() {
               Campaigns
             </span>
           </Button>
-          {['admin', 'super_admin'].includes((currentUser.role || '').toLowerCase()) && (
+          {['admin', 'super_admin', 'quality_manager'].includes((currentUser.role || '').toLowerCase()) && (
             <>
               <Button
                 variant={activePage === 'team-members' ? 'secondary' : 'ghost'}

@@ -50,17 +50,18 @@ export default function LoginPage({ onLogin }) {
 
         // Map external user to internal format
         const roleMap = {
-            'super_admin': 'admin',
+            'super_admin': 'super_admin',
             'admin': 'admin',
             'team_lead': 'supervisor',
-            'agent': 'agent'
+            'agent': 'agent',
+            'quality_manager': 'quality_manager'
         };
         
         const internalUser = {
             id: externalUser._id || externalUser.id,
             name: `${externalUser.firstname} ${externalUser.lastname}`,
             email: externalUser.email,
-            role: roleMap[externalUser.role] || 'agent',
+            role: roleMap[externalUser.role] || externalUser.role || 'agent',
             teamId: inferredTeamId || undefined,
             teamIds: inferredTeamId ? [inferredTeamId] : [] 
         };

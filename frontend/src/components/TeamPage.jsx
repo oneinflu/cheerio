@@ -95,7 +95,7 @@ export default function TeamPage({ conversations, agents, currentUser, onAssign,
                 <tbody className="divide-y divide-slate-100">
                   {visible.map((c) => {
                     const isAssigned = Boolean(c.assigneeUserId);
-                    const canUnassign = currentUser.role === 'admin' || c.assigneeUserId === currentUser.id;
+                    const canUnassign = ['admin', 'super_admin', 'quality_manager'].includes(currentUser.role) || c.assigneeUserId === currentUser.id;
                     return (
                       <tr key={c.id} className="align-middle">
                         <td className="py-3 pr-4">
