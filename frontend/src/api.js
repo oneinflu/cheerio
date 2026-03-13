@@ -394,6 +394,15 @@ export async function updateTeamUser(id, data) {
   return res.json();
 }
 
+export async function deleteTeamUser(id) {
+  const headers = getAuthHeaders();
+  const res = await fetch(`/api/team-users/${id}`, {
+    method: 'DELETE',
+    headers,
+  });
+  return res.json();
+}
+
 export async function getWorkflows() {
   const headers = getAuthHeaders();
   const res = await fetch('/api/workflows', { headers });

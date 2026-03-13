@@ -1,7 +1,7 @@
 'use strict';
 import React, { useEffect, useState, useMemo } from 'react';
-import { Loader2, Shield, Mail, Search, ChevronLeft, ChevronRight, Filter, X, Edit2, Check, User } from 'lucide-react';
-import { getTeamUsers, getLocalTeamUsers, updateTeamUser, createTeamUser } from '../api';
+import { Loader2, Shield, Mail, Search, ChevronLeft, ChevronRight, Filter, X, Edit2, Check, User, Trash2 } from 'lucide-react';
+import { getTeamUsers, getLocalTeamUsers, updateTeamUser, createTeamUser, deleteTeamUser } from '../api';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
 import { Badge } from './ui/Badge';
 import { Input } from './ui/Input';
@@ -147,6 +147,21 @@ export default function TeamMembersPage() {
     } catch (err) {
         console.error('Failed to update user:', err);
         alert('Error updating user');
+    }
+  };
+
+  const handleDeleteUser = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this local user? This action cannot be undone.')) return;
+    try {
+        const res = await deleteTeamUser(id);
+        if (res.success) {
+            setUsers(users.filter(u => u.id !== id));
+        } else {
+            alert(res.error || 'Failed to delete user');
+        }
+    } catch (err) {
+        console.error('Delete failed:', err);
+        alert('Error deleting user');
     }
   };
 
@@ -400,6 +415,16 @@ export default function TeamMembersPage() {
                                 >
                                     <Edit2 className="h-3 w-3 mr-1" /> Edit
                                 </Button>
+                                {teamSource === 'local' && (
+                                    <Button 
+                                        variant="ghost" 
+                                        size="sm" 
+                                        className="h-6 px-2 text-[10px] text-slate-400 hover:text-red-600 -ml-2"
+                                        onClick={() => handleDeleteUser(user.id)}
+                                    >
+                                        <Trash2 className="h-3 w-3 mr-1" /> Delete
+                                    </Button>
+                                )}
                             </div>
                         </td>
                         <td className="py-3 px-4">

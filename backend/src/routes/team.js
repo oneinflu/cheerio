@@ -173,4 +173,25 @@ router.put('/:id', auth.requireRole('admin', 'super_admin', 'supervisor', 'quali
   }
 });
 
+// DELETE /api/team-users/:id - Delete local user
+router.delete('/:id', auth.requireRole('admin', 'super_admin', 'supervisor', 'quality_manager'), async (req, res, next) => {
+  const { id } = req.params;
+  
+  try {
+    // Only allow deletion of local users (those with a password_hash)
+    const result = await db.query(
+      'DELETE FROM users WHERE id = $1 AND password_hash IS NOT NULL RETURNING id',
+      [id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Local user not found or not a native account' });
+    }
+
+    res.json({ success: true, message: 'Local user deleted successfully' });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;
