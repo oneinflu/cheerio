@@ -29,7 +29,9 @@ export default function TeamMembersPage() {
     lastname: '',
     email: '',
     password: '',
-    role: 'agent'
+    role: 'agent',
+    course: '',
+    language: ''
   });
 
   // Filter & Search States
@@ -157,11 +159,22 @@ export default function TeamMembersPage() {
   const handleCreateUser = async (e) => {
     e.preventDefault();
     try {
-      const res = await createTeamUser(createFormData);
+      const payload = {
+        firstname: createFormData.firstname,
+        lastname: createFormData.lastname,
+        email: createFormData.email,
+        password: createFormData.password,
+        role: createFormData.role,
+        attributes: {
+          course: createFormData.course,
+          language: createFormData.language
+        }
+      };
+      const res = await createTeamUser(payload);
       if (res.success) {
         setUsers([...users, res.user]);
         setIsCreateModalOpen(false);
-        setCreateFormData({ firstname: '', lastname: '', email: '', password: '', role: 'agent' });
+        setCreateFormData({ firstname: '', lastname: '', email: '', password: '', role: 'agent', course: '', language: '' });
       } else {
         alert(res.error || 'Failed to create user');
       }
@@ -547,6 +560,25 @@ export default function TeamMembersPage() {
                         <option value="admin">Admin</option>
                         <option value="super_admin">Super Admin</option>
                     </select>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 border-t border-slate-100 pt-4 mt-2">
+                <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-700 text-slate-500">Course (Skills)</label>
+                    <Input 
+                        placeholder="e.g. CPA, CMA, ACCA" 
+                        value={createFormData.course}
+                        onChange={(e) => setCreateFormData({...createFormData, course: e.target.value})}
+                    />
+                </div>
+                <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-700 text-slate-500">Language (Skills)</label>
+                    <Input 
+                        placeholder="e.g. English, Spanish" 
+                        value={createFormData.language}
+                        onChange={(e) => setCreateFormData({...createFormData, language: e.target.value})}
+                    />
                 </div>
             </div>
 

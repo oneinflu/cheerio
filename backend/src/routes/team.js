@@ -96,7 +96,7 @@ router.get('/', auth.requireAuth, async (req, res, next) => {
 
 // POST /api/team-users - Create local user
 router.post('/', auth.requireRole('admin', 'super_admin', 'supervisor', 'quality_manager'), async (req, res, next) => {
-  const { firstname, lastname, email, password, role } = req.body;
+  const { firstname, lastname, email, password, role, attributes } = req.body;
   if (!email || !password || !firstname || !role) {
      return res.status(400).json({ error: 'Missing required fields' });
   }
@@ -107,11 +107,12 @@ router.post('/', auth.requireRole('admin', 'super_admin', 'supervisor', 'quality
     const id = randomUUID();
     const hash = await bcrypt.hash(password, 10);
     const name = `${firstname} ${lastname || ''}`.trim();
+    const initialAttributes = attributes || {};
 
     await db.query(`
-      INSERT INTO users (id, email, name, role, password_hash, active, created_at)
-      VALUES ($1, $2, $3, $4, $5, true, NOW())
-    `, [id, email, name, role, hash]);
+      INSERT INTO users (id, email, name, role, password_hash, active, created_at, attributes)
+      VALUES ($1, $2, $3, $4, $5, true, NOW(), $6)
+    `, [id, email, name, role, hash, initialAttributes]);
 
     // Handle team_members auto join based on creator
     if (req.user && req.user.id) {
