@@ -31,7 +31,7 @@ async function resolveTeamId(req) {
   }
 }
 
-router.post('/ai/generate', auth.requireRole('admin', 'supervisor'), async (req, res, next) => {
+router.post('/ai/generate', auth.requireRole('admin', 'super_admin', 'supervisor', 'quality_manager', 'agent'), async (req, res, next) => {
   try {
     const { description } = req.body;
     if (!description || typeof description !== 'string') {
@@ -45,7 +45,7 @@ router.post('/ai/generate', auth.requireRole('admin', 'supervisor'), async (req,
 });
 
 // List workflows
-router.get('/', auth.requireRole('admin', 'supervisor'), async (req, res, next) => {
+router.get('/', auth.requireRole('admin', 'super_admin', 'supervisor', 'quality_manager', 'agent'), async (req, res, next) => {
   try {
     const workflows = await svc.listWorkflows();
     res.json(workflows);
@@ -55,7 +55,7 @@ router.get('/', auth.requireRole('admin', 'supervisor'), async (req, res, next) 
 });
 
 // Create workflow
-router.post('/', auth.requireRole('admin', 'supervisor'), async (req, res, next) => {
+router.post('/', auth.requireRole('admin', 'super_admin', 'supervisor', 'quality_manager', 'agent'), async (req, res, next) => {
   try {
     const { stageId, ...workflowData } = req.body;
     const workflow = await svc.createWorkflow(workflowData);
@@ -80,7 +80,7 @@ router.post('/', auth.requireRole('admin', 'supervisor'), async (req, res, next)
   }
 });
 
-router.get('/kanban', auth.requireRole('admin', 'supervisor'), async (req, res, next) => {
+router.get('/kanban', auth.requireRole('admin', 'super_admin', 'supervisor', 'quality_manager', 'agent'), async (req, res, next) => {
   try {
     const teamId = await resolveTeamId(req);
     const stagesRes = await db.query(
@@ -123,7 +123,7 @@ router.get('/kanban', auth.requireRole('admin', 'supervisor'), async (req, res, 
   }
 });
 
-router.post('/kanban/assign', auth.requireRole('admin', 'supervisor'), async (req, res, next) => {
+router.post('/kanban/assign', auth.requireRole('admin', 'super_admin', 'supervisor', 'quality_manager', 'agent'), async (req, res, next) => {
   try {
     const { stageId, workflowId } = req.body || {};
     if (!stageId || !workflowId) return res.status(400).json({ error: 'stageId and workflowId are required' });
@@ -145,7 +145,7 @@ router.post('/kanban/assign', auth.requireRole('admin', 'supervisor'), async (re
   }
 });
 
-router.put('/kanban/reorder', auth.requireRole('admin', 'supervisor'), async (req, res, next) => {
+router.put('/kanban/reorder', auth.requireRole('admin', 'super_admin', 'supervisor', 'quality_manager', 'agent'), async (req, res, next) => {
   try {
     const { moves } = req.body || {};
     if (!Array.isArray(moves) || moves.length === 0) {
@@ -178,7 +178,7 @@ router.put('/kanban/reorder', auth.requireRole('admin', 'supervisor'), async (re
 });
 
 // Get workflow
-router.get('/:id', auth.requireRole('admin', 'supervisor'), async (req, res, next) => {
+router.get('/:id', auth.requireRole('admin', 'super_admin', 'supervisor', 'quality_manager', 'agent'), async (req, res, next) => {
   try {
     const workflow = await svc.getWorkflow(req.params.id);
     if (!workflow) return res.status(404).json({ error: 'Workflow not found' });
@@ -189,7 +189,7 @@ router.get('/:id', auth.requireRole('admin', 'supervisor'), async (req, res, nex
 });
 
 // Update workflow
-router.put('/:id', auth.requireRole('admin', 'supervisor'), async (req, res, next) => {
+router.put('/:id', auth.requireRole('admin', 'super_admin', 'supervisor', 'quality_manager', 'agent'), async (req, res, next) => {
   try {
     const workflow = await svc.updateWorkflow(req.params.id, req.body);
     if (!workflow) return res.status(404).json({ error: 'Workflow not found' });
@@ -200,7 +200,7 @@ router.put('/:id', auth.requireRole('admin', 'supervisor'), async (req, res, nex
 });
 
 // Delete workflow
-router.delete('/:id', auth.requireRole('admin', 'supervisor'), async (req, res, next) => {
+router.delete('/:id', auth.requireRole('admin', 'super_admin', 'supervisor', 'quality_manager', 'agent'), async (req, res, next) => {
   try {
     await svc.deleteWorkflow(req.params.id);
     res.status(204).end();
@@ -210,7 +210,7 @@ router.delete('/:id', auth.requireRole('admin', 'supervisor'), async (req, res, 
 });
 
 // Run workflow (Manual Trigger)
-router.post('/:id/run', auth.requireRole('admin', 'supervisor'), async (req, res, next) => {
+router.post('/:id/run', auth.requireRole('admin', 'super_admin', 'supervisor', 'quality_manager', 'agent'), async (req, res, next) => {
   try {
     const { phoneNumber } = req.body;
     if (!phoneNumber) {

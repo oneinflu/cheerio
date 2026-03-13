@@ -102,7 +102,7 @@ export default function GalleryPage() {
            <label className="flex items-center gap-2 px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-md shadow-sm cursor-pointer transition-colors">
              <UploadCloud size={16} />
              {uploading ? 'Uploading...' : 'Upload Asset'}
-             <input type="file" className="hidden" onChange={handleFileUpload} disabled={uploading} />
+             <input type="file" className="hidden" onChange={handleFileUpload} disabled={uploading} accept={activeTab === 'image' ? 'image/*' : activeTab === 'video' ? 'video/mp4,video/*,video/x-m4v' : '.pdf,application/pdf'} />
            </label>
         </div>
       </div>
@@ -191,14 +191,20 @@ export default function GalleryPage() {
                      
                      {activeTab === 'raw' && (
                         <div 
-                          className="flex flex-col items-center justify-center w-full h-full bg-blue-50/30 hover:bg-blue-50 transition-colors"
+                          className="flex flex-col items-center justify-center w-full h-full bg-blue-50/30 hover:bg-blue-50 transition-colors relative"
                           onClick={() => window.open(file.secure_url, '_blank')}
                           title="Click to view/download Document"
                         >
-                           <FileText size={28} className="text-blue-500 mb-1.5 group-hover:scale-110 transition-transform" />
-                           <span className="text-[9px] font-bold text-blue-600 px-2 text-center uppercase tracking-wider bg-white rounded shadow-sm py-0.5">
-                             {(file.format || file.public_id.split('.').pop() || 'DOC').toUpperCase().substring(0, 4)}
-                           </span>
+                           {(file.format === 'pdf' || (file.secure_url || '').toLowerCase().endsWith('.pdf')) ? (
+                               <iframe src={`${file.secure_url}#toolbar=0&navpanes=0&scrollbar=0`} className="w-full h-full pointer-events-none object-cover" />
+                           ) : (
+                               <>
+                                 <FileText size={28} className="text-blue-500 mb-1.5 group-hover:scale-110 transition-transform" />
+                                 <span className="text-[9px] font-bold text-blue-600 px-2 text-center uppercase tracking-wider bg-white rounded shadow-sm py-0.5">
+                                   {(file.format || file.public_id.split('.').pop() || 'DOC').toUpperCase().substring(0, 4)}
+                                 </span>
+                               </>
+                           )}
                         </div>
                      )}
 

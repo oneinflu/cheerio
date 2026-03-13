@@ -103,11 +103,17 @@ export function GallerySelectModal({ isOpen, onClose, onSelect, resourceType = '
                     )}
 
                     {activeTab === 'raw' && (
-                      <div className="flex flex-col items-center justify-center w-full h-full bg-blue-50/30 group-hover:bg-blue-50 transition-colors">
-                        <FileText size={28} className="text-blue-500 mb-1 group-hover:scale-110 transition-transform" />
-                        <span className="text-[9px] font-bold text-blue-600 uppercase bg-white rounded shadow-sm px-1 py-0.5">
-                          {(f.format || f.public_id.split('.').pop() || 'DOC').substring(0, 4)}
-                        </span>
+                      <div className="flex flex-col items-center justify-center w-full h-full bg-blue-50/30 group-hover:bg-blue-50 transition-colors relative">
+                           {(f.format === 'pdf' || (f.secure_url || '').toLowerCase().endsWith('.pdf')) ? (
+                               <iframe src={`${f.secure_url}#toolbar=0&navpanes=0&scrollbar=0`} className="w-full h-full pointer-events-none object-cover" />
+                           ) : (
+                               <>
+                                 <FileText size={28} className="text-blue-500 mb-1 group-hover:scale-110 transition-transform" />
+                                 <span className="text-[9px] font-bold text-blue-600 uppercase bg-white rounded shadow-sm px-1 py-0.5">
+                                   {(f.format || f.public_id.split('.').pop() || 'DOC').substring(0, 4)}
+                                 </span>
+                               </>
+                           )}
                       </div>
                     )}
 
