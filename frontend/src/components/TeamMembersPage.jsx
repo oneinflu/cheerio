@@ -1,7 +1,7 @@
 'use strict';
 import React, { useEffect, useState, useMemo } from 'react';
 import { Loader2, Shield, Mail, Search, ChevronLeft, ChevronRight, Filter, X, Edit2, Check, User } from 'lucide-react';
-import { getTeamUsers, updateTeamUser } from '../api';
+import { getTeamUsers, getLocalTeamUsers, updateTeamUser, createTeamUser } from '../api';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
 import { Badge } from './ui/Badge';
 import { Input } from './ui/Input';
@@ -12,6 +12,7 @@ export default function TeamMembersPage() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [teamSource, setTeamSource] = useState('starforze'); // 'starforze' | 'local'
 
   // Edit State
   const [editingUser, setEditingUser] = useState(null);
@@ -19,6 +20,16 @@ export default function TeamMembersPage() {
   const [editFormData, setEditFormData] = useState({
     course: '',
     language: ''
+  });
+
+  // Create State
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [createFormData, setCreateFormData] = useState({
+    firstname: '',
+    lastname: '',
+    email: '',
+    password: '',
+    role: 'agent'
   });
 
   // Filter & Search States
@@ -34,7 +45,8 @@ export default function TeamMembersPage() {
     async function fetchUsers() {
       try {
         setLoading(true);
-        const res = await getTeamUsers();
+        const fetcher = teamSource === 'starforze' ? getTeamUsers : getLocalTeamUsers;
+        const res = await fetcher();
         // Handle response format: { success: true, data: { count: 57, data: [...] } }
         let data = [];
         if (res && res.data && Array.isArray(res.data.data)) {
@@ -53,7 +65,7 @@ export default function TeamMembersPage() {
       }
     }
     fetchUsers();
-  }, []);
+  }, [teamSource]);
 
   // Filter Logic
   const filteredUsers = useMemo(() => {
@@ -142,12 +154,50 @@ export default function TeamMembersPage() {
     );
   }
 
+  const handleCreateUser = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await createTeamUser(createFormData);
+      if (res.success) {
+        setUsers([...users, res.user]);
+        setIsCreateModalOpen(false);
+        setCreateFormData({ firstname: '', lastname: '', email: '', password: '', role: 'agent' });
+      } else {
+        alert(res.error || 'Failed to create user');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error creating user');
+    }
+  };
+
   return (
     <div className="flex-1 overflow-y-auto bg-slate-50">
       <div className="border-b border-slate-200 bg-white">
-        <div className="px-8 py-6">
-          <h1 className="text-lg font-semibold text-slate-900">Team Members</h1>
-          <p className="text-sm text-slate-500">Manage your team and permissions</p>
+        <div className="px-8 py-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div>
+             <h1 className="text-lg font-semibold text-slate-900">Team Members</h1>
+             <p className="text-sm text-slate-500">Manage your team and permissions</p>
+          </div>
+          <div className="flex bg-slate-100 p-1 rounded-lg">
+             <button 
+                 onClick={() => setTeamSource('starforze')}
+                 className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${teamSource === 'starforze' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+             >
+                 Starforze Users
+             </button>
+             <button 
+                 onClick={() => setTeamSource('local')}
+                 className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${teamSource === 'local' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+             >
+                 Local Native Users
+             </button>
+          </div>
+          {teamSource === 'local' && (
+              <Button onClick={() => setIsCreateModalOpen(true)} className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm">
+                 <User className="h-4 w-4 mr-2" /> Add Local Member
+              </Button>
+          )}
         </div>
       </div>
 
@@ -433,6 +483,81 @@ export default function TeamMembersPage() {
                 </Button>
             </div>
         </div>
+      </Modal>
+
+      <Modal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} title="Create Local Member">
+        <form onSubmit={handleCreateUser} className="space-y-4">
+            <div className="bg-slate-50 p-3 rounded-md text-sm text-slate-600 mb-4">
+                This creates a native user account bypassing the external team sync. 
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-700">First Name <span className="text-red-500">*</span></label>
+                    <Input 
+                        placeholder="John" 
+                        required
+                        value={createFormData.firstname}
+                        onChange={(e) => setCreateFormData({...createFormData, firstname: e.target.value})}
+                    />
+                </div>
+                <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-700">Last Name</label>
+                    <Input 
+                        placeholder="Doe" 
+                        value={createFormData.lastname}
+                        onChange={(e) => setCreateFormData({...createFormData, lastname: e.target.value})}
+                    />
+                </div>
+            </div>
+
+            <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">Email Address <span className="text-red-500">*</span></label>
+                <Input 
+                    type="email"
+                    required
+                    placeholder="john@example.com" 
+                    value={createFormData.email}
+                    onChange={(e) => setCreateFormData({...createFormData, email: e.target.value})}
+                />
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-700">Password <span className="text-red-500">*</span></label>
+                    <Input 
+                        type="password"
+                        required
+                        placeholder="••••••••" 
+                        value={createFormData.password}
+                        onChange={(e) => setCreateFormData({...createFormData, password: e.target.value})}
+                    />
+                </div>
+                <div className="space-y-2 flex flex-col justify-start mt-0.5">
+                    <label className="text-sm font-medium text-slate-700 mb-1">Role <span className="text-red-500">*</span></label>
+                    <select 
+                        required
+                        className="h-9 px-3 py-1 rounded-md border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 capitalize"
+                        value={createFormData.role}
+                        onChange={(e) => setCreateFormData({...createFormData, role: e.target.value})}
+                    >
+                        <option value="agent">Agent</option>
+                        <option value="supervisor">Supervisor</option>
+                        <option value="quality_manager">Quality Manager</option>
+                        <option value="admin">Admin</option>
+                        <option value="super_admin">Super Admin</option>
+                    </select>
+                </div>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4">
+                <Button type="button" variant="ghost" onClick={() => setIsCreateModalOpen(false)}>Cancel</Button>
+                <Button type="submit">
+                    <Check className="h-4 w-4 mr-2" />
+                    Create Member
+                </Button>
+            </div>
+        </form>
       </Modal>
     </div>
   );

@@ -101,7 +101,12 @@ function createApp() {
    * Apply authentication for API routes (staff-only surface).
    * Webhooks remain unauthenticated but signed by Meta.
    */
-  app.use('/api', auth.requireAuth);
+  app.use('/api', (req, res, next) => {
+    if (req.path === '/auth/login' || req.originalUrl === '/api/auth/login') {
+      return next();
+    }
+    return auth.requireAuth(req, res, next);
+  });
 
   /**
    * Example placeholder route (for onboarding):

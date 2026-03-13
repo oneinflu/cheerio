@@ -94,17 +94,71 @@ router.get('/', auth.requireAuth, async (req, res, next) => {
   }
 });
 
-// PUT /api/team-users/:id - Update user details (e.g. attributes)
-router.put('/:id', auth.requireRole('admin', 'super_admin'), async (req, res, next) => {
-  const { id } = req.params;
-  const { attributes } = req.body;
+// POST /api/team-users - Create local user
+router.post('/', auth.requireRole('admin', 'super_admin', 'supervisor', 'quality_manager'), async (req, res, next) => {
+  const { firstname, lastname, email, password, role } = req.body;
+  if (!email || !password || !firstname || !role) {
+     return res.status(400).json({ error: 'Missing required fields' });
+  }
   
   try {
-    // Only allow updating attributes for now
-    if (attributes) {
+    const bcrypt = require('bcrypt');
+    const { randomUUID } = require('crypto');
+    const id = randomUUID();
+    const hash = await bcrypt.hash(password, 10);
+    const name = `${firstname} ${lastname || ''}`.trim();
+
+    await db.query(`
+      INSERT INTO users (id, email, name, role, password_hash, active, created_at)
+      VALUES ($1, $2, $3, $4, $5, true, NOW())
+    `, [id, email, name, role, hash]);
+
+    // Handle team_members auto join based on creator
+    if (req.user && req.user.id) {
+       const teamRes = await db.query('SELECT team_id FROM team_members WHERE user_id = $1 LIMIT 1', [req.user.id]);
+       if (teamRes.rows.length > 0) {
+          await db.query('INSERT INTO team_members (team_id, user_id) VALUES ($1, $2)', [teamRes.rows[0].team_id, id]);
+       }
+    }
+
+    res.status(201).json({ success: true, user: { id, email, name, role } });
+  } catch(err) {
+    if (err.code === '23505') {
+       return res.status(409).json({ error: 'Email already exists' });
+    }
+    next(err);
+  }
+});
+
+// PUT /api/team-users/:id - Update user details (e.g. attributes)
+router.put('/:id', auth.requireRole('admin', 'super_admin', 'supervisor', 'quality_manager'), async (req, res, next) => {
+  const { id } = req.params;
+  const { attributes, password, active } = req.body;
+  
+  try {
+    const updates = [];
+    const values = [];
+    let idx = 1;
+
+    if (attributes !== undefined) {
+      updates.push(`attributes = $${idx++}`);
+      values.push(attributes);
+    }
+    if (active !== undefined) {
+      updates.push(`active = $${idx++}`);
+      values.push(active === true);
+    }
+    if (password) {
+      const bcrypt = require('bcrypt');
+      updates.push(`password_hash = $${idx++}`);
+      values.push(await bcrypt.hash(password, 10));
+    }
+
+    if (updates.length > 0) {
+      values.push(id);
       const result = await db.query(
-        'UPDATE users SET attributes = $1 WHERE id = $2 RETURNING id, attributes',
-        [attributes, id]
+        `UPDATE users SET ${updates.join(', ')} WHERE id = $${idx} RETURNING id, attributes, active`,
+        values
       );
       if (result.rowCount === 0) {
         return res.status(404).json({ error: 'User not found' });

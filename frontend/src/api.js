@@ -342,8 +342,7 @@ export async function getDashboardData(teamId) {
 }
 
 export async function login(email, password) {
-  // Hit external API directly
-  const res = await fetch('https://api.starforze.com/api/team-auth/login', {
+  const res = await fetch('/api/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
@@ -364,6 +363,22 @@ export async function syncUser(user) {
 export async function getTeamUsers() {
   const res = await fetch('https://api.starforze.com/api/team-users', {
     headers: getAuthHeaders(),
+  });
+  return res.json();
+}
+
+export async function getLocalTeamUsers() {
+  const res = await fetch('/api/team-users', {
+    headers: getAuthHeaders(),
+  });
+  return res.json();
+}
+
+export async function createTeamUser(data) {
+  const res = await fetch('/api/team-users', {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data),
   });
   return res.json();
 }

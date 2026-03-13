@@ -15,7 +15,47 @@ router.post('/login', async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Email and password required' });
     }
 
-    // Call external API
+    // 1. Try Local authentication first
+    const bcrypt = require('bcrypt');
+    const localUserRes = await db.query('SELECT * FROM users WHERE email = $1', [email]);
+    if (localUserRes.rows.length > 0) {
+        const localUser = localUserRes.rows[0];
+        if (localUser.password_hash) {
+            const isValid = await bcrypt.compare(password, localUser.password_hash);
+            if (isValid) {
+                // Determine team IDs
+                const teamRes = await db.query('SELECT team_id FROM team_members WHERE user_id = $1', [localUser.id]);
+                const teamIds = teamRes.rows.map(r => r.team_id);
+                
+                const accessToken = jwt.sign({
+                    userId: localUser.id,
+                    role: localUser.role,
+                    email: localUser.email,
+                    teamIds: teamIds
+                }, JWT_SECRET, { expiresIn: '7d' });
+
+                return res.json({
+                    success: true,
+                    data: {
+                        accessToken: accessToken,
+                        user: {
+                            _id: localUser.id,
+                            id: localUser.id,
+                            firstname: localUser.name.split(' ')[0],
+                            lastname: localUser.name.split(' ').slice(1).join(' '),
+                            name: localUser.name,
+                            email: localUser.email,
+                            role: localUser.role,
+                            teamIds: teamIds,
+                            status: localUser.active ? 'available' : 'logout'
+                        }
+                    }
+                });
+            }
+        }
+    }
+
+    // 2. Fallback to external API
     const response = await axios.post('https://api.starforze.com/api/team-auth/login', {
       email,
       password
@@ -26,12 +66,13 @@ router.post('/login', async (req, res, next) => {
       
       // Map roles
       const roleMap = {
-        'super_admin': 'admin',
+        'super_admin': 'super_admin',
         'admin': 'admin',
         'team_lead': 'supervisor',
-        'agent': 'agent'
+        'agent': 'agent',
+        'quality_manager': 'quality_manager'
       };
-      const localRole = roleMap[user.role] || 'agent';
+      const localRole = roleMap[user.role] || user.role || 'agent';
       const userId = user._id || user.id;
 
       // Upsert user to local DB
@@ -39,22 +80,20 @@ router.post('/login', async (req, res, next) => {
         INSERT INTO users (id, email, name, role, active, created_at)
         VALUES ($1, $2, $3, $4, $5, NOW())
         ON CONFLICT (id) DO UPDATE SET
-          email = EXCLUDED.email,
           name = EXCLUDED.name,
           role = EXCLUDED.role,
           active = EXCLUDED.active
-      `, [userId, user.email, `${user.firstname} ${user.lastname}`, localRole, user.status === 'available']);
+      `, [userId, user.email, `${user.firstname || ''} ${user.lastname || ''}`.trim() || 'Unknown', localRole, user.status === 'available']);
 
       res.json({
         success: true,
         data: {
           accessToken: accessToken,
           user: {
+            ...user, // Retain original fields so frontend maps it correctly
             id: userId,
-            name: `${user.firstname} ${user.lastname}`,
-            email: user.email,
-            role: localRole,
-            teamIds: [] // TODO: Handle team mapping if needed
+            _id: userId,
+            role: localRole
           }
         }
       });
