@@ -111,9 +111,19 @@ export default function TeamMembersPage() {
   const handleEditClick = (user) => {
     const attrs = user.attributes || {};
     setEditingUser(user);
+    
+    // Normalize to strings for editing
+    let courseText = '';
+    if (Array.isArray(attrs.courses)) courseText = attrs.courses.join(', ');
+    else if (attrs.course) courseText = attrs.course;
+
+    let langText = '';
+    if (Array.isArray(attrs.languages)) langText = attrs.languages.join(', ');
+    else if (attrs.language) langText = attrs.language;
+
     setEditFormData({
-        course: attrs.course || '',
-        language: attrs.language || ''
+        course: courseText,
+        language: langText
     });
     setIsEditModalOpen(true);
   };
@@ -122,8 +132,8 @@ export default function TeamMembersPage() {
     if (!editingUser) return;
     try {
         const attributes = {
-            course: editFormData.course,
-            language: editFormData.language
+            courses: editFormData.course.split(',').map(s => s.trim()).filter(Boolean),
+            languages: editFormData.language.split(',').map(s => s.trim()).filter(Boolean)
         };
         const res = await updateTeamUser(editingUser.id, { attributes });
         if (res.success) {
@@ -166,8 +176,8 @@ export default function TeamMembersPage() {
         password: createFormData.password,
         role: createFormData.role,
         attributes: {
-          course: createFormData.course,
-          language: createFormData.language
+          courses: createFormData.courses ? createFormData.courses.split(',').map(s => s.trim()).filter(Boolean) : [],
+          languages: createFormData.languages ? createFormData.languages.split(',').map(s => s.trim()).filter(Boolean) : []
         }
       };
       const res = await createTeamUser(payload);
@@ -352,14 +362,28 @@ export default function TeamMembersPage() {
                         </td>
                         <td className="py-3 px-4">
                             <div className="flex flex-col gap-1 items-start">
-                                {user.attributes && (user.attributes.course || user.attributes.language) ? (
+                                {user.attributes && (user.attributes.course || user.attributes.language || user.attributes.courses || user.attributes.languages) ? (
                                     <div className="flex flex-wrap gap-1">
-                                        {user.attributes.course && (
+                                        {/* Plural Courses */}
+                                        {Array.isArray(user.attributes.courses) && user.attributes.courses.map(c => (
+                                            <Badge key={c} variant="outline" className="text-[10px] py-0 h-5 border-blue-200 bg-blue-50 text-blue-700">
+                                                {c}
+                                            </Badge>
+                                        ))}
+                                        {/* Singular Course (Legacy) */}
+                                        {!user.attributes.courses && user.attributes.course && (
                                             <Badge variant="outline" className="text-[10px] py-0 h-5 border-blue-200 bg-blue-50 text-blue-700">
                                                 {user.attributes.course}
                                             </Badge>
                                         )}
-                                        {user.attributes.language && (
+                                        {/* Plural Languages */}
+                                        {Array.isArray(user.attributes.languages) && user.attributes.languages.map(l => (
+                                            <Badge key={l} variant="outline" className="text-[10px] py-0 h-5 border-purple-200 bg-purple-50 text-purple-700">
+                                                {l}
+                                            </Badge>
+                                        ))}
+                                        {/* Singular Language (Legacy) */}
+                                        {!user.attributes.languages && user.attributes.language && (
                                             <Badge variant="outline" className="text-[10px] py-0 h-5 border-purple-200 bg-purple-50 text-purple-700">
                                                 {user.attributes.language}
                                             </Badge>
@@ -565,19 +589,19 @@ export default function TeamMembersPage() {
 
             <div className="grid grid-cols-2 gap-4 border-t border-slate-100 pt-4 mt-2">
                 <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700 text-slate-500">Course (Skills)</label>
+                    <label className="text-sm font-medium text-slate-700 text-slate-500">Courses (Comma separated)</label>
                     <Input 
                         placeholder="e.g. CPA, CMA, ACCA" 
-                        value={createFormData.course}
-                        onChange={(e) => setCreateFormData({...createFormData, course: e.target.value})}
+                        value={createFormData.courses}
+                        onChange={(e) => setCreateFormData({...createFormData, courses: e.target.value})}
                     />
                 </div>
                 <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700 text-slate-500">Language (Skills)</label>
+                    <label className="text-sm font-medium text-slate-700 text-slate-500">Languages (Comma separated)</label>
                     <Input 
                         placeholder="e.g. English, Spanish" 
-                        value={createFormData.language}
-                        onChange={(e) => setCreateFormData({...createFormData, language: e.target.value})}
+                        value={createFormData.languages}
+                        onChange={(e) => setCreateFormData({...createFormData, languages: e.target.value})}
                     />
                 </div>
             </div>

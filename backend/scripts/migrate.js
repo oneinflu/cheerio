@@ -159,6 +159,21 @@ async function runMigrations() {
         } else {
           console.log('[migrate] automation_rules table already exists.');
         }
+        
+        // Check for attributes column in users
+        const attributesColRes = await client.query(`
+          SELECT column_name FROM information_schema.columns
+          WHERE table_name='users' AND column_name='attributes'
+        `);
+        if (attributesColRes.rowCount === 0) {
+          console.log('[migrate] Adding attributes column and agent assignment settings...');
+          await client.query('BEGIN');
+          await runSQLFile(client, path.join(__dirname, '..', 'db', 'migrations', '0012_add_agent_assignment.sql'));
+          await client.query('COMMIT');
+          console.log('[migrate] Applied agent assignment migration.');
+        } else {
+          console.log('[migrate] users.attributes column already exists.');
+        }
 
         const leadStagesRes = await client.query(`
           SELECT EXISTS (
