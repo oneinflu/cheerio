@@ -31,15 +31,67 @@ router.post('/onboard', auth.requireRole('admin', 'super_admin'), async (req, re
 
   try {
     // 1. Get WABA IDs associated with this token
-    // Note: The token from embedded signup works for this user
-    console.log('[WhatsApp Auth] Fetching WABAs for token...');
-    const wabaRes = await axios.get(`${GRAPH_BASE}/me/whatsapp_business_accounts`, {
-      params: { access_token: accessToken }
-    });
+    // We'll try multiple ways to find them as Graph API can be inconsistent with field availability
+    console.log('[WhatsApp Auth] Searching for WhatsApp Business Accounts...');
+    let wabas = [];
+    
+    // Method A: Direct connection on /me
+    try {
+      const res = await axios.get(`${GRAPH_BASE}/me/whatsapp_business_accounts`, {
+        params: { access_token: accessToken }
+      });
+      if (res.data && res.data.data) wabas = res.data.data;
+    } catch (e) {
+      console.log('[WhatsApp Auth] Method A (me/wabas) skipped:', e.message);
+    }
 
-    const wabas = wabaRes.data.data;
-    if (!wabas || wabas.length === 0) {
-      return res.status(404).json({ error: 'No WhatsApp Business Accounts found for this user' });
+    // Method B: Field query on /me
+    if (wabas.length === 0) {
+      try {
+        const res = await axios.get(`${GRAPH_BASE}/me`, {
+          params: { 
+            fields: 'whatsapp_business_accounts{id,name,currency,timezone_id}',
+            access_token: accessToken 
+          }
+        });
+        if (res.data && res.data.whatsapp_business_accounts && res.data.whatsapp_business_accounts.data) {
+          wabas = res.data.whatsapp_business_accounts.data;
+        }
+      } catch (e) {
+        console.log('[WhatsApp Auth] Method B (me?fields) skipped:', e.message);
+      }
+    }
+
+    // Method C: Discovery via Businesses
+    if (wabas.length === 0) {
+      try {
+        console.log('[WhatsApp Auth] Trying Method C (businesses discovery)...');
+        const bizRes = await axios.get(`${GRAPH_BASE}/me/businesses`, {
+          params: { access_token: accessToken }
+        });
+        const businesses = bizRes.data.data || [];
+        for (const biz of businesses) {
+          try {
+            const bizWabaRes = await axios.get(`${GRAPH_BASE}/${biz.id}/whatsapp_business_accounts`, {
+              params: { access_token: accessToken }
+            });
+            if (bizWabaRes.data && bizWabaRes.data.data) {
+              wabas = [...wabas, ...bizWabaRes.data.data];
+            }
+          } catch (e) {
+            console.warn(`[WhatsApp Auth] Failed to fetch WABAs for business ${biz.id}:`, e.message);
+          }
+        }
+      } catch (e) {
+        console.log('[WhatsApp Auth] Method C (businesses) skipped:', e.message);
+      }
+    }
+
+    if (wabas.length === 0) {
+      return res.status(404).json({ 
+        error: 'No WhatsApp Business Accounts found', 
+        message: 'Ensure your account has a WABA and you have granted business_management permissions.' 
+      });
     }
 
     // Use the first WABA for now (or let user choose if multiple? For simplicity, we choose the first one)

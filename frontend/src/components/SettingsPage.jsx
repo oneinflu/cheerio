@@ -203,9 +203,10 @@ export default function SettingsPage({ currentUser }) {
         console.log('User cancelled login or did not fully authorize.');
       }
     }, {
-      scope: 'whatsapp_business_management,whatsapp_business_messaging,public_profile'
+      scope: 'whatsapp_business_management,whatsapp_business_messaging,business_management,public_profile'
     });
   };
+
 
 
   const handleCreateStage = async () => {
