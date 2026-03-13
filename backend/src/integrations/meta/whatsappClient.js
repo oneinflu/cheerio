@@ -40,7 +40,8 @@ function delayUntilAvailable() {
  * POST JSON helper to Graph API.
  * Avoids adding external dependencies. Handles basic errors and JSON parsing.
  */
-async function postJSON(url, body) {
+async function postJSON(url, body, customConfig = null) {
+  const token = (customConfig && customConfig.token) || TOKEN;
   if (USE_MOCK) {
     console.log('[Mock WhatsApp Client] Skipping real API call. Payload:', JSON.stringify(body, null, 2));
     await new Promise(r => setTimeout(r, 500)); // simulate network delay
@@ -53,8 +54,8 @@ async function postJSON(url, body) {
       }
     };
   }
-  if (!TOKEN || TOKEN === 'placeholder_token') {
-    const err = new Error('WHATSAPP_TOKEN is required for real WhatsApp API calls');
+  if (!token || token === 'placeholder_token') {
+    const err = new Error('WhatsApp Token is required for real WhatsApp API calls');
     err.status = 500;
     throw err;
   }
@@ -69,7 +70,7 @@ async function postJSON(url, body) {
       path: u.pathname + (u.search || ''),
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${TOKEN}`,
+        'Authorization': `Bearer ${token}`,
         'Content-Length': Buffer.byteLength(data),
       },
     };
@@ -106,10 +107,9 @@ async function postJSON(url, body) {
  * @param {Array} components - Optional: Template components (variables, buttons)
  * @param {string} phoneId - Optional: Phone number ID to send from
  */
-async function sendTemplateMessage(to, templateName, languageCode = 'en_US', components = [], phoneId) {
-  // Use provided phoneId or fallback to env/default
-  const pid = phoneId || process.env.WHATSAPP_PHONE_NUMBER_ID || '342847945577237';
-  if (!pid) throw new Error('WHATSAPP_PHONE_NUMBER_ID is required');
+async function sendTemplateMessage(to, templateName, languageCode = 'en_US', components = [], phoneId, customConfig = null) {
+  const pid = phoneId || (customConfig && customConfig.phoneNumberId) || process.env.WHATSAPP_PHONE_NUMBER_ID;
+  if (!pid) throw new Error('Phone Number ID required');
 
   const url = `${GRAPH_BASE}/${pid}/messages`;
   const body = {
@@ -118,20 +118,18 @@ async function sendTemplateMessage(to, templateName, languageCode = 'en_US', com
     type: 'template',
     template: {
       name: templateName,
-      language: {
-        code: languageCode
-      },
-      components: components || []
-    }
+      language: { code: languageCode },
+      components,
+    },
   };
-  console.log(`[WhatsAppClient] sending to URL: ${url}`);
-  return postJSON(url, body);
+  return postJSON(url, body, customConfig);
 }
 
 /**
  * GET JSON helper to Graph API.
  */
-async function getJSON(url) {
+async function getJSON(url, customConfig = null) {
+  const token = (customConfig && customConfig.token) || TOKEN;
   if (USE_MOCK) {
     console.log('[Mock WhatsApp Client] Skipping real API call. GET', url);
     await new Promise(r => setTimeout(r, 500)); 
@@ -140,8 +138,8 @@ async function getJSON(url) {
       data: { data: [] }
     };
   }
-  if (!TOKEN || TOKEN === 'placeholder_token') {
-    const err = new Error('WHATSAPP_TOKEN is required for real WhatsApp API calls');
+  if (!token || token === 'placeholder_token') {
+    const err = new Error('WhatsApp Token is required for real WhatsApp API calls');
     err.status = 500;
     throw err;
   }
@@ -154,7 +152,7 @@ async function getJSON(url) {
       hostname: u.hostname,
       path: u.pathname + (u.search || ''),
       headers: {
-        'Authorization': `Bearer ${TOKEN}`,
+        'Authorization': `Bearer ${token}`,
       },
     };
     const req = https.request(opts, (res) => {
@@ -184,7 +182,7 @@ async function getJSON(url) {
 /**
  * Send a sender action (e.g. typing_on, typing_off).
  */
-async function sendSenderAction(phoneNumberId, toWaId, action) {
+async function sendSenderAction(phoneNumberId, toWaId, action, customConfig = null) {
   const url = `${GRAPH_BASE}/${phoneNumberId}/messages`;
   return postJSON(url, {
     messaging_product: 'whatsapp',
@@ -192,13 +190,13 @@ async function sendSenderAction(phoneNumberId, toWaId, action) {
     to: toWaId,
     type: 'sender_action',
     sender_action: action,
-  });
+  }, customConfig);
 }
 
 /**
  * Send a text message.
  */
-async function sendText(phoneNumberId, toWaId, text) {
+async function sendText(phoneNumberId, toWaId, text, customConfig = null) {
   const url = `${GRAPH_BASE}/${phoneNumberId}/messages`;
   const payload = {
     messaging_product: 'whatsapp',
@@ -206,13 +204,13 @@ async function sendText(phoneNumberId, toWaId, text) {
     type: 'text',
     text: { body: text },
   };
-  return postJSON(url, payload);
+  return postJSON(url, payload, customConfig);
 }
 
 /**
  * Send a media message (image/audio/document) via a public link or media ID.
  */
-async function sendMedia(phoneNumberId, toWaId, kind, linkOrId, caption) {
+async function sendMedia(phoneNumberId, toWaId, kind, linkOrId, caption, customConfig = null) {
   const url = `${GRAPH_BASE}/${phoneNumberId}/messages`;
   
   const mediaObj = {};
@@ -233,14 +231,14 @@ async function sendMedia(phoneNumberId, toWaId, kind, linkOrId, caption) {
     [kind]: mediaObj,
   };
 
-  return postJSON(url, payload);
+  return postJSON(url, payload, customConfig);
 }
 
 /**
  * Send a template message (for outside the 24-hour window).
  * Components allow variables (body parameters, etc.).
  */
-async function sendTemplate(phoneNumberId, toWaId, name, languageCode, components) {
+async function sendTemplate(phoneNumberId, toWaId, name, languageCode, components, customConfig = null) {
   const url = `${GRAPH_BASE}/${phoneNumberId}/messages`;
   const payload = {
     messaging_product: 'whatsapp',
@@ -252,15 +250,15 @@ async function sendTemplate(phoneNumberId, toWaId, name, languageCode, component
       components: components || [],
     },
   };
-  return postJSON(url, payload);
+  return postJSON(url, payload, customConfig);
 }
 
 /**
  * Get templates for a WABA.
  */
-async function getTemplates(wabaId, limit = 100) {
+async function getTemplates(wabaId, limit = 100, customConfig = null) {
   const url = `${GRAPH_BASE}/${wabaId}/message_templates?limit=${limit}`;
-  return getJSON(url);
+  return getJSON(url, customConfig);
 }
 
 /**
@@ -268,12 +266,13 @@ async function getTemplates(wabaId, limit = 100) {
  * Uses axios instead of the low-level https client to avoid intermittent
  * "socket hang up" network errors and to surface Graph API errors clearly.
  */
-async function createTemplate(wabaId, templateData) {
+async function createTemplate(wabaId, templateData, customConfig = null) {
+  const token = (customConfig && customConfig.token) || TOKEN;
   if (USE_MOCK) {
     console.log('[Mock WhatsApp Client] Skipping real template creation.');
     return { status: 200, data: { success: true, id: 'mock_template_' + Date.now() } };
   }
-  if (!TOKEN) throw new Error('WHATSAPP_TOKEN required');
+  if (!token) throw new Error('WhatsApp Token required');
 
   const url = `${GRAPH_BASE}/${wabaId}/message_templates`;
 
@@ -282,7 +281,7 @@ async function createTemplate(wabaId, templateData) {
   try {
     const res = await axios.post(url, templateData, {
       headers: {
-        'Authorization': `Bearer ${TOKEN}`,
+        'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
     });
@@ -301,9 +300,9 @@ async function createTemplate(wabaId, templateData) {
  * Get media URL by ID.
  * Returns the object containing the temporary URL.
  */
-async function getMedia(mediaId) {
+async function getMedia(mediaId, customConfig = null) {
   const url = `${GRAPH_BASE}/${mediaId}`;
-  return getJSON(url);
+  return getJSON(url, customConfig);
 }
 
 /**
@@ -313,12 +312,13 @@ async function getMedia(mediaId) {
  * @param {string} mimeType
  * @param {string} filename
  */
-async function uploadMedia(phoneNumberId, fileBuffer, mimeType, filename) {
+async function uploadMedia(phoneNumberId, fileBuffer, mimeType, filename, customConfig = null) {
+  const token = (customConfig && customConfig.token) || TOKEN;
   if (USE_MOCK) {
     console.log('[Mock WhatsApp Client] Skipping real upload.');
     return { id: 'mock_media_' + Date.now() };
   }
-  if (!TOKEN) throw new Error('WHATSAPP_TOKEN required');
+  if (!token) throw new Error('WhatsApp Token required');
 
   const url = `${GRAPH_BASE}/${phoneNumberId}/media`;
   const form = new FormData();
@@ -330,7 +330,7 @@ async function uploadMedia(phoneNumberId, fileBuffer, mimeType, filename) {
     const res = await axios.post(url, form, {
       headers: {
         ...form.getHeaders(),
-        'Authorization': `Bearer ${TOKEN}`
+        'Authorization': `Bearer ${token}`
       }
     });
     return res.data; // { id: '...' }
@@ -403,12 +403,13 @@ async function uploadMessageTemplateMedia(wabaId, fileBuffer, mimeType, filename
  * @param {string} name - Name of the template (required)
  * @param {string} hsmId - Optional: Template ID to delete specific version
  */
-async function deleteTemplate(wabaId, name, hsmId) {
+async function deleteTemplate(wabaId, name, hsmId, customConfig = null) {
+  const token = (customConfig && customConfig.token) || TOKEN;
   if (USE_MOCK) {
     console.log('[Mock WhatsApp Client] Deleting template:', name, hsmId);
     return { success: true };
   }
-  if (!TOKEN) throw new Error('WHATSAPP_TOKEN required');
+  if (!token) throw new Error('WhatsApp Token required');
 
   await delayUntilAvailable();
   
@@ -424,7 +425,7 @@ async function deleteTemplate(wabaId, name, hsmId) {
       hostname: u.hostname,
       path: u.pathname + u.search,
       headers: {
-        'Authorization': `Bearer ${TOKEN}`,
+        'Authorization': `Bearer ${token}`,
       },
     };
     
@@ -451,6 +452,7 @@ async function deleteTemplate(wabaId, name, hsmId) {
     req.end();
   });
 }
+
 
 async function createFlow({ name, categories, flowJson, publish = true, cloneFlowId, endpointUri }) {
   if (USE_MOCK) {
@@ -589,7 +591,7 @@ async function getFlows(wabaId, limit = 100) {
 /**
  * Send an interactive message (buttons, list, flow, etc.).
  */
-async function sendInteractiveMessage(phoneNumberId, toWaId, interactive) {
+async function sendInteractiveMessage(phoneNumberId, toWaId, interactive, customConfig = null) {
   const url = `${GRAPH_BASE}/${phoneNumberId}/messages`;
   const payload = {
     messaging_product: 'whatsapp',
@@ -597,7 +599,7 @@ async function sendInteractiveMessage(phoneNumberId, toWaId, interactive) {
     type: 'interactive',
     interactive: interactive,
   };
-  return postJSON(url, payload);
+  return postJSON(url, payload, customConfig);
 }
 
 module.exports = {

@@ -7,6 +7,7 @@ const FormData = require('form-data');
 const db = require('../../db');
 const auth = require('../middlewares/auth');
 const flowCrypto = require('../utils/flowCrypto');
+const waConfig = require('../utils/whatsappConfig');
 
 const BASE_URL = 'https://graph.facebook.com/v21.0';
 
@@ -14,14 +15,14 @@ const BASE_URL = 'https://graph.facebook.com/v21.0';
 // Helpers
 // ─────────────────────────────────────────────
 
-function getToken() {
-  const token = process.env.WHATSAPP_TOKEN;
-  if (!token) throw new Error('WHATSAPP_TOKEN env variable is not set');
+function getToken(config = null) {
+  const token = (config && config.token) || process.env.WHATSAPP_TOKEN;
+  if (!token) throw new Error('WhatsApp Token is not set');
   return token;
 }
 
-function authHeaders(extra = {}) {
-  return { Authorization: `Bearer ${getToken()}`, ...extra };
+function authHeaders(config = null, extra = {}) {
+  return { Authorization: `Bearer ${getToken(config)}`, ...extra };
 }
 
 function wrapMetaError(err) {
@@ -57,10 +58,10 @@ function sendFlowMetaError(res, err, fallbackMessage) {
 // Meta API functions
 // ─────────────────────────────────────────────
 
-async function metaGetFlows(wabaId) {
+async function metaGetFlows(wabaId, config = null) {
   try {
     const res = await axios.get(`${BASE_URL}/${wabaId}/flows`, {
-      headers: authHeaders(),
+      headers: authHeaders(config),
       params: { fields: 'id,name,status,categories,validation_errors,json_version,endpoint_uri' },
     });
     return res.data.data || [];
@@ -68,19 +69,19 @@ async function metaGetFlows(wabaId) {
 }
 
 // STEP 1 — create shell: only name + categories accepted here by Meta
-async function metaCreateFlowShell(wabaId, { name, categories, cloneFlowId }) {
+async function metaCreateFlowShell(wabaId, config, { name, categories, cloneFlowId }) {
   const payload = { name, categories: Array.isArray(categories) ? categories : ['OTHER'] };
   if (cloneFlowId) payload.clone_flow_id = cloneFlowId;
   try {
     const res = await axios.post(`${BASE_URL}/${wabaId}/flows`, payload, {
-      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      headers: authHeaders(config, { 'Content-Type': 'application/json' }),
     });
     return res.data; // { id, success }
   } catch (err) { wrapMetaError(err); }
 }
 
 // STEP 2 — upload flow JSON as multipart/form-data asset
-async function metaUploadFlowJson(flowId, flowJson) {
+async function metaUploadFlowJson(flowId, config, flowJson) {
   const form = new FormData();
   form.append('name', 'flow.json');
   form.append('asset_type', 'FLOW_JSON');
@@ -90,49 +91,49 @@ async function metaUploadFlowJson(flowId, flowJson) {
   });
   try {
     const res = await axios.post(`${BASE_URL}/${flowId}/assets`, form, {
-      headers: { ...authHeaders(), ...form.getHeaders() },
+      headers: { ...authHeaders(config), ...form.getHeaders() },
     });
     return res.data; // { success, validation_errors }
   } catch (err) { wrapMetaError(err); }
 }
 
 // STEP 3 — publish (irreversible — published flows cannot be edited, only cloned)
-async function metaPublishFlow(flowId) {
+async function metaPublishFlow(flowId, config) {
   try {
     const res = await axios.post(`${BASE_URL}/${flowId}/publish`, {}, {
-      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      headers: authHeaders(config, { 'Content-Type': 'application/json' }),
     });
     return res.data;
   } catch (err) { wrapMetaError(err); }
 }
 
-async function metaUpdateMetadata(flowId, payload) {
+async function metaUpdateMetadata(flowId, config, payload) {
   try {
     const res = await axios.post(`${BASE_URL}/${flowId}`, payload, {
-      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      headers: authHeaders(config, { 'Content-Type': 'application/json' }),
     });
     return res.data;
   } catch (err) { wrapMetaError(err); }
 }
 
-async function metaDeleteFlow(flowId) {
+async function metaDeleteFlow(flowId, config) {
   try {
-    const res = await axios.delete(`${BASE_URL}/${flowId}`, { headers: authHeaders() });
+    const res = await axios.delete(`${BASE_URL}/${flowId}`, { headers: authHeaders(config) });
     return res.data;
   } catch (err) { wrapMetaError(err); }
 }
 
 // Composite: shell → upload JSON → (optional) publish
-async function metaCreateFlow({ name, categories, flowJson, publish = false, cloneFlowId, endpointUri }) {
-  const WABA_ID = process.env.WHATSAPP_BUSINESS_ACCOUNT_ID;
-  if (!WABA_ID) throw new Error('WHATSAPP_BUSINESS_ACCOUNT_ID not configured');
+async function metaCreateFlow(config, { name, categories, flowJson, publish = false, cloneFlowId, endpointUri }) {
+  const wabaId = config.businessAccountId || process.env.WHATSAPP_BUSINESS_ACCOUNT_ID;
+  if (!wabaId) throw new Error('WhatsApp Business Account ID not configured');
 
-  const created = await metaCreateFlowShell(WABA_ID, { name, categories, cloneFlowId });
+  const created = await metaCreateFlowShell(wabaId, config, { name, categories, cloneFlowId });
   const flowId = created.id;
   if (!flowId) throw Object.assign(new Error('Meta did not return a flow id'), { status: 502 });
 
   if (flowJson) {
-    const upload = await metaUploadFlowJson(flowId, flowJson);
+    const upload = await metaUploadFlowJson(flowId, config, flowJson);
     if (upload && upload.validation_errors && upload.validation_errors.length) {
       throw Object.assign(new Error('Flow JSON has validation errors'), {
         status: 422,
@@ -141,18 +142,18 @@ async function metaCreateFlow({ name, categories, flowJson, publish = false, clo
     }
   }
 
-  if (endpointUri) await metaUpdateMetadata(flowId, { endpoint_uri: endpointUri });
+  if (endpointUri) await metaUpdateMetadata(flowId, config, { endpoint_uri: endpointUri });
 
   let publishResult = null;
-  if (publish) publishResult = await metaPublishFlow(flowId);
+  if (publish) publishResult = await metaPublishFlow(flowId, config);
 
   return { id: flowId, published: !!(publishResult && publishResult.success) };
 }
 
 // Composite update: re-upload JSON + update metadata
-async function metaUpdateFlow(flowId, { name, categories, flowJson, endpointUri }) {
+async function metaUpdateFlow(flowId, config, { name, categories, flowJson, endpointUri }) {
   if (flowJson) {
-    const upload = await metaUploadFlowJson(flowId, flowJson);
+    const upload = await metaUploadFlowJson(flowId, config, flowJson);
     if (upload && upload.validation_errors && upload.validation_errors.length) {
       throw Object.assign(new Error('Flow JSON has validation errors'), {
         status: 422,
@@ -164,7 +165,7 @@ async function metaUpdateFlow(flowId, { name, categories, flowJson, endpointUri 
   if (name !== undefined) metadataPayload.name = name;
   if (categories !== undefined) metadataPayload.categories = categories;
   if (endpointUri !== undefined) metadataPayload.endpoint_uri = endpointUri;
-  if (Object.keys(metadataPayload).length > 0) await metaUpdateMetadata(flowId, metadataPayload);
+  if (Object.keys(metadataPayload).length > 0) await metaUpdateMetadata(flowId, config, metadataPayload);
 }
 
 // ─────────────────────────────────────────────
@@ -197,9 +198,11 @@ router.post('/whatsapp/flows/keys', auth.requireRole('admin', 'supervisor'), asy
 // SYNC
 router.post('/whatsapp/flows/sync', auth.requireRole('admin', 'supervisor'), async (req, res, next) => {
   try {
-    const WABA_ID = process.env.WHATSAPP_BUSINESS_ACCOUNT_ID;
-    if (!WABA_ID) throw new Error('WHATSAPP_BUSINESS_ACCOUNT_ID not configured');
-    const remoteFlows = await metaGetFlows(WABA_ID);
+    const teamId = resolveTeamId(req);
+    const config = await waConfig.getConfig(teamId);
+    const wabaId = config.businessAccountId || process.env.WHATSAPP_BUSINESS_ACCOUNT_ID;
+    if (!wabaId) throw new Error('WhatsApp Business Account ID not configured');
+    const remoteFlows = await metaGetFlows(wabaId, config);
     const upserted = [];
     for (const flow of remoteFlows) {
       const result = await db.query(
@@ -232,6 +235,8 @@ router.get('/whatsapp/flows', auth.requireRole('admin', 'supervisor'), async (re
 router.post('/whatsapp/flows', auth.requireRole('admin', 'supervisor'), async (req, res, next) => {
   try {
     const { name, description, categories, flow_json, publish, endpoint_uri, clone_flow_id } = req.body || {};
+    const teamId = resolveTeamId(req);
+    const config = await waConfig.getConfig(teamId);
 
     if (!name) return res.status(400).json({ error: 'Bad Request', message: 'name is required' });
     if (!flow_json || typeof flow_json !== 'object') return res.status(400).json({ error: 'Bad Request', message: 'flow_json (object) is required' });
@@ -243,7 +248,7 @@ router.post('/whatsapp/flows', auth.requireRole('admin', 'supervisor'), async (r
     let remoteStatus = 'DRAFT';
 
     try {
-      const created = await metaCreateFlow({
+      const created = await metaCreateFlow(config, {
         name, categories, flowJson: flow_json,
         publish: String(publish) === 'true',
         cloneFlowId: clone_flow_id,
@@ -271,6 +276,8 @@ router.put('/whatsapp/flows/:id', auth.requireRole('admin', 'supervisor'), async
   try {
     const { id } = req.params;
     const { name, description, categories, flow_json, publish, endpoint_uri } = req.body || {};
+    const teamId = resolveTeamId(req);
+    const config = await waConfig.getConfig(teamId);
 
     const existingResult = await db.query(
       `SELECT id, flow_id, name, description, status, categories, flow_json FROM whatsapp_flows WHERE id = $1`,
@@ -289,20 +296,20 @@ router.put('/whatsapp/flows/:id', auth.requireRole('admin', 'supervisor'), async
 
     try {
       if (!remoteFlowId) {
-        const created = await metaCreateFlow({
+        const created = await metaCreateFlow(config, {
           name: nextName, categories: nextCategories, flowJson: nextFlowJson,
           publish: String(publish) === 'true', endpointUri,
         });
         remoteFlowId = created.id;
         if (created.published) remoteStatus = 'PUBLISHED';
       } else {
-        await metaUpdateFlow(remoteFlowId, {
+        await metaUpdateFlow(remoteFlowId, config, {
           name: nextName, categories: nextCategories,
           flowJson: flow_json !== undefined ? nextFlowJson : undefined,
           endpointUri,
         });
         if (String(publish) === 'true') {
-          await metaPublishFlow(remoteFlowId);
+          await metaPublishFlow(remoteFlowId, config);
           remoteStatus = 'PUBLISHED';
         }
       }
@@ -337,6 +344,9 @@ router.put('/whatsapp/flows/:id', auth.requireRole('admin', 'supervisor'), async
 router.post('/whatsapp/flows/:id/publish', auth.requireRole('admin', 'supervisor'), async (req, res, next) => {
   try {
     const { id } = req.params;
+    const teamId = resolveTeamId(req);
+    const config = await waConfig.getConfig(teamId);
+
     const existingResult = await db.query(
       `SELECT id, flow_id, status FROM whatsapp_flows WHERE id = $1`, [id]
     );
@@ -346,7 +356,7 @@ router.post('/whatsapp/flows/:id/publish', auth.requireRole('admin', 'supervisor
     if (existing.status === 'PUBLISHED') return res.status(400).json({ error: 'Bad Request', message: 'Flow is already published. Clone it to make changes.' });
 
     try {
-      await metaPublishFlow(existing.flow_id);
+      await metaPublishFlow(existing.flow_id, config);
     } catch (err) {
       return sendFlowMetaError(res, err, 'Failed to publish WhatsApp Flow on Meta');
     }
@@ -365,6 +375,9 @@ router.post('/whatsapp/flows/:id/publish', auth.requireRole('admin', 'supervisor
 router.delete('/whatsapp/flows/:id', auth.requireRole('admin', 'supervisor'), async (req, res, next) => {
   try {
     const { id } = req.params;
+    const teamId = resolveTeamId(req);
+    const config = await waConfig.getConfig(teamId);
+
     const existingResult = await db.query(
       `SELECT id, flow_id, status FROM whatsapp_flows WHERE id = $1`, [id]
     );
@@ -373,7 +386,7 @@ router.delete('/whatsapp/flows/:id', auth.requireRole('admin', 'supervisor'), as
 
     if (existing.flow_id && existing.status !== 'PUBLISHED') {
       try {
-        await metaDeleteFlow(existing.flow_id);
+        await metaDeleteFlow(existing.flow_id, config);
       } catch (err) {
         console.error(`[WhatsApp] Failed to delete flow ${existing.flow_id} from Meta:`, err.message);
       }

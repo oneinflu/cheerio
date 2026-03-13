@@ -285,4 +285,57 @@ router.delete('/settings/lead-stages/:id', auth.requireRole('admin', 'supervisor
 router.get('/settings/working-hours', auth.requireRole('admin', 'super_admin', 'supervisor', 'quality_manager', 'agent'), handleGetWorkingHours);
 router.put('/settings/working-hours', auth.requireRole('admin', 'supervisor'), handleSaveWorkingHours);
 
+// WhatsApp settings
+router.get('/whatsapp', auth.requireRole('admin', 'super_admin'), async (req, res, next) => {
+  try {
+    const teamId = await resolveTeamId(req);
+    const result = await db.query(
+      `SELECT phone_number_id, business_account_id, permanent_token, display_phone_number, is_active
+       FROM whatsapp_settings WHERE team_id = $1`,
+      [teamId]
+    );
+    if (result.rowCount === 0) {
+      return res.json({
+        teamId,
+        settings: {
+          phone_number_id: '',
+          business_account_id: '',
+          permanent_token: '',
+          display_phone_number: '',
+          is_active: false
+        }
+      });
+    }
+    res.json({ teamId, settings: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.put('/whatsapp', auth.requireRole('admin', 'super_admin'), async (req, res, next) => {
+  try {
+    const teamId = await resolveTeamId(req);
+    const { phone_number_id, business_account_id, permanent_token, display_phone_number, is_active } = req.body || {};
+    
+    // Upsert
+    const result = await db.query(
+      `INSERT INTO whatsapp_settings (team_id, phone_number_id, business_account_id, permanent_token, display_phone_number, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (team_id) DO UPDATE SET
+         phone_number_id = EXCLUDED.phone_number_id,
+         business_account_id = EXCLUDED.business_account_id,
+         permanent_token = EXCLUDED.permanent_token,
+         display_phone_number = EXCLUDED.display_phone_number,
+         is_active = EXCLUDED.is_active,
+         updated_at = NOW()
+       RETURNING *`,
+      [teamId, phone_number_id, business_account_id, permanent_token, display_phone_number, is_active === undefined ? true : is_active]
+    );
+    
+    res.json(result.rows[0]);
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;

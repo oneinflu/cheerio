@@ -32,6 +32,7 @@ const rulesRouter = require('./src/routes/rules');
 const galleryRouter = require('./src/routes/gallery');
 const authRouter = require('./src/routes/auth');
 const instagramAuthRouter = require('./src/routes/instagramAuth');
+const whatsappAuthRouter = require('./src/routes/whatsappAuth');
 const teamRouter = require('./src/routes/team');
 const settingsRouter = require('./src/routes/settings');
 const whatsappFlowsRouter = require('./src/routes/whatsappFlows');
@@ -124,6 +125,7 @@ function createApp() {
   app.use('/webhooks/razorpay', require('./src/webhooks/razorpay'));
   app.use('/api/auth', authRouter); // Login
   app.use('/api/auth', instagramAuthRouter); // Instagram Callback
+  app.use('/api/auth/whatsapp', whatsappAuthRouter); // WhatsApp Callback/Onboarding
   app.use('/api/team-users', teamRouter); // Team Users
   app.use('/api/whatsapp', whatsappOutboundRouter);
   app.use('/api/conversations', conversationsRouter);

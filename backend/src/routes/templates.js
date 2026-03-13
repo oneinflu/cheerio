@@ -7,6 +7,22 @@ const auth = require('../middlewares/auth');
 const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage() });
 const cloudinaryLib = require('cloudinary').v2;
+const waConfig = require('../utils/whatsappConfig');
+
+async function resolveTeamId(req) {
+  if (req.query && req.query.teamId) return req.query.teamId;
+  if (req.user && Array.isArray(req.user.teamIds) && req.user.teamIds.length > 0) {
+    return req.user.teamIds[0];
+  }
+  if (req.user && req.user.id) {
+    try {
+      const res = await db.query('SELECT team_id FROM team_members WHERE user_id = $1 LIMIT 1', [req.user.id]);
+      const t = res.rows[0]?.team_id;
+      if (t) return t;
+    } catch (e) {}
+  }
+  return 'default';
+}
 
 const WABA_ID = process.env.WHATSAPP_BUSINESS_ACCOUNT_ID;
 const HAS_CLOUDINARY =
@@ -27,20 +43,23 @@ if (HAS_CLOUDINARY) {
  * List all templates for the configured WABA.
  */
 router.get('/', async (req, res, next) => {
-  if (!WABA_ID) {
-    // Fallback/Demo mode if no WABA ID is set
-    console.warn('[templates] WHATSAPP_BUSINESS_ACCOUNT_ID not set. Returning empty list.');
-    return res.json({ data: [] });
-  }
   try {
-    console.log('[templates] Fetching templates for WABA:', WABA_ID);
+    const teamId = await resolveTeamId(req);
+    const config = await waConfig.getConfig(teamId);
+    const wabaId = config.businessAccountId || WABA_ID;
+
+    if (!wabaId) {
+      console.warn('[templates] WhatsApp Business Account ID not set. Returning empty list.');
+      return res.json({ data: [] });
+    }
+    
+    console.log('[templates] Fetching templates for WABA:', wabaId);
     let templates = [];
     try {
-      const resp = await whatsappClient.getTemplates(WABA_ID);
+      const resp = await whatsappClient.getTemplates(wabaId, 100, config);
       templates = resp.data && resp.data.data ? resp.data.data : [];
     } catch (apiErr) {
       console.error('[templates] Failed to fetch Meta templates:', apiErr.message);
-      // Don't fail completely, try to load local templates
     }
 
     // Fetch local templates
@@ -136,14 +155,18 @@ router.delete('/:name/star', async (req, res, next) => {
  * Create a new message template.
  */
 router.post('/', async (req, res, next) => {
-  if (!WABA_ID) {
-    const err = new Error('WHATSAPP_BUSINESS_ACCOUNT_ID is not configured');
-    err.status = 500;
-    err.expose = true;
-    return next(err);
-  }
   try {
-    const resp = await whatsappClient.createTemplate(WABA_ID, req.body);
+    const teamId = await resolveTeamId(req);
+    const config = await waConfig.getConfig(teamId);
+    const wabaId = config.businessAccountId || WABA_ID;
+
+    if (!wabaId) {
+      const err = new Error('WhatsApp Business Account ID is not configured');
+      err.status = 500;
+      err.expose = true;
+      return next(err);
+    }
+    const resp = await whatsappClient.createTemplate(wabaId, req.body, config);
     res.json(resp.data);
   } catch (err) {
     const e = new Error(err.message || 'Template creation failed');
@@ -294,11 +317,16 @@ router.post('/send-test', async (req, res, next) => {
   // The 'sendTemplateMessage' function in whatsappClient should handle this.
 
   try {
+    const teamId = await resolveTeamId(req);
+    const config = await waConfig.getConfig(teamId);
+
     const resp = await whatsappClient.sendTemplateMessage(
       to,
       templateName,
       languageCode || 'en_US',
-      components
+      components,
+      null,
+      config
     );
     res.json(resp.data);
   } catch (err) {
@@ -319,27 +347,28 @@ router.post('/send-test', async (req, res, next) => {
  * Delete a template by name (and optional hsm_id).
  */
 router.delete('/', async (req, res, next) => {
-  if (!WABA_ID) {
-    const err = new Error('WHATSAPP_BUSINESS_ACCOUNT_ID is not configured');
-    err.status = 500;
-    return next(err);
-  }
-
   const { name, hsm_id } = req.query;
-
   if (!name) {
-    const err = new Error('Template "name" is required');
-    err.status = 400;
-    return next(err);
+    return res.status(400).json({ error: 'Template name is required' });
   }
-
   try {
-    console.log(`[templates] Deleting template: ${name} (ID: ${hsm_id || 'ALL'})`);
-    const resp = await whatsappClient.deleteTemplate(WABA_ID, name, hsm_id);
+    const teamId = await resolveTeamId(req);
+    const config = await waConfig.getConfig(teamId);
+    const wabaId = config.businessAccountId || WABA_ID;
+
+    if (!wabaId) {
+      const err = new Error('WhatsApp Business Account ID is not configured');
+      err.status = 500;
+      return next(err);
+    }
+
+    console.log(`[templates] Deleting template: ${name} (ID: ${hsm_id || 'ALL'}) for WABA ${wabaId}`);
+    const resp = await whatsappClient.deleteTemplate(wabaId, name, hsm_id, config);
     res.json(resp.data || { success: true });
   } catch (err) {
     next(err);
   }
 });
+
 
 module.exports = router;

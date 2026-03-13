@@ -4,8 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Modal } from './ui/Modal';
-import { ListChecks, Clock } from 'lucide-react';
-import { getLeadStages, createLeadStage, updateLeadStage, deleteLeadStage, getWorkingHours, saveWorkingHours } from '../api';
+import { ListChecks, Clock, MessageSquare, Facebook, CheckCircle2, AlertCircle } from 'lucide-react';
+import { getLeadStages, createLeadStage, updateLeadStage, deleteLeadStage, getWorkingHours, saveWorkingHours, getWhatsAppSettings, updateWhatsAppSettings, onboardWhatsApp } from '../api';
 
 export default function SettingsPage({ currentUser }) {
   const teamId = useMemo(() => {
@@ -102,6 +102,116 @@ export default function SettingsPage({ currentUser }) {
     };
     load();
   }, [teamId]);
+
+  const [whatsappSettings, setWhatsappSettings] = useState({
+    phone_number_id: '',
+    business_account_id: '',
+    permanent_token: '',
+    display_phone_number: '',
+    is_active: false
+  });
+  const [loadingWhatsapp, setLoadingWhatsapp] = useState(false);
+  const [savingWhatsapp, setSavingWhatsapp] = useState(false);
+  const [whatsappError, setWhatsappError] = useState(null);
+
+  useEffect(() => {
+    if (!teamId) return;
+    const load = async () => {
+      try {
+        setLoadingWhatsapp(true);
+        const res = await getWhatsAppSettings(teamId);
+        if (res && res.settings) {
+          setWhatsappSettings(res.settings);
+        }
+      } catch (err) {
+        console.error('Failed to load WhatsApp settings:', err);
+      } finally {
+        setLoadingWhatsapp(false);
+      }
+    };
+    load();
+  }, [teamId]);
+
+  const handleSaveWhatsApp = async () => {
+    if (!teamId) return;
+    try {
+      setSavingWhatsapp(true);
+      setWhatsappError(null);
+      await updateWhatsAppSettings(whatsappSettings, teamId);
+      alert('WhatsApp settings saved successfully!');
+    } catch (err) {
+      setWhatsappError('Failed to save WhatsApp settings');
+    } finally {
+      setSavingWhatsapp(false);
+    }
+  };
+
+  // Meta SDK & Onboarding
+  const [sdkLoaded, setSdkLoaded] = useState(false);
+  useEffect(() => {
+    window.fbAsyncInit = function() {
+      window.FB.init({
+        appId      : '321531509460250', // Ideally from config/env
+        cookie     : true,
+        xfbml      : true,
+        version    : 'v21.0'
+      });
+      setSdkLoaded(true);
+    };
+
+    (function(d, s, id) {
+      var js, fjs = d.getElementsByTagName(s)[0];
+      if (d.getElementById(id)) return;
+      js = d.createElement(s); js.id = id;
+      js.src = "https://connect.facebook.net/en_US/sdk.js";
+      fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+  }, []);
+
+  const handleConnectWhatsApp = () => {
+    if (!window.FB) {
+      alert('Facebook SDK not loaded yet. Please wait a moment.');
+      return;
+    }
+
+    setLoadingWhatsapp(true);
+    window.FB.login((response) => {
+      if (response.authResponse) {
+        const accessToken = response.authResponse.accessToken;
+        onboardWhatsApp(accessToken, teamId)
+          .then(res => {
+            if (res.success) {
+              setWhatsappSettings(prev => ({
+                ...prev,
+                phone_number_id: res.data.phoneNumberId,
+                business_account_id: res.data.businessAccountId,
+                display_phone_number: res.data.displayPhoneNumber,
+                permanent_token: accessToken, // Store user token for now
+                is_active: true
+              }));
+              alert('Successfully connected to Meta!');
+            } else {
+              setWhatsappError(res.error || 'Failed to onboard');
+            }
+          })
+          .catch(err => {
+            setWhatsappError('Failed to connect to backend during onboarding');
+          })
+          .finally(() => setLoadingWhatsapp(false));
+      } else {
+        setLoadingWhatsapp(false);
+        console.log('User cancelled login or did not fully authorize.');
+      }
+    }, {
+      scope: 'whatsapp_business_management,whatsapp_business_messaging',
+      extras: {
+        feature: 'whatsapp_embedded_signup',
+        setup: {
+          // You can add more setup params here if needed
+        }
+      }
+    });
+  };
 
   const handleCreateStage = async () => {
     if (!newStageName.trim()) {
@@ -340,7 +450,121 @@ export default function SettingsPage({ currentUser }) {
             </div>
           </CardContent>
         </Card>
+        
+        {/* WhatsApp Business Account */}
+        <Card className="border-none shadow-sm h-full flex flex-col">
+          <CardHeader className="flex flex-row items-center justify-between py-4 pb-2 border-b border-slate-50">
+            <div className="flex items-center gap-2">
+              <div className="p-2 bg-green-50 rounded-lg">
+                <MessageSquare className="w-5 h-5 text-green-600" />
+              </div>
+              <div>
+                <CardTitle className="text-base font-semibold text-slate-800">WhatsApp Business</CardTitle>
+                <div className="text-[11px] text-slate-500 font-normal">Connect your own API credentials</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className={`h-2 w-2 rounded-full ${whatsappSettings.is_active ? 'bg-green-500' : 'bg-slate-300'}`} />
+              <span className="text-[10px] font-medium text-slate-500 uppercase tracking-wider">
+                {whatsappSettings.is_active ? 'Connected' : 'Disconnected'}
+              </span>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-4 flex-1 flex flex-col overflow-hidden">
+            <div className="flex-1 flex flex-col items-center justify-center py-6 text-center space-y-6">
+              {!whatsappSettings.phone_number_id ? (
+                <>
+                  <div className="max-w-xs space-y-2">
+                    <p className="text-sm text-slate-600 font-medium">
+                      One-click connection to Meta
+                    </p>
+                    <p className="text-[11px] text-slate-500">
+                      We will automatically fetch your Business ID and Phone Number ID from your Facebook account.
+                    </p>
+                  </div>
+                  <Button
+                    onClick={handleConnectWhatsApp}
+                    disabled={loadingWhatsapp || !sdkLoaded}
+                    className="bg-[#1877F2] hover:bg-[#166fe5] text-white flex items-center gap-3 px-8 h-11 rounded-full shadow-lg shadow-blue-500/20 transition-all hover:scale-[1.02]"
+                  >
+                    {loadingWhatsapp ? (
+                      <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    ) : (
+                      <Facebook className="w-5 h-5 fill-current" />
+                    )}
+                    <span className="font-semibold">Connect with Meta</span>
+                  </Button>
+                  {!sdkLoaded && <p className="text-[10px] text-slate-400">Loading Meta SDK...</p>}
+                </>
+              ) : (
+                <div className="w-full space-y-4">
+                  <div className="bg-green-50/50 border border-green-100 rounded-xl p-4 flex items-start gap-4">
+                    <div className="mt-1">
+                      <CheckCircle2 className="w-5 h-5 text-green-500" />
+                    </div>
+                    <div className="text-left">
+                      <h4 className="text-sm font-bold text-slate-800">Account Connected</h4>
+                      <p className="text-xs text-slate-600 mt-0.5">
+                        Linked Number: <span className="font-semibold text-slate-900">{whatsappSettings.display_phone_number || whatsappSettings.phone_number_id}</span>
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-slate-50 rounded-lg p-3 text-left">
+                      <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Business ID</label>
+                      <p className="text-xs text-slate-700 font-medium truncate">{whatsappSettings.business_account_id}</p>
+                    </div>
+                    <div className="bg-slate-50 rounded-lg p-3 text-left">
+                      <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Phone ID</label>
+                      <p className="text-xs text-slate-700 font-medium truncate">{whatsappSettings.phone_number_id}</p>
+                    </div>
+                  </div>
+
+                  <div className="pt-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => setWhatsappSettings(prev => ({ ...prev, phone_number_id: '', business_account_id: '' }))}
+                      className="text-slate-500 text-xs border-slate-200 h-8 px-4"
+                    >
+                      Reconnect different account
+                    </Button>
+                  </div>
+                </div>
+              )}
+              
+              {whatsappError && (
+                <div className="flex items-center gap-2 text-red-500 text-xs mt-2 bg-red-50 px-3 py-2 rounded-md border border-red-100 italic">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  {whatsappError}
+                </div>
+              )}
+            </div>
+            
+            <div className="pt-4 border-t border-slate-50 flex items-center justify-between mt-auto">
+              <div>
+                <label className="flex items-center gap-2 cursor-pointer group">
+                  <input
+                    type="checkbox"
+                    className="rounded border-slate-300 text-green-600 focus:ring-green-500/20"
+                    checked={whatsappSettings.is_active}
+                    onChange={(e) => setWhatsappSettings(prev => ({ ...prev, is_active: e.target.checked }))}
+                  />
+                  <span className="text-[11px] font-medium text-slate-600 group-hover:text-slate-900 transition-colors">Active Integration</span>
+                </label>
+              </div>
+              <Button
+                onClick={handleSaveWhatsApp}
+                disabled={savingWhatsapp || loadingWhatsapp || !whatsappSettings.phone_number_id}
+                className="bg-slate-900 hover:bg-black text-white h-9 px-6 text-xs font-semibold rounded-lg"
+              >
+                {savingWhatsapp ? 'Saving...' : 'Save Configuration'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
+
 
       <Modal
         isOpen={isHoursModalOpen}

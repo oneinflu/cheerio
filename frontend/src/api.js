@@ -967,3 +967,34 @@ export async function toggleAiForConversation(conversationId, isActive) {
   });
   return res.json();
 }
+
+export async function getWhatsAppSettings(teamId) {
+  const params = new URLSearchParams();
+  if (teamId) params.append('teamId', teamId);
+  const headers = getAuthHeaders();
+  const res = await fetch(`/api/settings/whatsapp?${params.toString()}`, { headers });
+  return res.json();
+}
+
+export async function updateWhatsAppSettings(data, teamId) {
+  const params = new URLSearchParams();
+  if (teamId) params.append('teamId', teamId);
+  const headers = getAuthHeaders();
+  const res = await fetch(`/api/settings/whatsapp?${params.toString()}`, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+export async function onboardWhatsApp(accessToken, teamId) {
+  const params = new URLSearchParams();
+  if (teamId) params.append('teamId', teamId);
+  const headers = getAuthHeaders();
+  const res = await fetch(`/api/auth/whatsapp/onboard?${params.toString()}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ accessToken }),
+  });
+  return res.json();
+}

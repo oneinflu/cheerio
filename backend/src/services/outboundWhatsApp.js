@@ -28,6 +28,7 @@ const { getIO } = require('../realtime/io');
 const client = require('../integrations/meta/whatsappClient');
 const cloudinaryLib = require('cloudinary').v2;
 const translation = require('./translation');
+const waConfig = require('../utils/whatsappConfig');
 
 const H24_MS = 24 * 60 * 60 * 1000;
 
@@ -254,10 +255,11 @@ async function sendText(conversationId, text) {
       targetLanguage: preferredLang || null,
     });
     emitStatus(details.conversationId, messageId, 'sending');
+    const customConfig = await waConfig.getConfigByPhone(details.phoneNumberId);
 
     let resp;
     try {
-      resp = await client.sendText(details.phoneNumberId, details.toWaId, textForMeta);
+      resp = await client.sendText(details.phoneNumberId, details.toWaId, textForMeta, customConfig);
     } catch (apiErr) {
       console.error('[sendText] Meta API failed:', apiErr.response?.data || apiErr.message);
       await finalizeOutboundMessage(clientConn, messageId, details.conversationId, null, false);
@@ -331,10 +333,11 @@ async function sendMedia(conversationId, kind, link, caption) {
 
     emitMessage(details.conversationId, messageId, kind, caption || null, null, [attachment]);
     emitStatus(details.conversationId, messageId, 'sending');
+    const customConfig = await waConfig.getConfigByPhone(details.phoneNumberId);
 
     let resp;
     try {
-      resp = await client.sendMedia(details.phoneNumberId, details.toWaId, kind, link, caption);
+      resp = await client.sendMedia(details.phoneNumberId, details.toWaId, kind, link, caption, customConfig);
     } catch (apiErr) {
       console.error('[sendMedia] Meta API failed:', apiErr.response?.data || apiErr.message);
       await finalizeOutboundMessage(clientConn, messageId, details.conversationId, null, false);
@@ -397,6 +400,7 @@ async function sendTemplate(conversationId, name, languageCode, components) {
     );
     emitMessage(details.conversationId, messageId, 'text', `Template: ${name}`, rawPayload);
     emitStatus(details.conversationId, messageId, 'sending');
+    const customConfig = await waConfig.getConfigByPhone(details.phoneNumberId);
 
     let resp;
     try {
@@ -405,7 +409,8 @@ async function sendTemplate(conversationId, name, languageCode, components) {
         details.toWaId,
         name,
         languageCode,
-        components
+        components,
+        customConfig
       );
     } catch (apiErr) {
       console.error('[sendTemplate] Meta API failed:', apiErr.response?.data || apiErr.message);
@@ -475,10 +480,11 @@ async function sendInteractive(conversationId, interactive) {
     
     emitMessage(details.conversationId, messageId, 'interactive', interactive.body?.text || 'Interactive Message', { type: 'interactive', interactive });
     emitStatus(details.conversationId, messageId, 'sending');
+    const customConfig = await waConfig.getConfigByPhone(details.phoneNumberId); // Added config lookup
 
     let resp;
     try {
-      resp = await client.sendInteractiveMessage(details.phoneNumberId, details.toWaId, interactive);
+      resp = await client.sendInteractiveMessage(details.phoneNumberId, details.toWaId, interactive, customConfig); // Passed customConfig
     } catch (apiErr) {
       console.error('[sendInteractive] Meta API failed:', apiErr.response?.data || apiErr.message);
       await finalizeOutboundMessage(clientConn, messageId, details.conversationId, null, false);
@@ -518,8 +524,9 @@ async function sendTypingIndicator(conversationId, action) {
   const clientConn = await db.getClient();
   try {
     const details = await getConversationDetails(clientConn, conversationId);
+    const customConfig = await waConfig.getConfigByPhone(details.phoneNumberId);
     // Best effort, no db persistence or 24h check needed for typing indicators
-    await client.sendSenderAction(details.phoneNumberId, details.toWaId, action);
+    await client.sendSenderAction(details.phoneNumberId, details.toWaId, action, customConfig);
   } catch (err) {
     // silently fail for typing indicators
     console.warn(`[sendTypingIndicator] failed for conv=${conversationId}`, err.message);
@@ -605,7 +612,8 @@ async function uploadMedia(conversationId, fileBuffer, mimeType, filename) {
       }
     }
 
-    const result = await client.uploadMedia(details.phoneNumberId, fileBuffer, mimeType, filename);
+    const customConfig = await waConfig.getConfigByPhone(details.phoneNumberId);
+    const result = await client.uploadMedia(details.phoneNumberId, fileBuffer, mimeType, filename, customConfig);
     return result;
   } finally {
     clientConn.release();

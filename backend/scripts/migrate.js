@@ -452,6 +452,24 @@ async function runMigrations() {
           console.log('[migrate] AI Agent tables already exist.');
         }
 
+        // 0022 – whatsapp_settings table
+        const waSettingsRes = await client.query(`
+          SELECT EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE  table_schema = 'public'
+            AND    table_name   = 'whatsapp_settings'
+          );
+        `);
+        if (!waSettingsRes.rows[0].exists) {
+          console.log('[migrate] Adding whatsapp_settings table...');
+          await client.query('BEGIN');
+          await runSQLFile(client, path.join(__dirname, '..', 'db', 'migrations', '0022_whatsapp_settings.sql'));
+          await client.query('COMMIT');
+          console.log('[migrate] Applied 0022_whatsapp_settings migration.');
+        } else {
+          console.log('[migrate] whatsapp_settings table already exists.');
+        }
+
         return;
 
 
