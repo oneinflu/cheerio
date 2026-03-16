@@ -107,10 +107,11 @@ async function listConversations(teamId, userId, userRole, filter = 'open', phon
     whereClause += ` AND (ws.team_id = $${params.length} OR ca.team_id = $${params.length} OR ws.team_id IS NULL) `;
   }
 
-  // Phone Number Filter
+  // Phone Number Filter - MUST be exact match on channel external_id
   if (phoneNumberId) {
     params.push(phoneNumberId);
     whereClause += ` AND ch.external_id = $${params.length} `;
+    console.log(`[InboxService] Filtering by phone number: ${phoneNumberId}`);
   }
 
   // Base visibility logic

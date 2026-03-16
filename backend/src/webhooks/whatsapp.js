@@ -87,7 +87,10 @@ router.post('/', async (req, res, next) => {
   try {
     const header = req.headers['x-hub-signature-256'] || '';
     const expected = 'sha256=' + crypto.createHmac('sha256', APP_SECRET).update(req.rawBody || '').digest('hex');
-    if (!APP_SECRET || header !== expected) {
+    if (!APP_SECRET) {
+      console.error('[WhatsApp Webhook] Missing process.env.META_APP_SECRET');
+    } else if (header !== expected) {
+      console.error(`[WhatsApp Webhook] Invalid signature. Expected: ${expected}, Received: ${header}`);
       const err = new Error('Invalid webhook signature');
       err.status = 403;
       err.expose = true;
@@ -98,6 +101,7 @@ router.post('/', async (req, res, next) => {
   }
   try {
     const entries = Array.isArray(body.entry) ? body.entry : [];
+    console.log(`[WhatsApp Webhook] Received payload with ${entries.length} entries`);
     for (const entry of entries) {
       const changes = Array.isArray(entry.changes) ? entry.changes : [];
       for (const change of changes) {
@@ -106,6 +110,7 @@ router.post('/', async (req, res, next) => {
         const statuses = Array.isArray(value.statuses) ? value.statuses : [];
         const metadata = value.metadata || {};
         const phoneNumberId = metadata.phone_number_id; // channel external_id
+        console.log(`[WhatsApp Webhook] Entry change for phoneNumberId: ${phoneNumberId}, messages: ${messages.length}, statuses: ${statuses.length}`);
 
         if (statuses.length > 0) {
           try {
