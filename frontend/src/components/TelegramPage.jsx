@@ -2,13 +2,13 @@
 import React, { useEffect, useState } from 'react';
 import { cn } from '../lib/utils';
 import { Badge } from './ui/Badge';
-import { Pin, Check, Trash2, Instagram, Loader2, Send, Paperclip, MoreHorizontal } from 'lucide-react';
+import { Pin, Check, Trash2, MessageCircle, Loader2, Send, Paperclip, MoreHorizontal } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import Chat from './Chat';
 import { getInbox, getMessages, pinConversation, resolveConversation, deleteConversation } from '../api';
 
-export default function InstagramPage({ socket, currentUser, teamId }) {
+export default function TelegramPage({ socket, currentUser, teamId }) {
   const [conversations, setConversations] = useState([]);
   const [selectedConversationId, setSelectedConversationId] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -17,20 +17,20 @@ export default function InstagramPage({ socket, currentUser, teamId }) {
   const [isChatLoading, setIsChatLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Fetch conversations filtered by Instagram channel
+  // Fetch conversations filtered by Telegram channel
   const fetchConversations = async () => {
     setIsLoading(true);
     try {
       const res = await getInbox(teamId, filter);
       if (res && res.success) {
-        // Filter only Instagram conversations
-        const instagramConversations = res.conversations.filter(
-          c => c.channelType === 'instagram' || c.channel_type === 'instagram'
+        // Filter only Telegram conversations
+        const telegramConversations = res.conversations.filter(
+          c => c.channelType === 'telegram' || c.channel_type === 'telegram'
         );
-        setConversations(instagramConversations);
+        setConversations(telegramConversations);
       }
     } catch (err) {
-      console.error('Failed to fetch Instagram conversations:', err);
+      console.error('Failed to fetch Telegram conversations:', err);
     } finally {
       setIsLoading(false);
     }
@@ -115,15 +115,15 @@ export default function InstagramPage({ socket, currentUser, teamId }) {
 
   return (
     <div className="flex h-full bg-slate-50">
-      {/* Sidebar - Instagram Conversations List */}
+      {/* Sidebar - Telegram Conversations List */}
       <div className="w-80 border-r border-slate-200 bg-white flex flex-col">
         {/* Header */}
         <div className="p-4 border-b border-slate-200">
           <div className="flex items-center gap-2 mb-3">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-500 via-red-500 to-yellow-500 flex items-center justify-center">
-              <Instagram size={18} className="text-white" />
+            <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center">
+              <MessageCircle size={18} className="text-white" />
             </div>
-            <h1 className="text-lg font-bold text-slate-900">Instagram</h1>
+            <h1 className="text-lg font-bold text-slate-900">Telegram</h1>
           </div>
           <Input
             placeholder="Search conversations..."
@@ -142,7 +142,7 @@ export default function InstagramPage({ socket, currentUser, teamId }) {
               className={cn(
                 "px-2.5 py-1 rounded-full text-xs font-medium transition-colors whitespace-nowrap border capitalize",
                 filter === f
-                  ? "bg-pink-600 text-white border-pink-600"
+                  ? "bg-blue-600 text-white border-blue-600"
                   : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
               )}
             >
@@ -159,7 +159,7 @@ export default function InstagramPage({ socket, currentUser, teamId }) {
             </div>
           ) : filteredConversations.length === 0 ? (
             <div className="p-4 text-center text-slate-500 text-sm">
-              No Instagram conversations found.
+              No Telegram conversations found.
             </div>
           ) : (
             <ul className="divide-y divide-slate-100">
@@ -168,12 +168,12 @@ export default function InstagramPage({ socket, currentUser, teamId }) {
                   key={c.id}
                   className={cn(
                     "px-4 py-3 cursor-pointer transition-colors relative group",
-                    selectedConversationId === c.id ? "bg-pink-50" : "hover:bg-slate-50"
+                    selectedConversationId === c.id ? "bg-blue-50" : "hover:bg-slate-50"
                   )}
                   onClick={() => setSelectedConversationId(c.id)}
                 >
                   {selectedConversationId === c.id && (
-                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-pink-600" />
+                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-600" />
                   )}
                   <div className="flex items-center justify-between mb-1">
                     <span className={cn(
@@ -194,7 +194,7 @@ export default function InstagramPage({ socket, currentUser, teamId }) {
                         }}
                         className={cn(
                           "p-1 rounded hover:bg-slate-200 transition-colors",
-                          c.isPinned ? "text-pink-600 bg-pink-50" : "text-slate-400 hover:text-slate-600"
+                          c.isPinned ? "text-blue-600 bg-blue-50" : "text-slate-400 hover:text-slate-600"
                         )}
                         title={c.isPinned ? "Unpin" : "Pin"}
                       >
@@ -210,7 +210,7 @@ export default function InstagramPage({ socket, currentUser, teamId }) {
                       {c.assigneeUserId ? 'Assigned' : 'Unassigned'}
                     </Badge>
                     {c.unreadCount > 0 && (
-                      <div className="flex h-5 w-5 items-center justify-center rounded-full bg-pink-500 text-[10px] font-bold text-white">
+                      <div className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-500 text-[10px] font-bold text-white">
                         {c.unreadCount}
                       </div>
                     )}
@@ -229,12 +229,12 @@ export default function InstagramPage({ socket, currentUser, teamId }) {
             {/* Chat Header */}
             <div className="h-16 border-b border-slate-200 bg-white flex items-center justify-between px-6 shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-pink-100 to-red-100 flex items-center justify-center">
-                  <Instagram size={20} className="text-pink-600" />
+                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                  <MessageCircle size={20} className="text-blue-600" />
                 </div>
                 <div>
                   <h2 className="font-semibold text-slate-900">{selectedConversation.contactName}</h2>
-                  <p className="text-xs text-slate-500">Instagram</p>
+                  <p className="text-xs text-slate-500">Telegram</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -281,10 +281,10 @@ export default function InstagramPage({ socket, currentUser, teamId }) {
         ) : (
           <div className="flex-1 flex items-center justify-center bg-slate-50">
             <div className="text-center">
-              <div className="mx-auto h-16 w-16 rounded-full bg-gradient-to-br from-pink-100 to-red-100 flex items-center justify-center mb-4">
-                <Instagram className="h-8 w-8 text-pink-600" />
+              <div className="mx-auto h-16 w-16 rounded-full bg-blue-100 flex items-center justify-center mb-4">
+                <MessageCircle className="h-8 w-8 text-blue-600" />
               </div>
-              <h3 className="text-lg font-semibold text-slate-700 mb-1">Select an Instagram Conversation</h3>
+              <h3 className="text-lg font-semibold text-slate-700 mb-1">Select a Telegram Conversation</h3>
               <p className="text-sm text-slate-500">Choose a conversation from the list to start messaging.</p>
             </div>
           </div>
