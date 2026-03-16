@@ -5,7 +5,7 @@ import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Modal } from './ui/Modal';
 import { ListChecks, Clock, MessageSquare, Facebook, CheckCircle2, AlertCircle } from 'lucide-react';
-import { getLeadStages, createLeadStage, updateLeadStage, deleteLeadStage, getWorkingHours, saveWorkingHours, getWhatsAppSettings, updateWhatsAppSettings, onboardWhatsApp } from '../api';
+import { getLeadStages, createLeadStage, updateLeadStage, deleteLeadStage, getWorkingHours, saveWorkingHours, getWhatsAppSettings, updateWhatsAppSettings, onboardWhatsApp, getTelegramSettings, connectTelegram, disconnectTelegram } from '../api';
 
 export default function SettingsPage({ currentUser }) {
   const teamId = useMemo(() => {
@@ -153,6 +153,79 @@ export default function SettingsPage({ currentUser }) {
       setWhatsappError('Failed to save WhatsApp settings');
     } finally {
       setSavingWhatsapp(false);
+    }
+  };
+
+  // Telegram Configuration
+  const [telegramSettings, setTelegramSettings] = useState([]);
+  const [loadingTelegram, setLoadingTelegram] = useState(false);
+  const [savingTelegram, setSavingTelegram] = useState(false);
+  const [telegramError, setTelegramError] = useState(null);
+  const [botTokenInput, setBotTokenInput] = useState('');
+  const [botDisplayName, setBotDisplayName] = useState('');
+
+  // Load Telegram settings
+  useEffect(() => {
+    if (!teamId) return;
+    const load = async () => {
+      try {
+        setLoadingTelegram(true);
+        const res = await getTelegramSettings(teamId);
+        if (res && res.settings) {
+          setTelegramSettings(res.settings);
+        }
+      } catch (err) {
+        console.error('Failed to load Telegram settings:', err);
+      } finally {
+        setLoadingTelegram(false);
+      }
+    };
+    load();
+  }, [teamId]);
+
+  const handleConnectTelegram = async () => {
+    if (!botTokenInput) {
+      setTelegramError('Bot token is required');
+      return;
+    }
+    try {
+      setSavingTelegram(true);
+      setTelegramError(null);
+      const res = await connectTelegram(botTokenInput, botDisplayName || 'Telegram Bot', teamId);
+      if (res.success) {
+        setBotTokenInput('');
+        setBotDisplayName('');
+        const updated = await getTelegramSettings(teamId);
+        if (updated && updated.settings) {
+          setTelegramSettings(updated.settings);
+        }
+        alert('Telegram bot connected successfully!');
+      } else {
+        setTelegramError(res.error || 'Failed to connect bot');
+      }
+    } catch (err) {
+      setTelegramError('Failed to connect Telegram bot');
+    } finally {
+      setSavingTelegram(false);
+    }
+  };
+
+  const handleDisconnectTelegram = async (botToken) => {
+    if (!window.confirm('Are you sure you want to disconnect this Telegram bot?')) return;
+    try {
+      setSavingTelegram(true);
+      const res = await disconnectTelegram(botToken, teamId);
+      if (res.success) {
+        const updated = await getTelegramSettings(teamId);
+        if (updated && updated.settings) {
+          setTelegramSettings(updated.settings);
+        }
+        alert('Telegram bot disconnected successfully!');
+      }
+    } catch (err) {
+      setTelegramError('Failed to disconnect Telegram bot');
+    } finally {
+      setSavingTelegram(false);
     }
   };
 
@@ -616,6 +689,132 @@ export default function SettingsPage({ currentUser }) {
               >
                 {savingWhatsapp ? 'Saving...' : 'Save Configuration'}
               </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Telegram Bot Configuration */}
+        <Card className="border-none shadow-sm h-full flex flex-col">
+          <CardHeader className="flex flex-row items-center justify-between py-4 pb-2 border-b border-slate-50">
+            <div className="flex items-center gap-2">
+              <div className="p-2 bg-blue-50 rounded-lg">
+                <MessageSquare className="w-5 h-5 text-blue-600" />
+              </div>
+              <div>
+                <CardTitle className="text-base font-semibold text-slate-800">Telegram Bot</CardTitle>
+                <div className="text-[11px] text-slate-500 font-normal">Connect your Telegram bot</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className={`h-2 w-2 rounded-full ${telegramSettings.length > 0 ? 'bg-blue-500' : 'bg-slate-300'}`} />
+              <span className="text-[10px] font-medium text-slate-500 uppercase tracking-wider">
+                {telegramSettings.length > 0 ? 'Connected' : 'Disconnected'}
+              </span>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-4 flex-1 flex flex-col overflow-hidden">
+            <div className="flex-1 flex flex-col items-center justify-center py-6 text-center space-y-6">
+              {telegramSettings.length === 0 ? (
+                <>
+                  <div className="max-w-xs space-y-2">
+                    <p className="text-sm text-slate-600 font-medium">
+                      Connect your Telegram bot
+                    </p>
+                    <p className="text-[11px] text-slate-500">
+                      Create a bot with @BotFather on Telegram and paste the token here to start receiving messages.
+                    </p>
+                  </div>
+                  
+                  {telegramError && (
+                    <div className="flex items-center gap-2 text-red-500 text-xs bg-red-50 px-3 py-2 rounded-md border border-red-100 italic w-full">
+                      <AlertCircle className="w-3.5 h-3.5" />
+                      {telegramError}
+                    </div>
+                  )}
+
+                  <div className="w-full space-y-3">
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-slate-600">Bot Token</label>
+                      <Input
+                        type="password"
+                        placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
+                        value={botTokenInput}
+                        onChange={(e) => setBotTokenInput(e.target.value)}
+                        className="h-9 text-sm"
+                      />
+                      <p className="text-[10px] text-slate-400">Get your bot token from @BotFather on Telegram</p>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-slate-600">Display Name (Optional)</label>
+                      <Input
+                        placeholder="My Telegram Bot"
+                        value={botDisplayName}
+                        onChange={(e) => setBotDisplayName(e.target.value)}
+                        className="h-9 text-sm"
+                      />
+                    </div>
+
+                    <Button
+                      onClick={handleConnectTelegram}
+                      disabled={savingTelegram || !botTokenInput}
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white h-10 rounded-lg font-semibold"
+                    >
+                      {savingTelegram ? 'Connecting...' : 'Connect Telegram Bot'}
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <div className="w-full space-y-4">
+                  <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-4 flex flex-col items-stretch gap-3">
+                    <div className="flex items-start gap-4">
+                      <div className="mt-1">
+                        <CheckCircle2 className="w-5 h-5 text-blue-500" />
+                      </div>
+                      <div className="text-left flex-1">
+                        <h4 className="text-sm font-bold text-slate-800">Bots Connected</h4>
+                        <p className="text-xs text-slate-600 mt-0.5">
+                          You have {telegramSettings.length} bot(s) linked to this team.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2 mt-2">
+                      {telegramSettings.map((bot) => (
+                        <div key={bot.id} className="flex items-center justify-between bg-white border border-blue-100 rounded-lg p-2 px-3 shadow-sm">
+                          <div className="text-left">
+                            <p className="text-xs font-bold text-slate-800">@{bot.bot_username}</p>
+                            <p className="text-[10px] text-slate-500">{bot.display_name}</p>
+                          </div>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => handleDisconnectTelegram(bot.bot_token)}
+                            disabled={savingTelegram}
+                            className="h-7 text-xs"
+                          >
+                            Disconnect
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="pt-2 flex flex-col gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setBotTokenInput('');
+                        setBotDisplayName('');
+                        setTelegramError(null);
+                      }}
+                      className="text-slate-500 text-xs border-slate-200 h-8 px-4 w-full"
+                    >
+                      Connect another bot
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

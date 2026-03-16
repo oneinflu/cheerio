@@ -1003,3 +1003,29 @@ export async function onboardWhatsApp(accessToken, teamId) {
   });
   return res.json();
 }
+export async function getTelegramSettings(teamId) {
+  const params = new URLSearchParams();
+  if (teamId) params.append('teamId', teamId);
+  const headers = getAuthHeaders();
+  const res = await fetch(`/api/auth/telegram/settings?${params.toString()}`, { headers });
+  return res.json();
+}
+
+export async function connectTelegram(botToken, displayName, teamId) {
+  const headers = getAuthHeaders();
+  const res = await fetch('/api/auth/telegram/connect', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ botToken, displayName, teamId })
+  });
+  return res.json();
+}
+
+export async function disconnectTelegram(botToken, teamId) {
+  const headers = getAuthHeaders();
+  const res = await fetch(`/api/auth/telegram/disconnect/${botToken}?teamId=${teamId}`, {
+    method: 'DELETE',
+    headers
+  });
+  return res.json();
+}
