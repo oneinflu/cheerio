@@ -68,5 +68,26 @@ async function getConfigByPhone(phoneNumberId) {
   };
 }
 
-module.exports = { getConfig, getConfigByPhone };
+async function getAllConfigs(teamId) {
+  if (teamId) {
+    try {
+      const res = await db.query(
+        'SELECT phone_number_id, business_account_id, permanent_token, display_phone_number FROM whatsapp_settings WHERE team_id = $1 AND is_active = true',
+        [teamId]
+      );
+      return res.rows.map(row => ({
+        phoneNumberId: row.phone_number_id,
+        businessAccountId: row.business_account_id,
+        token: row.permanent_token,
+        displayPhoneNumber: row.display_phone_number,
+        isCustom: true
+      }));
+    } catch (err) {
+      console.warn(`[WhatsAppConfig] Failed to fetch all settings for team ${teamId}:`, err.message);
+    }
+  }
+  return [];
+}
+
+module.exports = { getConfig, getConfigByPhone, getAllConfigs };
 

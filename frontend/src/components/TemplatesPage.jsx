@@ -32,7 +32,25 @@ export default function TemplatesPage() {
 
   // Templates Data
   const [templates, setTemplates] = useState([]);
+  const [linkedPhones, setLinkedPhones] = useState([]);
+  const [selectedPhoneNumberId, setSelectedPhoneNumberId] = useState('ALL');
   const [creationStep, setCreationStep] = useState('MAIN_CATEGORY'); // MAIN_CATEGORY, SUB_CATEGORY, FORM
+
+  React.useEffect(() => {
+    const fetchPhones = async () => {
+      try {
+        const res = await fetch('/api/settings/whatsapp');
+        if (res.ok) {
+          const data = await res.json();
+          setLinkedPhones(data.allSettings || []);
+        }
+      } catch (e) {
+        console.error("Failed to fetch phones", e);
+      }
+    };
+    fetchPhones();
+  }, []);
+
   const [selectedMainCategory, setSelectedMainCategory] = useState(null);
 
   // Variable Editor State
@@ -78,7 +96,8 @@ export default function TemplatesPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await getTemplates();
+      const pid = selectedPhoneNumberId === 'ALL' ? null : selectedPhoneNumberId;
+      const res = await getTemplates(pid);
       if (res && res.data) {
         const mapped = res.data.map(t => {
           const bodyComp = t.components.find(c => c.type === 'BODY');
@@ -113,7 +132,10 @@ export default function TemplatesPage() {
             footerText: footerComp ? footerComp.text : '',
             buttons: buttonsComp ? buttonsComp.buttons : [],
             parameterFormat: t.parameter_format || 'POSITIONAL',
-            examples
+            examples,
+            phoneNumberId: t.phoneNumberId,
+            displayPhoneNumber: t.displayPhoneNumber,
+            isLocal: t.isLocal
           };
         });
         setTemplates(mapped);
@@ -133,7 +155,7 @@ export default function TemplatesPage() {
 
   React.useEffect(() => {
     fetchTemplatesData();
-  }, []);
+  }, [selectedPhoneNumberId]);
 
   const [formData, setFormData] = useState(null);
   const bodyTextareaRef = React.useRef(null);
@@ -492,7 +514,8 @@ export default function TemplatesPage() {
           name: formData.name,
           category: formData.category,
           language: formData.language,
-          components
+          components,
+          phoneNumberId: formData.phoneNumberId || (linkedPhones.length > 0 ? linkedPhones[0].phone_number_id : null)
         };
 
         if (formData.variables && formData.variables.length > 0) {
@@ -543,7 +566,7 @@ Are you sure you want to delete '${template.name}'?`;
     try {
       // We try to delete by ID (hsm_id) + name for specificity if possible.
       // The mapped template object has `id` which is the hsm_id.
-      await deleteTemplate(template.name, template.id);
+      await deleteTemplate(template.name, template.id, template.phoneNumberId);
       alert('Template deleted successfully.');
       // Clear selection if we deleted the selected one
       if (selectedId === template.id) {
@@ -963,6 +986,25 @@ Are you sure you want to delete '${template.name}'?`;
             />
           </div>
 
+          {/* Channel Filter */}
+          {linkedPhones.length > 1 && (
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Business Account</label>
+              <select
+                className="w-full text-xs bg-slate-50 border border-slate-200 rounded-md px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                value={selectedPhoneNumberId}
+                onChange={(e) => setSelectedPhoneNumberId(e.target.value)}
+              >
+                <option value="ALL">All Accounts</option>
+                {linkedPhones.map(phone => (
+                  <option key={phone.phone_number_id} value={phone.phone_number_id}>
+                    {phone.display_phone_number || phone.phone_number_id}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           {/* Filter Chips */}
           <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
             {['ALL', 'AUTHENTICATION', 'UTILITY', 'MARKETING'].map(cat => (
@@ -1015,9 +1057,15 @@ Are you sure you want to delete '${template.name}'?`;
                   </button>
                 </div>
               </div>
-              <div className="flex items-center gap-2 text-xs text-slate-500 mb-2">
+              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 mb-2">
                 <Badge variant="outline" className="text-[10px] h-5 px-1">{t.category}</Badge>
                 <span>{t.language}</span>
+                {t.displayPhoneNumber && (
+                  <span className="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-full font-medium">
+                    {t.displayPhoneNumber}
+                  </span>
+                )}
+                {t.isLocal && <Badge variant="secondary" className="text-[10px] h-5 px-1 bg-amber-50 text-amber-700 border-amber-100">Local</Badge>}
               </div>
               <p className="text-xs text-slate-400 line-clamp-2">
                 {t.bodyText}
@@ -1153,6 +1201,24 @@ Are you sure you want to delete '${template.name}'?`;
                         />
                         <p className="text-[11px] text-slate-500">Lowercase, underscores only.</p>
                       </div>
+                      {linkedPhones.length > 1 && (
+                        <div className="space-y-2 lg:col-span-3">
+                          <label className="text-sm font-medium text-slate-700">Business Account</label>
+                          <select
+                            className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-2 transition-all"
+                            value={formData.phoneNumberId || (linkedPhones[0]?.phone_number_id)}
+                            onChange={e => setFormData({ ...formData, phoneNumberId: e.target.value })}
+                          >
+                            {linkedPhones.map(phone => (
+                              <option key={phone.phone_number_id} value={phone.phone_number_id}>
+                                {phone.display_phone_number || phone.phone_number_id}
+                              </option>
+                            ))}
+                          </select>
+                          <p className="text-[11px] text-slate-500">Select which Meta WABA to submit this template to.</p>
+                        </div>
+                      )}
+
                       <div className="space-y-2">
                         <label className="text-sm font-medium text-slate-700">Category</label>
                         {isCreating ? (

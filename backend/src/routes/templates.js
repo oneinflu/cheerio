@@ -45,21 +45,45 @@ if (HAS_CLOUDINARY) {
 router.get('/', async (req, res, next) => {
   try {
     const teamId = await resolveTeamId(req);
-    const config = await waConfig.getConfig(teamId);
-    const wabaId = config.businessAccountId || WABA_ID;
-
-    if (!wabaId) {
-      console.warn('[templates] WhatsApp Business Account ID not set. Returning empty list.');
-      return res.json({ data: [] });
-    }
+    const { phoneNumberId } = req.query;
     
-    console.log('[templates] Fetching templates for WABA:', wabaId);
-    let templates = [];
-    try {
-      const resp = await whatsappClient.getTemplates(wabaId, 100, config);
-      templates = resp.data && resp.data.data ? resp.data.data : [];
-    } catch (apiErr) {
-      console.error('[templates] Failed to fetch Meta templates:', apiErr.message);
+    let configs = [];
+    if (phoneNumberId) {
+      const config = await waConfig.getConfigByPhone(phoneNumberId);
+      if (config.isCustom || config.phoneNumberId) configs = [config];
+    } else {
+      configs = await waConfig.getAllConfigs(teamId);
+    }
+
+    // Fallback if no custom configs
+    if (configs.length === 0) {
+      configs = [{
+        phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID,
+        businessAccountId: process.env.WHATSAPP_BUSINESS_ACCOUNT_ID || WABA_ID,
+        token: process.env.WHATSAPP_TOKEN,
+        isCustom: false
+      }];
+    }
+
+    let allMetaTemplates = [];
+    for (const config of configs) {
+      const wabaId = config.businessAccountId;
+      if (!wabaId) continue;
+
+      console.log(`[templates] Fetching templates for WABA: ${wabaId} (Phone: ${config.phoneNumberId})`);
+      try {
+        const resp = await whatsappClient.getTemplates(wabaId, 100, config);
+        const metaTemplates = resp.data && resp.data.data ? resp.data.data : [];
+        // Tag with source info
+        allMetaTemplates.push(...metaTemplates.map(t => ({
+          ...t,
+          wabaId,
+          phoneNumberId: config.phoneNumberId,
+          displayPhoneNumber: config.displayPhoneNumber
+        })));
+      } catch (apiErr) {
+        console.error(`[templates] Failed to fetch for WABA ${wabaId}:`, apiErr.message);
+      }
     }
 
     // Fetch local templates
@@ -69,7 +93,6 @@ router.get('/', async (req, res, next) => {
     try {
       const starredRes = await client.query('SELECT template_name FROM template_settings WHERE is_starred = TRUE');
       starredRes.rows.forEach(r => starredMap.add(r.template_name));
-      console.log(`[templates] Found ${starredMap.size} starred templates in DB.`);
       
       const localRes = await client.query('SELECT * FROM whatsapp_templates');
       localTemplates = localRes.rows.map(t => ({
@@ -79,21 +102,17 @@ router.get('/', async (req, res, next) => {
         category: t.category,
         components: t.components,
         status: t.status, // 'LOCAL'
-        last_updated_time: t.updated_at
+        last_updated_time: t.updated_at,
+        isLocal: true
       }));
     } catch (dbErr) {
-      console.error('[templates] Error fetching local/starred templates:', dbErr.message);
+      console.error('[templates] DB Error:', dbErr.message);
     } finally {
       client.release();
     }
 
-    // Merge Meta + Local
-    // Deduplicate by name (prefer Meta if conflict, or show both? Usually name must be unique per WABA)
-    // We'll just concat them for now.
-    const allTemplates = [...templates, ...localTemplates];
-
-    // Merge info
-    const enriched = allTemplates.map(t => ({
+    const merged = [...allMetaTemplates, ...localTemplates];
+    const enriched = merged.map(t => ({
       ...t,
       is_starred: starredMap.has(t.name)
     }));
@@ -157,7 +176,15 @@ router.delete('/:name/star', async (req, res, next) => {
 router.post('/', async (req, res, next) => {
   try {
     const teamId = await resolveTeamId(req);
-    const config = await waConfig.getConfig(teamId);
+    const { phoneNumberId } = req.body;
+    
+    let config;
+    if (phoneNumberId) {
+      config = await waConfig.getConfigByPhone(phoneNumberId);
+    } else {
+      config = await waConfig.getConfig(teamId);
+    }
+    
     const wabaId = config.businessAccountId || WABA_ID;
 
     if (!wabaId) {
@@ -347,13 +374,18 @@ router.post('/send-test', async (req, res, next) => {
  * Delete a template by name (and optional hsm_id).
  */
 router.delete('/', async (req, res, next) => {
-  const { name, hsm_id } = req.query;
+  const { name, hsm_id, phoneNumberId } = req.query;
   if (!name) {
     return res.status(400).json({ error: 'Template name is required' });
   }
   try {
     const teamId = await resolveTeamId(req);
-    const config = await waConfig.getConfig(teamId);
+    let config;
+    if (phoneNumberId) {
+      config = await waConfig.getConfigByPhone(phoneNumberId);
+    } else {
+      config = await waConfig.getConfig(teamId);
+    }
     const wabaId = config.businessAccountId || WABA_ID;
 
     if (!wabaId) {
