@@ -1052,11 +1052,11 @@ export default function App() {
                         <p className="text-xs text-slate-500">
                           {selectedConversation?.status === 'closed' ? 'Closed' : 'Open Conversation'}
                         </p>
-                        {selectedConversation?.channelExternalId && (
+                        {selectedConversation?.channelDisplayName && (
                           <>
                             <span className="text-slate-300">•</span>
                             <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-medium">
-                              via {selectedConversation.channelExternalId}
+                              via {selectedConversation.channelDisplayName}
                             </span>
                           </>
                         )}

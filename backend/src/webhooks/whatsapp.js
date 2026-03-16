@@ -413,7 +413,7 @@ router.post('/', async (req, res, next) => {
 
             if (isFirstMessage) {
               try {
-                await triggerWorkflowsForEvent('first_message', senderWaId, { conversationId });
+                await triggerWorkflowsForEvent('first_message', senderWaId, { conversationId, channelId });
               } catch (e) {
                 console.error('[WorkflowEvents] Failed to trigger first_message workflows from webhook:', e);
               }
@@ -421,7 +421,7 @@ router.post('/', async (req, res, next) => {
 
             try {
               if (textBody) {
-                await evaluateMessageRules(senderWaId, textBody);
+                await evaluateMessageRules(senderWaId, textBody, channelId);
               }
             } catch (e) {
               console.error('[Rules] Failed to evaluate message rules from webhook:', e);

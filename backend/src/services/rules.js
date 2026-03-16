@@ -118,7 +118,7 @@ async function deleteRule(id) {
   return { success: true };
 }
 
-async function evaluateMessageRules(phoneNumber, textBody) {
+async function evaluateMessageRules(phoneNumber, textBody, channelId) {
   if (!phoneNumber || !textBody) return [];
 
   const res = await db.query(
@@ -148,14 +148,14 @@ async function evaluateMessageRules(phoneNumber, textBody) {
     const hit = tokens.some((token) => lowerText.includes(token));
     if (hit) {
       matched.push(rule);
-      await performRuleAction(rule, phoneNumber);
+      await performRuleAction(rule, phoneNumber, channelId);
     }
   }
 
   return matched;
 }
 
-async function evaluateCourseRules(phoneNumber, courseValue) {
+async function evaluateCourseRules(phoneNumber, courseValue, channelId) {
   if (!phoneNumber || !courseValue) return [];
 
   const res = await db.query(
@@ -185,14 +185,14 @@ async function evaluateCourseRules(phoneNumber, courseValue) {
     const hit = tokens.some((token) => lowerCourse === token);
     if (hit) {
       matched.push(rule);
-      await performRuleAction(rule, phoneNumber);
+      await performRuleAction(rule, phoneNumber, channelId);
     }
   }
 
   return matched;
 }
 
-async function evaluatePaymentRules(phoneNumber, paymentData) {
+async function evaluatePaymentRules(phoneNumber, paymentData, channelId) {
   if (!phoneNumber) return [];
 
   const res = await db.query(
@@ -219,14 +219,14 @@ async function evaluatePaymentRules(phoneNumber, paymentData) {
 
     if (hit) {
       matched.push(rule);
-      await performRuleAction(rule, phoneNumber);
+      await performRuleAction(rule, phoneNumber, channelId);
     }
   }
 
   return matched;
 }
 
-async function performRuleAction(rule, phoneNumber) {
+async function performRuleAction(rule, phoneNumber, channelId) {
   const actionType = rule.action_type;
   const cfg = rule.action_config || {};
 
@@ -235,7 +235,7 @@ async function performRuleAction(rule, phoneNumber) {
     if (!text) return;
 
     try {
-      const conversationId = await ensureConversationForRule(phoneNumber);
+      const conversationId = await ensureConversationForRule(phoneNumber, channelId);
       await outboundWhatsApp.sendText(conversationId, text);
     } catch (err) {
       console.error('[Rules] Failed to send message for rule', rule.id, err);
@@ -245,7 +245,7 @@ async function performRuleAction(rule, phoneNumber) {
     if (!workflowId) return;
 
     try {
-      await runWorkflow(workflowId, phoneNumber);
+      await runWorkflow(workflowId, phoneNumber, { channelId });
     } catch (err) {
       console.error('[Rules] Failed to start workflow for rule', rule.id, err);
     }
@@ -272,7 +272,7 @@ async function performRuleAction(rule, phoneNumber) {
     try {
       const agentId = await findAgentForAssignment(conditions);
       if (agentId) {
-        const conversationId = await ensureConversationForRule(phoneNumber);
+        const conversationId = await ensureConversationForRule(phoneNumber, channelId);
         if (conversationId) {
           // Find team for user
           const teamRes = await db.query('SELECT team_id FROM team_members WHERE user_id = $1 LIMIT 1', [agentId]);
@@ -298,10 +298,10 @@ async function performRuleAction(rule, phoneNumber) {
   }
 }
 
-async function ensureConversationForRule(phoneNumber) {
+async function ensureConversationForRule(phoneNumber, channelId) {
   let contactRes = await db.query(
-    'SELECT id, channel_id FROM contacts WHERE external_id = $1',
-    [phoneNumber]
+    'SELECT id, channel_id FROM contacts WHERE external_id = $1 AND (channel_id = $2 OR $2 IS NULL)',
+    [phoneNumber, channelId]
   );
 
   if (contactRes.rows.length === 0) {
@@ -309,19 +309,22 @@ async function ensureConversationForRule(phoneNumber) {
       ? phoneNumber.slice(1)
       : `+${phoneNumber}`;
     contactRes = await db.query(
-      'SELECT id, channel_id FROM contacts WHERE external_id = $1',
-      [altPhone]
+      'SELECT id, channel_id FROM contacts WHERE external_id = $1 AND (channel_id = $2 OR $2 IS NULL)',
+      [altPhone, channelId]
     );
   }
 
   if (contactRes.rows.length === 0) {
-    const channelRes = await db.query(
-      "SELECT id FROM channels WHERE type = 'whatsapp' LIMIT 1"
-    );
-    if (channelRes.rowCount === 0) {
-      throw new Error('No WhatsApp channel configured');
-    }
-    const channelId = channelRes.rows[0].id;
+     let targetChannelId = channelId;
+     if (!targetChannelId) {
+        const channelRes = await db.query(
+          "SELECT id FROM channels WHERE type = 'whatsapp' LIMIT 1"
+        );
+        if (channelRes.rowCount === 0) {
+          throw new Error('No WhatsApp channel configured');
+        }
+        targetChannelId = channelRes.rows[0].id;
+     }
 
     const createContact = await db.query(
       `
@@ -329,7 +332,7 @@ async function ensureConversationForRule(phoneNumber) {
       VALUES (gen_random_uuid(), $1, $2, 'Unknown', '{}'::jsonb)
       RETURNING id
       `,
-      [channelId, phoneNumber]
+      [targetChannelId, phoneNumber]
     );
     const contactId = createContact.rows[0].id;
 
@@ -339,24 +342,24 @@ async function ensureConversationForRule(phoneNumber) {
       VALUES (gen_random_uuid(), $1, $2, 'open', NOW(), NOW())
       RETURNING id
       `,
-      [channelId, contactId]
+      [targetChannelId, contactId]
     );
     return createConv.rows[0].id;
   }
 
   const contact = contactRes.rows[0];
   const contactId = contact.id;
-  const channelId = contact.channel_id;
+  const actualChannelId = contact.channel_id;
 
   const convRes = await db.query(
     `
     SELECT id
     FROM conversations
-    WHERE contact_id = $1
+    WHERE contact_id = $1 AND channel_id = $2
     ORDER BY created_at ASC
     LIMIT 1
     `,
-    [contactId]
+    [contactId, actualChannelId]
   );
 
   if (convRes.rows.length > 0) {
@@ -369,7 +372,7 @@ async function ensureConversationForRule(phoneNumber) {
     VALUES (gen_random_uuid(), $1, $2, 'open', NOW(), NOW())
     RETURNING id
     `,
-    [channelId, contactId]
+    [actualChannelId, contactId]
   );
   return createConv.rows[0].id;
 }

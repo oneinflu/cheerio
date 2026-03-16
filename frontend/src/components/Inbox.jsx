@@ -170,8 +170,7 @@ export default function Inbox({ conversations, selectedId, onSelect, onPin, onRe
                      )}
                    >
                      {isInsta ? <Instagram size={10} /> : <MessageCircle size={10} />}
-                     {isInsta ? 'Instagram' : `WhatsApp ${c.channelExternalId ? `(${c.channelExternalId})` : ''}`}
-
+                     {isInsta ? 'Instagram' : (c.channelDisplayName || 'WhatsApp')}
                    </Badge>
                 </div>
               </li>
