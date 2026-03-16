@@ -100,7 +100,11 @@ async function listConversations(teamId, userId, userRole, filter = 'open', phon
   // Team Filter (Mandatory if teamId provided)
   if (teamId) {
     params.push(teamId);
-    whereClause += ` AND (ws.team_id = $${params.length} OR ca.team_id = $${params.length}) `;
+    // Include conversations where:
+    // 1. The WhatsApp settings belong to this team, OR
+    // 2. The conversation assignment belongs to this team, OR
+    // 3. There's no whatsapp_settings row at all (so we don't exclude channels without settings)
+    whereClause += ` AND (ws.team_id = $${params.length} OR ca.team_id = $${params.length} OR ws.team_id IS NULL) `;
   }
 
   // Phone Number Filter

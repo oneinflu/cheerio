@@ -450,6 +450,26 @@ router.post('/', async (req, res, next) => {
             if (textBody && !isFirstMessage) {
               (async () => {
                  try {
+                   // FAIL-SAFE: Check global AI config directly before calling AI service
+                   const aiConfigCheck = await db.query('SELECT is_active FROM ai_agent_config LIMIT 1');
+                   const isGlobalAiActive = aiConfigCheck.rows.length > 0 && aiConfigCheck.rows[0].is_active === true;
+                   console.log(`[AI Agent Webhook] Global AI active check: ${isGlobalAiActive} (raw: ${JSON.stringify(aiConfigCheck.rows[0])})`);
+                   
+                   if (!isGlobalAiActive) {
+                     console.log(`[AI Agent Webhook] AI is globally INACTIVE. Skipping auto-reply for conversation ${conversationId}.`);
+                     return;
+                   }
+
+                   // Also check per-conversation AI toggle
+                   const convAiCheck = await db.query('SELECT is_ai_active FROM conversations WHERE id = $1', [conversationId]);
+                   const isConvAiActive = convAiCheck.rows.length > 0 && convAiCheck.rows[0].is_ai_active !== false;
+                   console.log(`[AI Agent Webhook] Conversation ${conversationId} AI active: ${isConvAiActive}`);
+                   
+                   if (!isConvAiActive) {
+                     console.log(`[AI Agent Webhook] AI is DISABLED for conversation ${conversationId}. Skipping.`);
+                     return;
+                   }
+
                    // Add a small delay to mimic typing and ensure DB is consistent
                    await new Promise(r => setTimeout(r, 1000));
                    
