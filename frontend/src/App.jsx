@@ -170,6 +170,24 @@ export default function App() {
   const [assigneeSearch, setAssigneeSearch] = useState('');
   const [targetAssigneeId, setTargetAssigneeId] = useState(null);
   const [inboxFilter, setInboxFilter] = useState('open');
+  const [phoneNumberId, setPhoneNumberId] = useState(null);
+  const [linkedPhones, setLinkedPhones] = useState([]);
+
+  useEffect(() => {
+    if (!storedUser) return;
+    const fetchSettings = async () => {
+      try {
+        const res = await fetch('/api/settings/whatsapp');
+        if (res.ok) {
+          const data = await res.json();
+          setLinkedPhones(data.allSettings || []);
+        }
+      } catch (e) {
+        console.error("Failed to fetch linked phones", e);
+      }
+    };
+    fetchSettings();
+  }, [storedUser]);
 
   useEffect(() => {
     if (selectedId) {
@@ -288,7 +306,7 @@ export default function App() {
   const loadInbox = async () => {
     if (!currentUser) return;
     try {
-      const res = await getInbox(currentUser.teamIds[0], 'all');
+      const res = await getInbox(currentUser.teamIds[0], inboxFilter, phoneNumberId);
       const currentId = selectedIdRef.current;
       const nextConversations = (res.conversations || []).map(c => {
         const base = c.id === currentId ? { ...c, unreadCount: 0 } : c;
@@ -306,7 +324,7 @@ export default function App() {
 
   useEffect(() => {
     loadInbox();
-  }, [currentUser]);
+  }, [currentUser, inboxFilter, phoneNumberId]);
 
   const filteredConversations = useMemo(() => {
     if (!conversations) return [];
@@ -1127,10 +1145,12 @@ export default function App() {
                 <Chat
                   socket={socket}
                   conversationId={selectedId}
+                  channelExternalId={selectedConversation?.channelExternalId}
                   messages={messages}
                   isLoading={isLoadingMessages}
                   onRefresh={() => loadMessages(true)}
                 />
+
               </div>
             </main>
 

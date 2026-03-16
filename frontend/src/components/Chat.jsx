@@ -10,7 +10,7 @@ import { Modal } from './ui/Modal';
 import { GallerySelectModal } from './GallerySelectModal';
 import { Send, Paperclip, Image as ImageIcon, File, Mic, FileText, BookOpen, BarChart, DollarSign, Loader2, MessageSquare, MapPin, User, Video, Star, MoreHorizontal } from 'lucide-react';
 
-export default function Chat({ socket, conversationId, messages, onRefresh, isLoading }) {
+export default function Chat({ socket, conversationId, channelExternalId, messages, onRefresh, isLoading }) {
   const [text, setText] = useState('');
   const [showMediaInput, setShowMediaInput] = useState(false);
   const [showProposalModal, setShowProposalModal] = useState(false);
@@ -719,6 +719,12 @@ export default function Chat({ socket, conversationId, messages, onRefresh, isLo
                     ? "bg-[#d9fdd3] text-slate-900 rounded-tr-sm"
                     : "bg-white text-slate-900 rounded-tl-sm"
                 )}>
+                  {/* Channel Identifier for Inbound */}
+                  {!isOutbound && channelExternalId && (
+                    <div className="text-[9px] text-slate-400 mb-1 flex items-center gap-1">
+                      <span className="opacity-70">To:</span> <span className="font-semibold">{channelExternalId}</span>
+                    </div>
+                  )}
                   {/* Reply Context - Hide for Interactive/Button replies to match WhatsApp UI */}
                   {m.rawPayload?.context && m.rawPayload?.type !== 'interactive' && m.rawPayload?.type !== 'button' && (
                     <div className="mb-2 text-xs bg-black/5 p-1.5 rounded border-l-2 border-slate-400 opacity-80">

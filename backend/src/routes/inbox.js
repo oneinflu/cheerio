@@ -8,8 +8,10 @@ router.get('/inbox', auth.requireRole('admin', 'super_admin', 'quality_manager',
   try {
     const teamId = (req.query && req.query.teamId) || (req.user.teamIds && req.user.teamIds[0]) || null;
     const filter = req.query.filter || 'open';
-    console.log(`[InboxRoute] GET /inbox teamId=${teamId} filter=${filter} query=${JSON.stringify(req.query)}`);
-    const list = await svc.listConversations(teamId, req.user.id, req.user.role, filter);
+    const phoneNumberId = req.query.phoneNumberId || null;
+    console.log(`[InboxRoute] GET /inbox teamId=${teamId} filter=${filter} phoneNumberId=${phoneNumberId}`);
+    const list = await svc.listConversations(teamId, req.user.id, req.user.role, filter, phoneNumberId);
+
     res.status(200).json({ conversations: list });
   } catch (err) {
     return next(err);

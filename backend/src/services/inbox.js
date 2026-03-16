@@ -91,13 +91,25 @@ async function syncUnassignedConversations(conversations) {
   }
 }
 
-async function listConversations(teamId, userId, userRole, filter = 'open') {
-  console.log(`[InboxService] listConversations called with filter: '${filter}', userId: ${userId}, role: ${userRole}`);
+async function listConversations(teamId, userId, userRole, filter = 'open', phoneNumberId = null) {
+  console.log(`[InboxService] listConversations filter='${filter}', userId=${userId}, phone='${phoneNumberId}'`);
 
   const params = [];
   let whereClause = "";
 
-  // Base visibility logic: privileged roles see ALL chats; others see only their own
+  // Team Filter (Mandatory if teamId provided)
+  if (teamId) {
+    params.push(teamId);
+    whereClause += ` AND (ws.team_id = $${params.length} OR ca.team_id = $${params.length}) `;
+  }
+
+  // Phone Number Filter
+  if (phoneNumberId) {
+    params.push(phoneNumberId);
+    whereClause += ` AND ch.external_id = $${params.length} `;
+  }
+
+  // Base visibility logic
   if (!PRIVILEGED_ROLES.has(userRole)) {
     params.push(userId);
     whereClause += ` AND (ca.assignee_user_id = $${params.length} OR ca.assignee_user_id IS NULL) `;
@@ -141,11 +153,26 @@ async function listConversations(teamId, userId, userRole, filter = 'open') {
            ct.profile,
            ch.type as channel_type,
            ch.external_id AS channel_external_id,
+           ws.display_phone_number AS channel_display_number,
            ca.assignee_user_id,
            ls.name AS lead_stage_name,
            ls.color AS lead_stage_color,
            ls.is_closed AS lead_stage_is_closed,
            (pc.conversation_id IS NOT NULL) AS is_pinned,
+           (
+             SELECT m2.text_body 
+             FROM messages m2 
+             WHERE m2.conversation_id = c.id 
+             ORDER BY m2.created_at DESC 
+             LIMIT 1
+           ) AS last_message_body,
+           (
+             SELECT m2.content_type
+             FROM messages m2
+             WHERE m2.conversation_id = c.id
+             ORDER BY m2.created_at DESC
+             LIMIT 1
+           ) AS last_message_type,
            (
              SELECT COUNT(*)::int
              FROM messages m
@@ -156,6 +183,8 @@ async function listConversations(teamId, userId, userRole, filter = 'open') {
     FROM conversations c
     JOIN contacts ct ON ct.id = c.contact_id
     JOIN channels ch ON ch.id = c.channel_id
+    -- Join with settings to filter by team
+    LEFT JOIN whatsapp_settings ws ON ws.phone_number_id = ch.external_id AND ch.type = 'whatsapp'
     LEFT JOIN conversation_assignments ca
       ON ca.conversation_id = c.id AND ca.released_at IS NULL
     LEFT JOIN lead_stages ls
@@ -173,47 +202,25 @@ async function listConversations(teamId, userId, userRole, filter = 'open') {
 
   console.log(`[InboxService] Found ${res.rows.length} conversations`);
 
-  // --- SYNC LOGIC START ---
-  // Trigger sync in background if there are unassigned items or if explicit refresh requested.
-  // We can do it here for any unassigned items found in the result (if filter allowed them).
-  // Or better, if filter is 'unassigned' or 'all', check them.
-  // We run this *after* the query so the user gets a fast response, 
-  // but next refresh will show updates. 
-  // However, since node is single threaded event loop, awaiting it blocks response.
-  // We should NOT await it if we want speed, but user asked "on refresh... check assigned".
-  // So we SHOULD await it or at least part of it, OR fire-and-forget and let user refresh again.
-  // Given "should check assigned", implying immediate result, we should try to await 
-  // but for performance on list, maybe limit to top 5 unassigned?
-  // Let's fire-and-forget for now to avoid timeout, as axios calls can be slow.
-
-  // Note: We need to pass the RAW rows to sync, but mapped logic below needs to handle potential updates?
-  // No, the mapped logic uses the DB result. The sync updates DB. 
-  // So this request won't see the change, but the NEXT one will.
-  // To make it see the change immediately, we'd need to re-query or update the in-memory rows.
-
-  // Let's try to update in-memory rows if we find assignments.
   const rows = res.rows;
-  const unassignedIndices = [];
-  rows.forEach((r, idx) => {
-    if (!r.assignee_user_id) unassignedIndices.push(idx);
-  });
+  // --- SYNC LOGIC START ---
+  // Trigger sync in background for TOP 5 unassigned items to avoid timeouts
+  const unassigned = rows.filter(r => !r.assignee_user_id);
 
-  if (unassignedIndices.length > 0) {
-    // We'll perform the sync and wait for it (up to a limit) to update the current view
-    // This might slow down inbox load but ensures "on refresh" data is fresh.
-    await syncUnassignedConversations(rows.filter(r => !r.assignee_user_id));
+  if (unassigned.length > 0) {
+    const toSync = unassigned.slice(0, 5);
+    // Explicitly do NOT await the sync to avoid timeouts
+    syncUnassignedConversations(toSync).catch(e => console.error('[InboxSync] Error:', e));
 
-    // Re-fetch assignments for these specific conversations to reflect changes in THIS response
-    // Optimization: Only query assignments table for these IDs
-    const idsToCheck = rows.filter(r => !r.assignee_user_id).map(r => r.id);
-    if (idsToCheck.length > 0) {
+
+    if (toSync.length > 0) {
+      const idsToCheck = toSync.map(r => r.id);
       const newAssignments = await db.query(
         `SELECT conversation_id, assignee_user_id FROM conversation_assignments 
                WHERE conversation_id = ANY($1::uuid[]) AND released_at IS NULL`,
         [idsToCheck]
       );
 
-      // Update in-memory rows
       for (const assign of newAssignments.rows) {
         const row = rows.find(r => r.id === assign.conversation_id);
         if (row) {
@@ -252,11 +259,13 @@ async function listConversations(teamId, userId, userRole, filter = 'open') {
         }
         : null,
       lastMessageAt: r.last_message_at,
+      lastMessage: r.last_message_type === 'text' ? r.last_message_body : (r.last_message_type ? `[${r.last_message_type}]` : null),
       contactName: r.display_name || 'Unknown',
       contactExternalId: r.contact_external_id,
       blocked: (r.profile && r.profile.blocked === true) || false,
       channelType: r.channel_type,
       channelExternalId: r.channel_external_id,
+      channelDisplayName: r.channel_display_number || r.channel_external_id,
       assigneeUserId: r.assignee_user_id || null,
       isPinned: r.is_pinned,
       unreadCount: r.unread_count || 0,
@@ -265,14 +274,27 @@ async function listConversations(teamId, userId, userRole, filter = 'open') {
 }
 
 async function getInboxCounts(teamId, userId) {
-  // Return dummy counts to avoid UUID errors
-  return {
-    all: 0,
-    unassigned: 0,
-    assigned_to_me: 0,
-    pinned: 0,
-    resolved: 0
-  };
+  try {
+    const res = await db.query(
+      `
+      SELECT 
+        COUNT(*)::int as all,
+        COUNT(*) FILTER (WHERE ca.assignee_user_id IS NULL AND c.status != 'closed')::int as unassigned,
+        COUNT(*) FILTER (WHERE ca.assignee_user_id = $1 AND c.status != 'closed')::int as assigned_to_me,
+        COUNT(*) FILTER (WHERE pc.conversation_id IS NOT NULL AND c.status != 'closed')::int as pinned,
+        COUNT(*) FILTER (WHERE c.status = 'closed')::int as resolved
+      FROM conversations c
+      LEFT JOIN conversation_assignments ca ON ca.conversation_id = c.id AND ca.released_at IS NULL
+      LEFT JOIN pinned_conversations pc ON pc.conversation_id = c.id AND pc.user_id = $1
+      `,
+      [userId]
+    );
+    return res.rows[0];
+  } catch (err) {
+    console.error('[InboxService] Failed to get counts:', err);
+    return { all: 0, unassigned: 0, assigned_to_me: 0, pinned: 0, resolved: 0 };
+  }
 }
+
 
 module.exports = { listConversations, getInboxCounts };

@@ -6,10 +6,11 @@ export async function getTeamUser(id) {
   return res.json();
 }
 
-export async function getInbox(teamId, filter) {
+export async function getInbox(teamId, filter, phoneNumberId) {
   const params = new URLSearchParams();
   if (teamId) params.append('teamId', teamId);
   if (filter) params.append('filter', filter);
+  if (phoneNumberId) params.append('phoneNumberId', phoneNumberId);
   const url = `/api/inbox?${params.toString()}`;
   const headers = getAuthHeaders();
   const res = await fetch(url, { headers, cache: 'no-store' });
