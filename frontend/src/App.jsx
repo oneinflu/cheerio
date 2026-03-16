@@ -997,16 +997,32 @@ export default function App() {
         {activePage === 'inbox' && (
           <>
             <div className="w-80 flex-none border-r border-slate-200 bg-white flex flex-col">
-              <div className="h-16 border-b border-slate-200 flex items-center px-4 justify-between">
-                <h1 className="font-semibold text-lg">Inbox</h1>
-                <div className="flex space-x-1">
-                  <Button variant="ghost" size="icon" className="h-8 w-8">
-                    <Search size={16} />
-                  </Button>
-                  <Button variant="ghost" size="icon" className="h-8 w-8">
-                    <Bell size={16} />
-                  </Button>
+              <div className="border-b border-slate-200 px-4 py-3">
+                <div className="flex items-center justify-between mb-2">
+                  <h1 className="font-semibold text-lg">Inbox</h1>
+                  <div className="flex space-x-1">
+                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                      <Search size={16} />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                      <Bell size={16} />
+                    </Button>
+                  </div>
                 </div>
+                {linkedPhones.length > 1 && (
+                  <select
+                    value={phoneNumberId || ''}
+                    onChange={(e) => setPhoneNumberId(e.target.value || null)}
+                    className="w-full text-xs border border-slate-200 rounded-md px-2 py-1.5 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
+                  >
+                    <option value="">All Channels</option>
+                    {linkedPhones.map(p => (
+                      <option key={p.phone_number_id} value={p.phone_number_id}>
+                        {p.display_phone_number || p.phone_number_id}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
               <Inbox
                 conversations={filteredConversations}
