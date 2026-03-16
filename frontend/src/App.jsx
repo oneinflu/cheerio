@@ -180,7 +180,6 @@ export default function App() {
         const res = await fetch('/api/settings/whatsapp');
         if (res.ok) {
           const data = await res.json();
-          console.log('[Settings] Fetched WhatsApp settings:', data.allSettings?.map(p => ({ phone: p.phone_number_id, display: p.display_phone_number })));
           setLinkedPhones(data.allSettings || []);
         }
       } catch (e) {
@@ -307,9 +306,7 @@ export default function App() {
   const loadInbox = async () => {
     if (!currentUser) return;
     try {
-      console.log(`[Inbox] Loading with filter=${inboxFilter}, phoneNumberId=${phoneNumberId}`);
       const res = await getInbox(currentUser.teamIds[0], inboxFilter, phoneNumberId);
-      console.log(`[Inbox] Loaded ${res.conversations?.length || 0} conversations`);
       const currentId = selectedIdRef.current;
       const nextConversations = (res.conversations || []).map(c => {
         const base = c.id === currentId ? { ...c, unreadCount: 0 } : c;
