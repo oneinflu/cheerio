@@ -20,6 +20,7 @@ import EmailTemplatesPage from './components/EmailTemplatesPage.jsx';
 import LoginPage from './components/LoginPage.jsx';
 import GuestChat from './components/GuestChat.jsx';
 import InstagramPage from './components/InstagramPage.jsx';
+import TelegramPage from './components/TelegramPage.jsx';
 import GalleryPage from './components/GalleryPage.jsx';
 import LandingPage from './components/LandingPage.jsx';
 import AiAgentPage from './components/AiAgentPage.jsx';
@@ -890,6 +891,19 @@ export default function App() {
                 </span>
               </Button>
               <Button
+                variant={activePage === 'telegram' ? 'secondary' : 'ghost'}
+                className="w-full flex items-center justify-start h-10 px-0 rounded-lg overflow-hidden shrink-0"
+                onClick={() => setActivePage('telegram')}
+                title="Telegram Bot Integration"
+              >
+                <div className="w-10 h-10 flex items-center justify-center shrink-0">
+                  <MessageSquare size={20} />
+                </div>
+                <span className="ml-3 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100">
+                  Telegram
+                </span>
+              </Button>
+              <Button
                 variant={activePage === 'gallery' ? 'secondary' : 'ghost'}
                 className="w-full flex items-center justify-start h-10 px-0 rounded-lg overflow-hidden shrink-0"
                 onClick={() => setActivePage('gallery')}
@@ -985,7 +999,8 @@ export default function App() {
 
         {activePage === 'rules' && <RulesPage />}
 
-        {activePage === 'instagram' && <InstagramPage />}
+        {activePage === 'instagram' && <InstagramPage currentUser={currentUser} socket={socket} />}
+        {activePage === 'telegram' && <TelegramPage currentUser={currentUser} socket={socket} />}
         {activePage === 'gallery' && <GalleryPage />}
         {activePage === 'ai-agent' && <AiAgentPage />}
 
