@@ -470,6 +470,21 @@ async function runMigrations() {
           console.log('[migrate] whatsapp_settings table already exists.');
         }
 
+        // 0023 – allow multiple whatsapp numbers
+        const multiNumberCheck = await client.query(`
+          SELECT 1 FROM information_schema.table_constraints 
+          WHERE table_name = 'whatsapp_settings' AND constraint_name = 'whatsapp_settings_team_phone_unique'
+        `);
+        if (multiNumberCheck.rowCount === 0) {
+          console.log('[migrate] Adding multi-number support to whatsapp_settings...');
+          await client.query('BEGIN');
+          await runSQLFile(client, path.join(__dirname, '..', 'db', 'migrations', '0023_allow_multiple_whatsapp_numbers.sql'));
+          await client.query('COMMIT');
+          console.log('[migrate] Applied 0023_allow_multiple_whatsapp_numbers migration.');
+        } else {
+          console.log('[migrate] whatsapp_settings already supports multiple numbers.');
+        }
+
         return;
 
 

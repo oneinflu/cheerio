@@ -297,16 +297,15 @@ router.get('/whatsapp', auth.requireRole('admin', 'super_admin'), async (req, re
     if (result.rowCount === 0) {
       return res.json({
         teamId,
-        settings: {
-          phone_number_id: '',
-          business_account_id: '',
-          permanent_token: '',
-          display_phone_number: '',
-          is_active: false
-        }
+        settings: null,
+        allSettings: []
       });
     }
-    res.json({ teamId, settings: result.rows[0] });
+    res.json({ 
+      teamId, 
+      settings: result.rows[0], 
+      allSettings: result.rows 
+    });
   } catch (err) {
     next(err);
   }
@@ -321,8 +320,7 @@ router.put('/whatsapp', auth.requireRole('admin', 'super_admin'), async (req, re
     const result = await db.query(
       `INSERT INTO whatsapp_settings (team_id, phone_number_id, business_account_id, permanent_token, display_phone_number, is_active)
        VALUES ($1, $2, $3, $4, $5, $6)
-       ON CONFLICT (team_id) DO UPDATE SET
-         phone_number_id = EXCLUDED.phone_number_id,
+       ON CONFLICT (team_id, phone_number_id) DO UPDATE SET
          business_account_id = EXCLUDED.business_account_id,
          permanent_token = EXCLUDED.permanent_token,
          display_phone_number = EXCLUDED.display_phone_number,

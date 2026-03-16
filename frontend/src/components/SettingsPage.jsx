@@ -110,6 +110,11 @@ export default function SettingsPage({ currentUser }) {
     display_phone_number: '',
     is_active: false
   });
+  const [allWhatsappSettings, setAllWhatsappSettings] = useState([]);
+  const [discoveredPhones, setDiscoveredPhones] = useState([]);
+  const [isPhoneSelectModalOpen, setIsPhoneSelectModalOpen] = useState(false);
+  const [discoveredWabaId, setDiscoveredWabaId] = useState('');
+  const [discoveredToken, setDiscoveredToken] = useState('');
   const [loadingWhatsapp, setLoadingWhatsapp] = useState(false);
   const [savingWhatsapp, setSavingWhatsapp] = useState(false);
   const [whatsappError, setWhatsappError] = useState(null);
@@ -120,8 +125,13 @@ export default function SettingsPage({ currentUser }) {
       try {
         setLoadingWhatsapp(true);
         const res = await getWhatsAppSettings(teamId);
-        if (res && res.settings) {
-          setWhatsappSettings(res.settings);
+        if (res) {
+          if (res.settings) {
+            setWhatsappSettings(res.settings);
+          }
+          if (res.allSettings) {
+            setAllWhatsappSettings(res.allSettings);
+          }
         }
       } catch (err) {
         console.error('Failed to load WhatsApp settings:', err);
@@ -181,15 +191,31 @@ export default function SettingsPage({ currentUser }) {
         onboardWhatsApp(accessToken, teamId)
           .then(res => {
             if (res.success) {
-              setWhatsappSettings(prev => ({
-                ...prev,
-                phone_number_id: res.data.phoneNumberId,
-                business_account_id: res.data.businessAccountId,
-                display_phone_number: res.data.displayPhoneNumber,
-                permanent_token: accessToken, // Store user token for now
-                is_active: true
-              }));
-              alert('Successfully connected to Meta!');
+              if (res.data.phones && res.data.phones.length > 1) {
+                // Multiple phones found, show selection modal
+                setDiscoveredPhones(res.data.phones);
+                setDiscoveredWabaId(res.data.businessAccountId);
+                setDiscoveredToken(res.data.accessToken);
+                setIsPhoneSelectModalOpen(true);
+              } else if (res.data.phones && res.data.phones.length === 1) {
+                // One phone found, it was already auto-saved by backend
+                const phone = res.data.phones[0];
+                const newSetting = {
+                  phone_number_id: phone.id,
+                  business_account_id: res.data.businessAccountId,
+                  display_phone_number: phone.displayPhoneNumber,
+                  permanent_token: accessToken,
+                  is_active: true
+                };
+                setWhatsappSettings(newSetting);
+                setAllWhatsappSettings(prev => {
+                  const filtered = prev.filter(s => s.phone_number_id !== phone.id);
+                  return [...filtered, newSetting];
+                });
+                alert('Successfully connected: ' + (phone.displayPhoneNumber || phone.id));
+              } else {
+                 setWhatsappError('No phone numbers found in this Business Account');
+              }
             } else {
               setWhatsappError(res.error || 'Failed to onboard');
             }
@@ -205,6 +231,35 @@ export default function SettingsPage({ currentUser }) {
     }, {
       scope: 'whatsapp_business_management,whatsapp_business_messaging,business_management,public_profile'
     });
+  };
+
+  const handleSelectPhone = async (phone) => {
+    try {
+      setLoadingWhatsapp(true);
+      const payload = {
+        phone_number_id: phone.id,
+        business_account_id: discoveredWabaId,
+        permanent_token: discoveredToken,
+        display_phone_number: phone.displayPhoneNumber,
+        is_active: true
+      };
+      const res = await updateWhatsAppSettings(payload, teamId);
+      if (res) {
+        setAllWhatsappSettings(prev => {
+          const filtered = prev.filter(s => s.phone_number_id !== phone.id);
+          return [...filtered, res];
+        });
+        if (!whatsappSettings.phone_number_id) {
+          setWhatsappSettings(res);
+        }
+        alert('Successfully linked ' + (phone.displayPhoneNumber || phone.id));
+      }
+    } catch (err) {
+      console.error('Failed to link phone:', err);
+      alert('Failed to link phone number');
+    } finally {
+      setLoadingWhatsapp(false);
+    }
   };
 
 
@@ -468,14 +523,14 @@ export default function SettingsPage({ currentUser }) {
           </CardHeader>
           <CardContent className="pt-4 flex-1 flex flex-col overflow-hidden">
             <div className="flex-1 flex flex-col items-center justify-center py-6 text-center space-y-6">
-              {!whatsappSettings.phone_number_id ? (
+              {!allWhatsappSettings.some(s => s.phone_number_id) ? (
                 <>
                   <div className="max-w-xs space-y-2">
                     <p className="text-sm text-slate-600 font-medium">
                       One-click connection to Meta
                     </p>
                     <p className="text-[11px] text-slate-500">
-                      We will automatically fetch your Business ID and Phone Number ID from your Facebook account.
+                      We will automatically fetch your Business ID and Phone Number IDs from your Facebook account.
                     </p>
                   </div>
                   <Button
@@ -494,36 +549,41 @@ export default function SettingsPage({ currentUser }) {
                 </>
               ) : (
                 <div className="w-full space-y-4">
-                  <div className="bg-green-50/50 border border-green-100 rounded-xl p-4 flex items-start gap-4">
-                    <div className="mt-1">
-                      <CheckCircle2 className="w-5 h-5 text-green-500" />
+                  <div className="bg-green-50/50 border border-green-100 rounded-xl p-4 flex flex-col items-stretch gap-3">
+                    <div className="flex items-start gap-4">
+                      <div className="mt-1">
+                        <CheckCircle2 className="w-5 h-5 text-green-500" />
+                      </div>
+                      <div className="text-left flex-1">
+                        <h4 className="text-sm font-bold text-slate-800">Accounts Connected</h4>
+                        <p className="text-xs text-slate-600 mt-0.5">
+                          You have {allWhatsappSettings.length} number(s) linked to this team.
+                        </p>
+                      </div>
                     </div>
-                    <div className="text-left">
-                      <h4 className="text-sm font-bold text-slate-800">Account Connected</h4>
-                      <p className="text-xs text-slate-600 mt-0.5">
-                        Linked Number: <span className="font-semibold text-slate-900">{whatsappSettings.display_phone_number || whatsappSettings.phone_number_id}</span>
-                      </p>
+
+                    <div className="space-y-2 mt-2">
+                      {allWhatsappSettings.map(s => (
+                        <div key={s.phone_number_id} className="flex items-center justify-between bg-white border border-green-100 rounded-lg p-2 px-3 shadow-sm">
+                          <div className="text-left">
+                            <p className="text-xs font-bold text-slate-800">{s.display_phone_number || s.phone_number_id}</p>
+                            <p className="text-[10px] text-slate-500">ID: {s.phone_number_id}</p>
+                          </div>
+                          <div className={`text-[10px] px-2 py-0.5 rounded-full ${s.is_active ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
+                            {s.is_active ? 'Active' : 'Paused'}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-slate-50 rounded-lg p-3 text-left">
-                      <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Business ID</label>
-                      <p className="text-xs text-slate-700 font-medium truncate">{whatsappSettings.business_account_id}</p>
-                    </div>
-                    <div className="bg-slate-50 rounded-lg p-3 text-left">
-                      <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Phone ID</label>
-                      <p className="text-xs text-slate-700 font-medium truncate">{whatsappSettings.phone_number_id}</p>
-                    </div>
-                  </div>
-
-                  <div className="pt-2">
+                  <div className="pt-2 flex flex-col gap-2">
                     <Button
                       variant="outline"
-                      onClick={() => setWhatsappSettings(prev => ({ ...prev, phone_number_id: '', business_account_id: '' }))}
-                      className="text-slate-500 text-xs border-slate-200 h-8 px-4"
+                      onClick={handleConnectWhatsApp}
+                      className="text-slate-500 text-xs border-slate-200 h-8 px-4 w-full"
                     >
-                      Reconnect different account
+                      Connect more numbers
                     </Button>
                   </div>
                 </div>
@@ -699,6 +759,44 @@ export default function SettingsPage({ currentUser }) {
             >
               {addingStage ? 'Adding...' : 'Add Stage'}
             </Button>
+          </div>
+        </div>
+      </Modal>
+
+
+      <Modal
+        isOpen={isPhoneSelectModalOpen}
+        onClose={() => setIsPhoneSelectModalOpen(false)}
+        title="Select WhatsApp Numbers"
+      >
+        <div className="space-y-4">
+          <p className="text-xs text-slate-500">
+            Multiple phone numbers found in your Business Account. Select the ones you want to link to this team.
+          </p>
+          <div className="space-y-2 max-h-60 overflow-y-auto border border-slate-100 rounded-lg p-2">
+            {discoveredPhones.map(phone => {
+              const alreadyLinked = allWhatsappSettings.some(s => s.phone_number_id === phone.id);
+              return (
+                <div key={phone.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100 hover:border-blue-200 transition-colors">
+                  <div className="text-left">
+                    <p className="text-sm font-bold text-slate-800">{phone.displayPhoneNumber || phone.id}</p>
+                    {phone.verifiedName && <p className="text-[10px] text-slate-500">{phone.verifiedName}</p>}
+                    <p className="text-[9px] text-slate-400">ID: {phone.id}</p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant={alreadyLinked ? "ghost" : "primary"}
+                    disabled={alreadyLinked || loadingWhatsapp}
+                    onClick={() => handleSelectPhone(phone)}
+                  >
+                    {alreadyLinked ? 'Linked' : 'Link Number'}
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+          <div className="flex justify-end pt-2">
+            <Button onClick={() => setIsPhoneSelectModalOpen(false)}>Done</Button>
           </div>
         </div>
       </Modal>

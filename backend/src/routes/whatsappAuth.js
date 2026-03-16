@@ -136,38 +136,40 @@ router.post('/onboard', auth.requireRole('admin', 'super_admin'), async (req, re
       return res.status(404).json({ error: 'No phone numbers found for this Business Account' });
     }
 
-    const phone = phones[0];
-    const phoneNumberId = phone.id;
-    const displayPhoneNumber = phone.display_phone_number;
-    console.log(`[WhatsApp Auth] Found Phone Number ID: ${phoneNumberId} (${displayPhoneNumber})`);
+    console.log(`[WhatsApp Auth] Found ${phones.length} phone numbers for WABA ${businessAccountId}`);
 
-    // 3. Upsert into whatsapp_settings
-    // Note: We are using the user's access token here. 
-    // IMPORTANT: User tokens expire. Usually, we'd exchange for long-lived, 
-    // but WhatsApp Business API often prefers a "System User Token" for truly permanent access.
-    // However, if we just want to "fetch the data", we can save these and ask user for a permanent token 
-    // OR we can try to use this token for now.
-    
-    await db.query(`
-      INSERT INTO whatsapp_settings (team_id, phone_number_id, business_account_id, permanent_token, display_phone_number, is_active)
-      VALUES ($1, $2, $3, $4, $5, true)
-      ON CONFLICT (team_id) DO UPDATE SET
-        phone_number_id = EXCLUDED.phone_number_id,
-        business_account_id = EXCLUDED.business_account_id,
-        permanent_token = EXCLUDED.permanent_token,
-        display_phone_number = EXCLUDED.display_phone_number,
-        is_active = true,
-        updated_at = NOW()
-    `, [teamId, phoneNumberId, businessAccountId, accessToken, displayPhoneNumber]);
+    // If there's only one phone number, we can auto-upsert it for backward compatibility
+    // but we should still return the full list.
+    if (phones.length === 1) {
+      const phone = phones[0];
+      const phoneNumberId = phone.id;
+      const displayPhoneNumber = phone.display_phone_number;
+
+      await db.query(`
+        INSERT INTO whatsapp_settings (team_id, phone_number_id, business_account_id, permanent_token, display_phone_number, is_active)
+        VALUES ($1, $2, $3, $4, $5, true)
+        ON CONFLICT (team_id, phone_number_id) DO UPDATE SET
+          permanent_token = EXCLUDED.permanent_token,
+          display_phone_number = EXCLUDED.display_phone_number,
+          is_active = true,
+          updated_at = NOW()
+      `, [teamId, phoneNumberId, businessAccountId, accessToken, displayPhoneNumber]);
+    }
 
     res.json({
       success: true,
       data: {
         businessAccountId,
-        phoneNumberId,
-        displayPhoneNumber
+        phones: phones.map(p => ({
+          id: p.id,
+          displayPhoneNumber: p.display_phone_number,
+          verifiedName: p.verified_name,
+          qualityRating: p.quality_rating
+        })),
+        accessToken // Return token so frontend can use it if they need to select multiple
       }
     });
+
 
   } catch (err) {
     console.error('[WhatsApp Auth] Onboarding failed:', err.response?.data || err.message);

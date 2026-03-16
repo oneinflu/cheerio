@@ -1014,9 +1014,19 @@ export default function App() {
                       <h2 className="font-semibold text-sm text-slate-900 leading-tight">
                         {selectedConversation?.contactName || 'Unknown Contact'}
                       </h2>
-                      <p className="text-xs text-slate-500">
-                        {selectedConversation?.status === 'closed' ? 'Closed' : 'Open Conversation'}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs text-slate-500">
+                          {selectedConversation?.status === 'closed' ? 'Closed' : 'Open Conversation'}
+                        </p>
+                        {selectedConversation?.channelExternalId && (
+                          <>
+                            <span className="text-slate-300">•</span>
+                            <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-medium">
+                              via {selectedConversation.channelExternalId}
+                            </span>
+                          </>
+                        )}
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-center space-x-2">
