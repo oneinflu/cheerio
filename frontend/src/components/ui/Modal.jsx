@@ -22,11 +22,12 @@ export function Modal({ isOpen, onClose, title, children, className, zIndex = 'z
 
   return (
     <div className={`fixed inset-0 ${zIndex} flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200`}>
-      <div 
+      <div
         className={cn(
           "relative w-full max-w-lg rounded-xl bg-white shadow-2xl animate-in zoom-in-95 duration-200",
           className
         )}
+        style={{ color: '#111827' }}
       >
         <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
           <h3 className="text-lg font-semibold text-slate-900">{title}</h3>

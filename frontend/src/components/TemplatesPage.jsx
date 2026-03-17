@@ -754,7 +754,7 @@ Are you sure you want to delete '${template.name}'?`;
       {/* Test Modal Overlay */}
       {isTestModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-lg shadow-xl w-[400px] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-lg shadow-xl w-[400px] overflow-hidden animate-in fade-in zoom-in-95 duration-200" style={{ color: '#111827' }}>
             <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
               <h3 className="font-semibold text-slate-900">Send Test Message</h3>
               <button
