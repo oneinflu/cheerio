@@ -283,36 +283,45 @@ async function listConversations(teamId, userId, userRole, filter = 'open', phon
 async function getInboxCounts(teamId, userId, userRole) {
   try {
     const isPrivileged = PRIVILEGED_ROLES.has(userRole);
-    const res = await db.query(
-      `
+    const params = [];
+    
+    let teamFilter = '';
+    let teamFilterSub = '';
+    if (teamId) {
+      params.push(teamId);
+      teamFilter = ` AND (ws.team_id = $${params.length} OR ca.team_id = $${params.length} OR ws.team_id IS NULL) `;
+      teamFilterSub = ` AND (ws2.team_id = $${params.length} OR ca2.team_id = $${params.length} OR ws2.team_id IS NULL) `;
+    }
+
+    params.push(userId);
+    const userIdx = params.length;
+
+    let visibilityFilter = '';
+    let visibilityFilterSub = '';
+    if (!isPrivileged) {
+      visibilityFilter = ` AND (ca.assignee_user_id = $${userIdx} OR ca.assignee_user_id IS NULL) `;
+      visibilityFilterSub = ` AND (ca2.assignee_user_id = $${userIdx} OR ca2.assignee_user_id IS NULL) `;
+    }
+
+    const query = `
       SELECT 
-        COUNT(*)::int as all,
-        COUNT(*) FILTER (WHERE ca.assignee_user_id IS NULL AND c.status != 'closed' AND c.team_id = $1)::int as unassigned,
-        COUNT(*) FILTER (WHERE ca.assignee_user_id = $2 AND c.status != 'closed' AND c.team_id = $1)::int as assigned_to_me,
-        COUNT(*) FILTER (WHERE pc.conversation_id IS NOT NULL AND c.status != 'closed' AND c.team_id = $1)::int as pinned,
-        COUNT(*) FILTER (WHERE c.status = 'closed' AND c.team_id = $1)::int as resolved,
-        (
-          SELECT COUNT(*)::int 
-          FROM messages m 
-          JOIN conversations c2 ON c2.id = m.conversation_id
-          LEFT JOIN conversation_assignments ca2 ON ca2.conversation_id = c2.id AND ca2.released_at IS NULL
-          WHERE m.direction = 'inbound' 
-            AND m.read_at IS NULL 
-            AND c2.status != 'closed'
-            AND c2.team_id = $1
-            AND (
-              $3 = true 
-              OR ca2.assignee_user_id = $2 
-              OR ca2.assignee_user_id IS NULL
-            )
-        ) as unread
+        COUNT(DISTINCT c.id)::int as all,
+        COUNT(DISTINCT c.id) FILTER (WHERE ca.assignee_user_id IS NULL AND c.status != 'closed')::int as unassigned,
+        COUNT(DISTINCT c.id) FILTER (WHERE ca.assignee_user_id = $${userIdx} AND c.status != 'closed')::int as assigned_to_me,
+        COUNT(DISTINCT c.id) FILTER (WHERE pc.conversation_id IS NOT NULL AND c.status != 'closed')::int as pinned,
+        COUNT(DISTINCT c.id) FILTER (WHERE c.status = 'closed')::int as resolved,
+        COALESCE(SUM(
+          (SELECT COUNT(*)::int FROM messages m WHERE m.conversation_id = c.id AND m.direction = 'inbound' AND m.read_at IS NULL)
+        ) FILTER (WHERE c.status != 'closed'), 0)::int as unread
       FROM conversations c
+      JOIN channels ch ON ch.id = c.channel_id
+      LEFT JOIN whatsapp_settings ws ON ws.phone_number_id = ch.external_id AND ch.type = 'whatsapp'
       LEFT JOIN conversation_assignments ca ON ca.conversation_id = c.id AND ca.released_at IS NULL
-      LEFT JOIN pinned_conversations pc ON pc.conversation_id = c.id AND pc.user_id = $2
-      WHERE c.team_id = $1
-      `,
-      [teamId, userId, isPrivileged]
-    );
+      LEFT JOIN pinned_conversations pc ON pc.conversation_id = c.id AND pc.user_id = $${userIdx}
+      WHERE 1=1 ${teamFilter} ${visibilityFilter}
+    `;
+
+    const res = await db.query(query, params);
     return res.rows[0];
   } catch (err) {
     console.error('[InboxService] Failed to get counts:', err);
