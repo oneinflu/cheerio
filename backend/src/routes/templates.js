@@ -23,8 +23,6 @@ async function resolveTeamId(req) {
   }
   return 'default';
 }
-
-const WABA_ID = process.env.WHATSAPP_BUSINESS_ACCOUNT_ID;
 const HAS_CLOUDINARY =
   !!process.env.CLOUDINARY_CLOUD_NAME &&
   !!process.env.CLOUDINARY_API_KEY &&
@@ -49,20 +47,14 @@ router.get('/', async (req, res, next) => {
     
     let configs = [];
     if (phoneNumberId) {
-      const config = await waConfig.getConfigByPhone(phoneNumberId);
-      if (config.isCustom || config.phoneNumberId) configs = [config];
+      try {
+        const config = await waConfig.getConfigByPhone(phoneNumberId);
+        if (config.isCustom || config.phoneNumberId) configs = [config];
+      } catch (e) {
+        configs = [];
+      }
     } else {
       configs = await waConfig.getAllConfigs(teamId);
-    }
-
-    // Fallback if no custom configs
-    if (configs.length === 0) {
-      configs = [{
-        phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID,
-        businessAccountId: process.env.WHATSAPP_BUSINESS_ACCOUNT_ID || WABA_ID,
-        token: process.env.WHATSAPP_TOKEN,
-        isCustom: false
-      }];
     }
 
     let allMetaTemplates = [];
@@ -185,10 +177,10 @@ router.post('/', async (req, res, next) => {
       config = await waConfig.getConfig(teamId);
     }
     
-    const wabaId = config.businessAccountId || WABA_ID;
+    const wabaId = config.businessAccountId;
 
     if (!wabaId) {
-      const err = new Error('WhatsApp Business Account ID is not configured');
+      const err = new Error('WhatsApp Business Account ID is not configured in settings');
       err.status = 500;
       err.expose = true;
       return next(err);
@@ -208,12 +200,23 @@ router.post('/', async (req, res, next) => {
  * Upload media for template example (returns handle).
  */
 router.post('/upload-example', upload.single('file'), async (req, res, next) => {
-  if (!WABA_ID) {
-    const err = new Error('WHATSAPP_BUSINESS_ACCOUNT_ID is not configured');
-    err.status = 500;
-    err.expose = true;
-    return next(err);
-  }
+  try {
+    const teamId = await resolveTeamId(req);
+    const { phoneNumberId } = req.body;
+    let config;
+    if (phoneNumberId) {
+      config = await waConfig.getConfigByPhone(phoneNumberId);
+    } else {
+      config = await waConfig.getConfig(teamId);
+    }
+    const WABA_ID = config.businessAccountId;
+
+    if (!WABA_ID) {
+      const err = new Error('WhatsApp Business Account ID is not configured in settings');
+      err.status = 500;
+      err.expose = true;
+      return next(err);
+    }
   if (!req.file) {
     const err = new Error('File is required');
     err.status = 400;
@@ -221,12 +224,12 @@ router.post('/upload-example', upload.single('file'), async (req, res, next) => 
     return next(err);
   }
 
-  try {
     const resp = await whatsappClient.uploadMessageTemplateMedia(
       WABA_ID,
       req.file.buffer,
       req.file.mimetype,
-      req.file.originalname
+      req.file.originalname,
+      config
     );
 
     let cloudinaryUrl = null;
@@ -386,10 +389,10 @@ router.delete('/', async (req, res, next) => {
     } else {
       config = await waConfig.getConfig(teamId);
     }
-    const wabaId = config.businessAccountId || WABA_ID;
+    const wabaId = config.businessAccountId;
 
     if (!wabaId) {
-      const err = new Error('WhatsApp Business Account ID is not configured');
+      const err = new Error('WhatsApp Business Account ID is not configured in settings');
       err.status = 500;
       return next(err);
     }

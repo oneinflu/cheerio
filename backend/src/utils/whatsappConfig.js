@@ -7,7 +7,6 @@ const db = require('../../db');
  * Falls back to environment variables if no settings are found for the team.
  */
 async function getConfig(teamId) {
-  // Try to fetch from DB first
   if (teamId) {
     try {
       const res = await db.query(
@@ -28,13 +27,7 @@ async function getConfig(teamId) {
     }
   }
 
-  // Fallback to environment variables
-  return {
-    phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID || '342847945577237',
-    businessAccountId: process.env.WHATSAPP_BUSINESS_ACCOUNT_ID || '',
-    token: process.env.WHATSAPP_TOKEN || '',
-    isCustom: false
-  };
+  throw new Error('No active WhatsApp configuration found for this team. Please connect a number in Settings.');
 }
 
 async function getConfigByPhone(phoneNumberId) {
@@ -58,14 +51,7 @@ async function getConfigByPhone(phoneNumberId) {
     }
   }
 
-  // Fallback
-  const defaultPid = process.env.WHATSAPP_PHONE_NUMBER_ID || '342847945577237';
-  return {
-    phoneNumberId: phoneNumberId || defaultPid,
-    businessAccountId: process.env.WHATSAPP_BUSINESS_ACCOUNT_ID || '',
-    token: process.env.WHATSAPP_TOKEN || '',
-    isCustom: false
-  };
+  throw new Error('No active WhatsApp configuration found for this phone number. Please connect a number in Settings.');
 }
 
 async function getAllConfigs(teamId) {

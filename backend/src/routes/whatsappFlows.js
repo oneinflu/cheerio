@@ -16,8 +16,8 @@ const BASE_URL = 'https://graph.facebook.com/v21.0';
 // ─────────────────────────────────────────────
 
 function getToken(config = null) {
-  const token = (config && config.token) || process.env.WHATSAPP_TOKEN;
-  if (!token) throw new Error('WhatsApp Token is not set');
+  const token = config ? config.token : null;
+  if (!token) throw new Error('WhatsApp Token is not set for this team. Please connect a number in Settings.');
   return token;
 }
 
@@ -125,8 +125,8 @@ async function metaDeleteFlow(flowId, config) {
 
 // Composite: shell → upload JSON → (optional) publish
 async function metaCreateFlow(config, { name, categories, flowJson, publish = false, cloneFlowId, endpointUri }) {
-  const wabaId = config.businessAccountId || process.env.WHATSAPP_BUSINESS_ACCOUNT_ID;
-  if (!wabaId) throw new Error('WhatsApp Business Account ID not configured');
+  const wabaId = config ? config.businessAccountId : null;
+  if (!wabaId) throw new Error('WhatsApp Business Account ID not configured for this team.');
 
   const created = await metaCreateFlowShell(wabaId, config, { name, categories, cloneFlowId });
   const flowId = created.id;
@@ -200,8 +200,8 @@ router.post('/whatsapp/flows/sync', auth.requireRole('admin', 'supervisor'), asy
   try {
     const teamId = resolveTeamId(req);
     const config = await waConfig.getConfig(teamId);
-    const wabaId = config.businessAccountId || process.env.WHATSAPP_BUSINESS_ACCOUNT_ID;
-    if (!wabaId) throw new Error('WhatsApp Business Account ID not configured');
+    const wabaId = config ? config.businessAccountId : null;
+    if (!wabaId) throw new Error('WhatsApp Business Account ID not configured for this team.');
     const remoteFlows = await metaGetFlows(wabaId, config);
     const upserted = [];
     for (const flow of remoteFlows) {

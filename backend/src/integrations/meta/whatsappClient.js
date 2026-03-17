@@ -20,10 +20,8 @@ const axios = require('axios');
 const FormData = require('form-data');
 
 const GRAPH_BASE = process.env.WHATSAPP_GRAPH_BASE || 'https://graph.facebook.com/v21.0';
-const TOKEN = process.env.WHATSAPP_TOKEN || '';
 const USE_MOCK = String(process.env.WHATSAPP_USE_MOCK || '').toLowerCase() === 'true';
 const APP_ID = process.env.META_APP_ID || process.env.FACEBOOK_APP_ID || '';
-const WABA_ID = process.env.WHATSAPP_BUSINESS_ACCOUNT_ID || '';
 
 // Simple in-memory limiter: one request every LAG_MS. Adjust with env as needed.
 const LAG_MS = Number(process.env.WHATSAPP_RATE_LIMIT_MS || 100);
@@ -41,7 +39,7 @@ function delayUntilAvailable() {
  * Avoids adding external dependencies. Handles basic errors and JSON parsing.
  */
 async function postJSON(url, body, customConfig = null) {
-  const token = (customConfig && customConfig.token) || TOKEN;
+  const token = customConfig ? customConfig.token : null;
   if (USE_MOCK) {
     console.log('[Mock WhatsApp Client] Skipping real API call. Payload:', JSON.stringify(body, null, 2));
     await new Promise(r => setTimeout(r, 500)); // simulate network delay
@@ -108,8 +106,8 @@ async function postJSON(url, body, customConfig = null) {
  * @param {string} phoneId - Optional: Phone number ID to send from
  */
 async function sendTemplateMessage(to, templateName, languageCode = 'en_US', components = [], phoneId, customConfig = null) {
-  const pid = phoneId || (customConfig && customConfig.phoneNumberId) || process.env.WHATSAPP_PHONE_NUMBER_ID;
-  if (!pid) throw new Error('Phone Number ID required');
+  const pid = phoneId || (customConfig && customConfig.phoneNumberId);
+  if (!pid) throw new Error('Phone Number ID required (not found in config)');
 
   const url = `${GRAPH_BASE}/${pid}/messages`;
   const body = {
@@ -129,7 +127,7 @@ async function sendTemplateMessage(to, templateName, languageCode = 'en_US', com
  * GET JSON helper to Graph API.
  */
 async function getJSON(url, customConfig = null) {
-  const token = (customConfig && customConfig.token) || TOKEN;
+  const token = customConfig ? customConfig.token : null;
   if (USE_MOCK) {
     console.log('[Mock WhatsApp Client] Skipping real API call. GET', url);
     await new Promise(r => setTimeout(r, 500)); 
@@ -267,7 +265,7 @@ async function getTemplates(wabaId, limit = 100, customConfig = null) {
  * "socket hang up" network errors and to surface Graph API errors clearly.
  */
 async function createTemplate(wabaId, templateData, customConfig = null) {
-  const token = (customConfig && customConfig.token) || TOKEN;
+  const token = customConfig ? customConfig.token : null;
   if (USE_MOCK) {
     console.log('[Mock WhatsApp Client] Skipping real template creation.');
     return { status: 200, data: { success: true, id: 'mock_template_' + Date.now() } };
@@ -313,7 +311,7 @@ async function getMedia(mediaId, customConfig = null) {
  * @param {string} filename
  */
 async function uploadMedia(phoneNumberId, fileBuffer, mimeType, filename, customConfig = null) {
-  const token = (customConfig && customConfig.token) || TOKEN;
+  const token = customConfig ? customConfig.token : null;
   if (USE_MOCK) {
     console.log('[Mock WhatsApp Client] Skipping real upload.');
     return { id: 'mock_media_' + Date.now() };
@@ -346,12 +344,13 @@ async function uploadMedia(phoneNumberId, fileBuffer, mimeType, filename, custom
  * @param {string} mimeType
  * @param {string} filename
  */
-async function uploadMessageTemplateMedia(wabaId, fileBuffer, mimeType, filename) {
+async function uploadMessageTemplateMedia(wabaId, fileBuffer, mimeType, filename, customConfig = null) {
+  const token = customConfig ? customConfig.token : null;
   if (USE_MOCK) {
     console.log('[Mock WhatsApp Client] Skipping real template media upload.');
     return { h: 'mock_handle_' + Date.now() };
   }
-  if (!TOKEN) throw new Error('WHATSAPP_TOKEN required');
+  if (!token) throw new Error('WhatsApp Token required (not found in config)');
   if (!APP_ID) throw new Error('META_APP_ID or FACEBOOK_APP_ID required for template media upload');
 
   try {
@@ -365,7 +364,7 @@ async function uploadMessageTemplateMedia(wabaId, fileBuffer, mimeType, filename
           file_name: filename,
           file_length: length,
           file_type: mimeType,
-          access_token: TOKEN,
+          access_token: token,
         },
       }
     );
@@ -380,7 +379,7 @@ async function uploadMessageTemplateMedia(wabaId, fileBuffer, mimeType, filename
       fileBuffer,
       {
         headers: {
-          Authorization: `OAuth ${TOKEN}`,
+          Authorization: `OAuth ${token}`,
           file_offset: 0,
         },
       }
@@ -404,7 +403,7 @@ async function uploadMessageTemplateMedia(wabaId, fileBuffer, mimeType, filename
  * @param {string} hsmId - Optional: Template ID to delete specific version
  */
 async function deleteTemplate(wabaId, name, hsmId, customConfig = null) {
-  const token = (customConfig && customConfig.token) || TOKEN;
+  const token = customConfig ? customConfig.token : null;
   if (USE_MOCK) {
     console.log('[Mock WhatsApp Client] Deleting template:', name, hsmId);
     return { success: true };
@@ -454,15 +453,17 @@ async function deleteTemplate(wabaId, name, hsmId, customConfig = null) {
 }
 
 
-async function createFlow({ name, categories, flowJson, publish = true, cloneFlowId, endpointUri }) {
+async function createFlow({ name, categories, flowJson, publish = true, cloneFlowId, endpointUri }, customConfig = null) {
+  const token = customConfig ? customConfig.token : null;
+  const wabaId = (customConfig && customConfig.businessAccountId);
   if (USE_MOCK) {
     console.log('[Mock WhatsApp Client] Skipping real flow creation.');
     return { id: 'mock_flow_' + Date.now(), success: true, validation_errors: [] };
   }
-  if (!TOKEN) throw new Error('WHATSAPP_TOKEN required');
-  if (!WABA_ID) throw new Error('WHATSAPP_BUSINESS_ACCOUNT_ID required for Flows API');
+  if (!token) throw new Error('WhatsApp Token required (not found in config)');
+  if (!wabaId) throw new Error('WhatsApp Business Account ID required for Flows API');
 
-  const url = `${GRAPH_BASE}/${WABA_ID}/flows`;
+  const url = `${GRAPH_BASE}/${wabaId}/flows`;
   const payload = {
     name,
     categories: Array.isArray(categories) && categories.length ? categories : ['OTHER'],
@@ -486,7 +487,7 @@ async function createFlow({ name, categories, flowJson, publish = true, cloneFlo
   try {
     const res = await axios.post(url, payload, {
       headers: {
-        Authorization: `Bearer ${TOKEN}`,
+        Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
     });
@@ -504,12 +505,13 @@ async function createFlow({ name, categories, flowJson, publish = true, cloneFlo
   }
 }
 
-async function updateFlowMetadata(flowId, data) {
+async function updateFlowMetadata(flowId, data, customConfig = null) {
+  const token = customConfig ? customConfig.token : null;
   if (USE_MOCK) {
     console.log('[Mock WhatsApp Client] Skipping real flow metadata update.', flowId, data);
     return { success: true };
   }
-  if (!TOKEN) throw new Error('WHATSAPP_TOKEN required');
+  if (!token) throw new Error('WhatsApp Token required (not found in config)');
   if (!flowId) throw new Error('flowId is required');
 
   const url = `${GRAPH_BASE}/${flowId}`;
@@ -519,7 +521,7 @@ async function updateFlowMetadata(flowId, data) {
   try {
     const res = await axios.post(url, data, {
       headers: {
-        Authorization: `Bearer ${TOKEN}`,
+        Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
     });
@@ -537,12 +539,13 @@ async function updateFlowMetadata(flowId, data) {
   }
 }
 
-async function updateFlowJson(flowId, flowJson) {
+async function updateFlowJson(flowId, flowJson, customConfig = null) {
+  const token = customConfig ? customConfig.token : null;
   if (USE_MOCK) {
     console.log('[Mock WhatsApp Client] Skipping real flow JSON update.');
     return { success: true, validation_errors: [] };
   }
-  if (!TOKEN) throw new Error('WHATSAPP_TOKEN required');
+  if (!token) throw new Error('WhatsApp Token required (not found in config)');
   if (!flowId) throw new Error('flowId is required');
 
   const url = `${GRAPH_BASE}/${flowId}/assets`;
@@ -562,7 +565,7 @@ async function updateFlowJson(flowId, flowJson) {
     const res = await axios.post(url, form, {
       headers: {
         ...form.getHeaders(),
-        Authorization: `Bearer ${TOKEN}`,
+        Authorization: `Bearer ${token}`,
       },
     });
     return res.data;
@@ -579,13 +582,13 @@ async function updateFlowJson(flowId, flowJson) {
   }
 }
 
-async function getFlows(wabaId, limit = 100) {
+async function getFlows(wabaId, limit = 100, customConfig = null) {
   if (USE_MOCK) {
     console.log('[Mock WhatsApp Client] Skipping real flow fetch.');
     return { status: 200, data: { data: [] } };
   }
   const url = `${GRAPH_BASE}/${wabaId}/flows?limit=${limit}&fields=id,name,status,categories,validation_errors`;
-  return getJSON(url);
+  return getJSON(url, customConfig);
 }
 
 /**
