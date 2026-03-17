@@ -254,8 +254,8 @@ export default function TeamMembersPage() {
             
             <div className="flex gap-2 w-full md:w-auto">
                 <div className="relative">
-                    <select 
-                        className="h-10 pl-3 pr-8 rounded-md border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-slate-950 capitalize"
+                    <select
+                        className="h-10 pl-3 pr-8 rounded-md border border-slate-200 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-slate-950 capitalize"
                         value={roleFilter}
                         onChange={(e) => setRoleFilter(e.target.value)}
                     >
@@ -266,8 +266,8 @@ export default function TeamMembersPage() {
                     </select>
                 </div>
                 <div className="relative">
-                    <select 
-                        className="h-10 pl-3 pr-8 rounded-md border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-slate-950"
+                    <select
+                        className="h-10 pl-3 pr-8 rounded-md border border-slate-200 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-slate-950"
                         value={statusFilter}
                         onChange={(e) => setStatusFilter(e.target.value)}
                     >
@@ -599,7 +599,7 @@ export default function TeamMembersPage() {
                     <label className="text-sm font-medium text-slate-700 mb-1">Role <span className="text-red-500">*</span></label>
                     <select 
                         required
-                        className="h-9 px-3 py-1 rounded-md border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 capitalize"
+                        className="h-9 px-3 py-1 rounded-md border border-slate-200 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 capitalize"
                         value={createFormData.role}
                         onChange={(e) => setCreateFormData({...createFormData, role: e.target.value})}
                     >
