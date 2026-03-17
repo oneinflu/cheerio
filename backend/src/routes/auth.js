@@ -47,7 +47,8 @@ router.post('/login', async (req, res, next) => {
                             email: localUser.email,
                             role: localUser.role,
                             teamIds: teamIds,
-                            status: localUser.active ? 'available' : 'logout'
+                            status: localUser.active ? 'available' : 'logout',
+                            attributes: localUser.attributes || {}
                         }
                     }
                 });
@@ -137,6 +138,22 @@ router.post('/sync', auth.requireAuth, async (req, res, next) => {
     `, [userId, user.email, `${user.firstname} ${user.lastname}`, localRole, user.status === 'available']);
 
     res.json({ success: true, message: 'User synced' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/onboarding', auth.requireAuth, async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    // Update onboarding_completed flag in attributes jsonb
+    await db.query(`
+      UPDATE users 
+      SET attributes = COALESCE(attributes, '{}'::jsonb) || '{"onboarding_completed": true}'::jsonb
+      WHERE id = $1
+    `, [userId]);
+
+    res.json({ success: true, message: 'Onboarding marked as completed' });
   } catch (err) {
     next(err);
   }

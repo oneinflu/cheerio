@@ -334,7 +334,7 @@ router.post('/upload-test-media', auth.requireRole('admin', 'agent', 'supervisor
  * Send a test template message.
  */
 router.post('/send-test', async (req, res, next) => {
-  const { to, templateName, languageCode, components } = req.body;
+  const { to, templateName, languageCode, components, phoneNumberId } = req.body;
   if (!to || !templateName) {
     const err = new Error('Missing "to" or "templateName"');
     err.status = 400;
@@ -348,7 +348,12 @@ router.post('/send-test', async (req, res, next) => {
 
   try {
     const teamId = await resolveTeamId(req);
-    const config = await waConfig.getConfig(teamId);
+    let config;
+    if (phoneNumberId) {
+      config = await waConfig.getConfigByPhone(phoneNumberId);
+    } else {
+      config = await waConfig.getConfig(teamId);
+    }
 
     const resp = await whatsappClient.sendTemplateMessage(
       to,

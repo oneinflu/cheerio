@@ -24,8 +24,9 @@ import TelegramPage from './components/TelegramPage.jsx';
 import GalleryPage from './components/GalleryPage.jsx';
 import LandingPage from './components/LandingPage.jsx';
 import AiAgentPage from './components/AiAgentPage.jsx';
+import OnboardingTour from './components/OnboardingTour.jsx';
 import { connectSocket } from './socket.js';
-import { getInbox, getMessages, claimConversation, reassignConversation, forceReassignConversation, releaseConversation, markAsRead, resolveConversation, deleteConversation, blockConversation, unblockConversation, pinConversation, updateWorkflow, getTeamUser, getTeamUsers, reassignExternalLead, toggleAiForConversation } from './api.js';
+import { getInbox, getMessages, claimConversation, reassignConversation, forceReassignConversation, releaseConversation, markAsRead, resolveConversation, deleteConversation, blockConversation, unblockConversation, pinConversation, updateWorkflow, getTeamUser, getTeamUsers, reassignExternalLead, toggleAiForConversation, completeOnboarding } from './api.js';
 import { LayoutDashboard, MessageSquare, Users, Megaphone, Settings, LogOut, Search, Bell, FileText, Workflow, Shield, ChevronsUpDown, Check, Zap, GitBranch, Instagram, ChevronDown, ChevronRight, Mail, Bot, ArrowRight, PauseCircle, PlayCircle } from 'lucide-react';
 import { Button } from './components/ui/Button';
 import { Badge } from './components/ui/Badge';
@@ -173,6 +174,32 @@ export default function App() {
   const [inboxFilter, setInboxFilter] = useState('open');
   const [phoneNumberId, setPhoneNumberId] = useState(null);
   const [linkedPhones, setLinkedPhones] = useState([]);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
+  useEffect(() => {
+    if (storedUser && storedUser.attributes?.onboarding_completed !== true) {
+      setShowOnboarding(true);
+    } else {
+      setShowOnboarding(false);
+    }
+  }, [storedUser]);
+
+  const handleOnboardingComplete = async () => {
+    try {
+      await completeOnboarding();
+      setShowOnboarding(false);
+      // Update local storage so it doesn't show again on refresh
+      const updatedUser = { 
+        ...storedUser, 
+        attributes: { ...(storedUser.attributes || {}), onboarding_completed: true } 
+      };
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+      setStoredUser(updatedUser);
+    } catch (err) {
+      console.error('Failed to complete onboarding:', err);
+      setShowOnboarding(false); // Hide anyway to not block user
+    }
+  };
 
   useEffect(() => {
     if (!storedUser) return;
@@ -1330,6 +1357,7 @@ export default function App() {
         )}
       </div>
       <Toaster />
+      {showOnboarding && <OnboardingTour onComplete={handleOnboardingComplete} />}
     </div>
   );
 }

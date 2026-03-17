@@ -721,7 +721,7 @@ Are you sure you want to delete '${template.name}'?`;
         });
       }
 
-      await sendTestTemplate(testPhoneNumber, testSelectedTemplate, lang, components);
+      await sendTestTemplate(testPhoneNumber, testSelectedTemplate, lang, components, tmpl ? tmpl.phoneNumberId : null);
       alert('Test message sent successfully!');
       setIsTestModalOpen(false);
       setTestPhoneNumber('');

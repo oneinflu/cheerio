@@ -77,12 +77,12 @@ export async function createTemplate(templateData) {
   return res.json();
 }
 
-export async function sendTestTemplate(to, templateName, languageCode, components) {
+export async function sendTestTemplate(to, templateName, languageCode, components, phoneNumberId) {
   const headers = getAuthHeaders();
   const res = await fetch('/api/templates/send-test', {
     method: 'POST',
     headers,
-    body: JSON.stringify({ to, templateName, languageCode, components }),
+    body: JSON.stringify({ to, templateName, languageCode, components, phoneNumberId }),
   });
   return res.json();
 }
@@ -361,6 +361,15 @@ export async function syncUser(user) {
     method: 'POST',
     headers,
     body: JSON.stringify({ user }),
+  });
+  return res.json();
+}
+
+export async function completeOnboarding() {
+  const headers = getAuthHeaders();
+  const res = await fetch('/api/auth/onboarding', {
+    method: 'POST',
+    headers,
   });
   return res.json();
 }
