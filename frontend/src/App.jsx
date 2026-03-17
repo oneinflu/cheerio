@@ -26,7 +26,7 @@ import LandingPage from './components/LandingPage.jsx';
 import AiAgentPage from './components/AiAgentPage.jsx';
 import OnboardingTour from './components/OnboardingTour.jsx';
 import { connectSocket } from './socket.js';
-import { getInbox, getMessages, claimConversation, reassignConversation, forceReassignConversation, releaseConversation, markAsRead, resolveConversation, deleteConversation, blockConversation, unblockConversation, pinConversation, updateWorkflow, getTeamUser, getTeamUsers, reassignExternalLead, toggleAiForConversation, completeOnboarding } from './api.js';
+import { getInbox, getInboxCounts, getMessages, claimConversation, reassignConversation, forceReassignConversation, releaseConversation, markAsRead, resolveConversation, deleteConversation, blockConversation, unblockConversation, pinConversation, updateWorkflow, getTeamUser, getTeamUsers, reassignExternalLead, toggleAiForConversation, completeOnboarding } from './api.js';
 import { LayoutDashboard, MessageSquare, Users, Megaphone, Settings, LogOut, Search, Bell, FileText, Workflow, Shield, ChevronsUpDown, Check, Zap, GitBranch, Instagram, ChevronDown, ChevronRight, Mail, Bot, ArrowRight, PauseCircle, PlayCircle } from 'lucide-react';
 import { Button } from './components/ui/Button';
 import { Badge } from './components/ui/Badge';
@@ -765,24 +765,24 @@ export default function App() {
           </Button>
 
           <Button
-            id="nav-inbox"
+            id="tour-nav-inbox"
             variant={activePage === 'inbox' ? 'secondary' : 'ghost'}
-            className="w-full flex items-center justify-start h-10 px-0 rounded-lg overflow-hidden shrink-0 relative"
+            className="w-full flex items-center justify-start h-10 px-0 rounded-lg overflow-hidden shrink-0 relative group/inbox"
             onClick={() => setActivePage('inbox')}
             title="Inbox"
           >
             <div className="w-10 h-10 flex items-center justify-center shrink-0 relative">
-              <MessageSquare size={20} />
+              <MessageSquare size={20} className={activePage === 'inbox' ? "text-blue-600 scale-110 transition-transform" : ""} />
               {totalUnread > 0 && (
-                <span className="absolute top-1.5 right-1.5 bg-red-500 text-white text-[9px] font-bold h-4 min-w-[16px] px-1 rounded-full flex items-center justify-center border border-white">
+                <span className="absolute -top-0.5 -right-0.5 bg-red-600 text-white text-[9px] font-bold h-4 min-w-[16px] px-1 rounded-full flex items-center justify-center border border-white shadow-sm animate-in zoom-in duration-300">
                   {totalUnread > 99 ? '99+' : totalUnread}
                 </span>
               )}
             </div>
             <span className="ml-3 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100 flex-1 text-left flex items-center justify-between">
-              <span>Inbox</span>
+              <span className="font-medium">Inbox</span>
               {totalUnread > 0 && (
-                <span className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded text-[10px] font-semibold mr-3 group-hover:opacity-100 opacity-0 transition-opacity">
+                <span className="bg-red-50 text-red-600 px-1.5 py-0.5 rounded-full text-[10px] font-bold mr-3 group-hover:opacity-100 opacity-0 transition-opacity">
                   {totalUnread}
                 </span>
               )}
