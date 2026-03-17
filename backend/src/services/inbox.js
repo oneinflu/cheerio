@@ -289,7 +289,17 @@ async function getInboxCounts(teamId, userId) {
         COUNT(*) FILTER (WHERE ca.assignee_user_id IS NULL AND c.status != 'closed')::int as unassigned,
         COUNT(*) FILTER (WHERE ca.assignee_user_id = $1 AND c.status != 'closed')::int as assigned_to_me,
         COUNT(*) FILTER (WHERE pc.conversation_id IS NOT NULL AND c.status != 'closed')::int as pinned,
-        COUNT(*) FILTER (WHERE c.status = 'closed')::int as resolved
+        COUNT(*) FILTER (WHERE c.status = 'closed')::int as resolved,
+        (
+          SELECT COUNT(*)::int 
+          FROM messages m 
+          JOIN conversations c2 ON c2.id = m.conversation_id
+          LEFT JOIN conversation_assignments ca2 ON ca2.conversation_id = c2.id AND ca2.released_at IS NULL
+          WHERE m.direction = 'inbound' 
+            AND m.read_at IS NULL 
+            AND c2.status != 'closed'
+            AND (ca2.assignee_user_id = $1 OR ca2.assignee_user_id IS NULL)
+        ) as unread
       FROM conversations c
       LEFT JOIN conversation_assignments ca ON ca.conversation_id = c.id AND ca.released_at IS NULL
       LEFT JOIN pinned_conversations pc ON pc.conversation_id = c.id AND pc.user_id = $1

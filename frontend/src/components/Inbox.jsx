@@ -4,7 +4,8 @@ import { cn } from '../lib/utils';
 import { Badge } from './ui/Badge';
 import { Pin, MessageCircle, Instagram, Check, Trash2 } from 'lucide-react';
 
-export default function Inbox({ conversations, selectedId, onSelect, onPin, onResolve, onDelete, currentUser, filter, setFilter }) {
+export default function Inbox({ conversations, selectedId, onSelect, onPin, onResolve, onDelete, currentUser, filter, setFilter, counts }) {
+  const safeCounts = counts || { all: 0, unassigned: 0, assigned_to_me: 0, pinned: 0, resolved: 0 };
   
   return (
     <div className="flex flex-col h-full">
@@ -14,59 +15,89 @@ export default function Inbox({ conversations, selectedId, onSelect, onPin, onRe
           id="tour-inbox-filter-all"
           onClick={() => setFilter('all')}
           className={cn(
-            "px-3 py-1 rounded-full text-xs font-medium transition-colors whitespace-nowrap border",
+            "px-3 py-1 rounded-full text-xs font-medium transition-all whitespace-nowrap border flex items-center gap-1.5",
             filter === 'all' 
-              ? "bg-slate-900 text-white border-slate-900" 
+              ? "bg-slate-900 text-white border-slate-900 shadow-sm shadow-slate-200" 
               : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
           )}
         >
-          All
+          <span>All</span>
+          <span className={cn(
+            "text-[10px] px-1.5 py-0.5 rounded-full",
+            filter === 'all' ? "bg-white/20 text-white" : "bg-slate-100 text-slate-500"
+          )}>
+            {safeCounts.all}
+          </span>
         </button>
         <button
           id="tour-inbox-filter-open"
           onClick={() => setFilter('open')}
           className={cn(
-            "px-3 py-1 rounded-full text-xs font-medium transition-colors whitespace-nowrap border",
+            "px-3 py-1 rounded-full text-xs font-medium transition-all whitespace-nowrap border flex items-center gap-1.5",
             filter === 'open' 
-              ? "bg-green-600 text-white border-green-600" 
+              ? "bg-green-600 text-white border-green-600 shadow-sm shadow-green-100" 
               : "bg-white text-slate-600 border-slate-200 hover:bg-green-50 hover:text-green-700 hover:border-green-200"
           )}
         >
-          Open
+          <span>Open</span>
+          <span className={cn(
+             "text-[10px] px-1.5 py-0.5 rounded-full",
+             filter === 'open' ? "bg-white/20 text-white" : "bg-green-50 text-green-600"
+          )}>
+            {safeCounts.all - safeCounts.resolved}
+          </span>
         </button>
         <button
           id="tour-inbox-filter-unassigned"
           onClick={() => setFilter('unassigned')}
           className={cn(
-            "px-3 py-1 rounded-full text-xs font-medium transition-colors whitespace-nowrap border",
+            "px-3 py-1 rounded-full text-xs font-medium transition-all whitespace-nowrap border flex items-center gap-1.5",
             filter === 'unassigned' 
-              ? "bg-orange-500 text-white border-orange-500" 
+              ? "bg-orange-500 text-white border-orange-500 shadow-sm shadow-orange-100" 
               : "bg-white text-slate-600 border-slate-200 hover:bg-orange-50 hover:text-orange-700 hover:border-orange-200"
           )}
         >
-          Unassigned
+          <span>Unassigned</span>
+          <span className={cn(
+             "text-[10px] px-1.5 py-0.5 rounded-full",
+             filter === 'unassigned' ? "bg-white/20 text-white" : "bg-orange-50 text-orange-600"
+          )}>
+            {safeCounts.unassigned}
+          </span>
         </button>
         <button
           onClick={() => setFilter('pinned')}
           className={cn(
-            "px-3 py-1 rounded-full text-xs font-medium transition-colors whitespace-nowrap border",
+            "px-3 py-1 rounded-full text-xs font-medium transition-all whitespace-nowrap border flex items-center gap-1.5",
             filter === 'pinned' 
-              ? "bg-blue-600 text-white border-blue-600" 
+              ? "bg-blue-600 text-white border-blue-600 shadow-sm shadow-blue-100" 
               : "bg-white text-slate-600 border-slate-200 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200"
           )}
         >
-          Pinned
+          <span>Pinned</span>
+          <span className={cn(
+             "text-[10px] px-1.5 py-0.5 rounded-full",
+             filter === 'pinned' ? "bg-white/20 text-white" : "bg-blue-50 text-blue-600"
+          )}>
+            {safeCounts.pinned}
+          </span>
         </button>
         <button
           onClick={() => setFilter('closed')}
           className={cn(
-            "px-3 py-1 rounded-full text-xs font-medium transition-colors whitespace-nowrap border",
+            "px-3 py-1 rounded-full text-xs font-medium transition-all whitespace-nowrap border flex items-center gap-1.5",
             filter === 'closed' 
-              ? "bg-slate-600 text-white border-slate-600" 
+              ? "bg-slate-600 text-white border-slate-600 shadow-sm shadow-slate-100" 
               : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-slate-800"
           )}
         >
-          Closed
+          <span>Closed</span>
+          <span className={cn(
+             "text-[10px] px-1.5 py-0.5 rounded-full",
+             filter === 'closed' ? "bg-white/20 text-white" : "bg-slate-100 text-slate-500"
+          )}>
+            {safeCounts.resolved}
+          </span>
         </button>
       </div>
 

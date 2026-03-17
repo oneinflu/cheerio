@@ -175,6 +175,8 @@ export default function App() {
   const [phoneNumberId, setPhoneNumberId] = useState(null);
   const [linkedPhones, setLinkedPhones] = useState([]);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [totalUnread, setTotalUnread] = useState(0);
+  const [inboxCounts, setInboxCounts] = useState({ all: 0, unassigned: 0, assigned_to_me: 0, pinned: 0, resolved: 0 });
 
   useEffect(() => {
     if (storedUser && storedUser.attributes?.onboarding_v3 !== true) {
@@ -337,6 +339,19 @@ export default function App() {
     };
   }, [currentUser]);
 
+  const loadInboxCounts = async () => {
+    if (!currentUser) return;
+    try {
+      const res = await getInboxCounts(currentUser.teamIds[0]);
+      setInboxCounts(res);
+      if (res && typeof res.unread === 'number') {
+        setTotalUnread(res.unread);
+      }
+    } catch (err) {
+      console.error('Failed to load inbox counts:', err);
+    }
+  };
+
   const loadInbox = async () => {
     if (!currentUser) return;
     try {
@@ -351,6 +366,8 @@ export default function App() {
       if (!currentId && nextConversations.length > 0) {
         setSelectedConversation(nextConversations[0].id);
       }
+      // Also reload counts when inbox loads
+      loadInboxCounts();
     } catch (err) {
       console.error('Failed to load inbox:', err);
     }
@@ -393,6 +410,7 @@ export default function App() {
 
       // Mark as read and update local state
       await markAsRead(selectedId);
+      loadInboxCounts();
       setConversations(prev => prev.map(c =>
         c.id === selectedId ? { ...c, unreadCount: 0 } : c
       ));
@@ -425,7 +443,7 @@ export default function App() {
       const currentId = selectedIdRef.current;
       if (currentId && payload && payload.conversationId === currentId) {
         // Mark as read immediately since we are viewing it
-        markAsRead(currentId).catch(console.error);
+        markAsRead(currentId).then(() => loadInboxCounts()).catch(console.error);
 
         setMessages((prev) => {
           if (prev.some((m) => m.id === payload.messageId)) return prev;
@@ -597,6 +615,7 @@ export default function App() {
     try {
       await deleteConversation(conversationId);
       setConversations(prev => prev.filter(c => c.id !== conversationId));
+      loadInboxCounts();
       if (selectedId === conversationId) {
         setSelectedConversation(null);
         setMessages([]);
@@ -748,15 +767,25 @@ export default function App() {
           <Button
             id="nav-inbox"
             variant={activePage === 'inbox' ? 'secondary' : 'ghost'}
-            className="w-full flex items-center justify-start h-10 px-0 rounded-lg overflow-hidden shrink-0"
+            className="w-full flex items-center justify-start h-10 px-0 rounded-lg overflow-hidden shrink-0 relative"
             onClick={() => setActivePage('inbox')}
             title="Inbox"
           >
-            <div className="w-10 h-10 flex items-center justify-center shrink-0">
+            <div className="w-10 h-10 flex items-center justify-center shrink-0 relative">
               <MessageSquare size={20} />
+              {totalUnread > 0 && (
+                <span className="absolute top-1.5 right-1.5 bg-red-500 text-white text-[9px] font-bold h-4 min-w-[16px] px-1 rounded-full flex items-center justify-center border border-white">
+                  {totalUnread > 99 ? '99+' : totalUnread}
+                </span>
+              )}
             </div>
-            <span className="ml-3 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100">
-              Inbox
+            <span className="ml-3 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100 flex-1 text-left flex items-center justify-between">
+              <span>Inbox</span>
+              {totalUnread > 0 && (
+                <span className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded text-[10px] font-semibold mr-3 group-hover:opacity-100 opacity-0 transition-opacity">
+                  {totalUnread}
+                </span>
+              )}
             </span>
           </Button>
 
@@ -1090,6 +1119,7 @@ export default function App() {
                 currentUser={currentUser}
                 filter={inboxFilter}
                 setFilter={setInboxFilter}
+                counts={inboxCounts}
               />
             </div>
 
