@@ -93,7 +93,7 @@ export default function DashboardPage({ teamId }) {
 
       <div className="p-8 space-y-6 max-w-[1600px] mx-auto">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="border-0 shadow-sm">
+          <Card id="tour-kpi-conversations" className="border-0 shadow-sm">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm text-slate-600 flex items-center gap-2">
                 <MessageSquare size={16} className="text-blue-600" />
@@ -114,7 +114,7 @@ export default function DashboardPage({ teamId }) {
             </CardContent>
           </Card>
 
-          <Card className="border-0 shadow-sm">
+          <Card id="tour-kpi-messages" className="border-0 shadow-sm">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm text-slate-600 flex items-center gap-2">
                 <Activity size={16} className="text-indigo-600" />
@@ -130,7 +130,7 @@ export default function DashboardPage({ teamId }) {
             </CardContent>
           </Card>
 
-          <Card className="border-0 shadow-sm">
+          <Card id="tour-kpi-contacts" className="border-0 shadow-sm">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm text-slate-600 flex items-center gap-2">
                 <Users size={16} className="text-emerald-600" />
@@ -145,7 +145,7 @@ export default function DashboardPage({ teamId }) {
             </CardContent>
           </Card>
 
-          <Card className="border-0 shadow-sm">
+          <Card id="tour-kpi-csat" className="border-0 shadow-sm">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm text-slate-600 flex items-center gap-2">
                 <span className="text-pink-600 font-bold">★</span>
@@ -163,7 +163,7 @@ export default function DashboardPage({ teamId }) {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <Card className="lg:col-span-2 border-0 shadow-sm">
+          <Card id="tour-volume-chart" className="lg:col-span-2 border-0 shadow-sm">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold text-slate-800 flex items-center gap-2">
                 <Activity size={16} className="text-indigo-600" />
@@ -196,7 +196,7 @@ export default function DashboardPage({ teamId }) {
             </CardContent>
           </Card>
 
-          <Card className="border-0 shadow-sm">
+          <Card id="tour-channels-chart" className="border-0 shadow-sm">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold text-slate-800">Channels (14d)</CardTitle>
             </CardHeader>
@@ -230,7 +230,7 @@ export default function DashboardPage({ teamId }) {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <Card className="border-0 shadow-sm">
+          <Card id="tour-automations-card" className="border-0 shadow-sm">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold text-slate-800 flex items-center gap-2">
                 <Workflow size={16} className="text-slate-700" />
@@ -246,7 +246,7 @@ export default function DashboardPage({ teamId }) {
             </CardContent>
           </Card>
 
-          <Card className="border-0 shadow-sm">
+          <Card id="tour-campaigns-card" className="border-0 shadow-sm">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold text-slate-800 flex items-center gap-2">
                 <Megaphone size={16} className="text-indigo-600" />
@@ -262,7 +262,7 @@ export default function DashboardPage({ teamId }) {
             </CardContent>
           </Card>
 
-          <Card className="border-0 shadow-sm">
+          <Card id="tour-payments-card" className="border-0 shadow-sm">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold text-slate-800 flex items-center gap-2">
                 <CreditCard size={16} className="text-emerald-600" />
@@ -280,7 +280,7 @@ export default function DashboardPage({ teamId }) {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card className="border-0 shadow-sm">
+          <Card id="tour-recent-conversations" className="border-0 shadow-sm">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold text-slate-800">Recent Conversations</CardTitle>
             </CardHeader>
@@ -320,7 +320,7 @@ export default function DashboardPage({ teamId }) {
             </CardContent>
           </Card>
 
-          <Card className="border-0 shadow-sm">
+          <Card id="tour-agent-workload" className="border-0 shadow-sm">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold text-slate-800">Agent Workload (7d)</CardTitle>
             </CardHeader>

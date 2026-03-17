@@ -725,6 +725,7 @@ export default function App() {
         </div>
         <nav className="flex-1 flex flex-col space-y-2 w-full px-3 overflow-hidden">
           <Button
+            id="nav-dashboard"
             variant={activePage === 'dashboard' ? 'secondary' : 'ghost'}
             className="w-full flex items-center justify-start h-10 px-0 rounded-lg overflow-hidden shrink-0"
             onClick={() => setActivePage('dashboard')}
@@ -739,6 +740,7 @@ export default function App() {
           </Button>
 
           <Button
+            id="nav-inbox"
             variant={activePage === 'inbox' ? 'secondary' : 'ghost'}
             className="w-full flex items-center justify-start h-10 px-0 rounded-lg overflow-hidden shrink-0"
             onClick={() => setActivePage('inbox')}
@@ -795,6 +797,7 @@ export default function App() {
           </div>
 
           <Button
+            id="nav-campaigns"
             variant={activePage === 'campaigns' ? 'secondary' : 'ghost'}
             className="w-full flex items-center justify-start h-10 px-0 rounded-lg overflow-hidden shrink-0"
             onClick={() => setActivePage('campaigns')}
@@ -824,6 +827,7 @@ export default function App() {
               </Button>
 
               <Button
+                id="nav-templates"
                 variant={activePage === 'templates' ? 'secondary' : 'ghost'}
                 className="w-full flex items-center justify-start h-10 px-0 rounded-lg overflow-hidden shrink-0"
                 onClick={() => setActivePage('templates')}
@@ -950,6 +954,7 @@ export default function App() {
         </nav>
         <div className="flex flex-col space-y-2 pb-4 w-full px-3 overflow-hidden">
           <Button
+            id="nav-settings"
             variant={activePage === 'settings' ? 'secondary' : 'ghost'}
             className="w-full flex items-center justify-start h-10 px-0 rounded-lg overflow-hidden shrink-0"
             onClick={() => setActivePage('settings')}
@@ -1357,7 +1362,13 @@ export default function App() {
         )}
       </div>
       <Toaster />
-      {showOnboarding && <OnboardingTour onComplete={handleOnboardingComplete} />}
+      {showOnboarding && (
+        <OnboardingTour 
+          onComplete={handleOnboardingComplete} 
+          activePage={activePage}
+          setActivePage={setActivePage}
+        />
+      )}
     </div>
   );
 }

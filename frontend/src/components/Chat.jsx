@@ -1035,7 +1035,7 @@ export default function Chat({ socket, conversationId, channelExternalId, messag
           </div>
         )}
 
-        <div className="flex items-end gap-2">
+        <div id="tour-chat-input-area" className="flex items-end gap-2">
           <Button variant="ghost" size="icon" className="text-slate-500 hover:text-slate-900" onClick={() => setShowMediaInput(!showMediaInput)}>
             <Paperclip size={20} />
           </Button>
@@ -1049,6 +1049,7 @@ export default function Chat({ socket, conversationId, channelExternalId, messag
             />
           </div>
           <Button
+            id="tour-chat-send-btn"
             className="h-11 w-11 rounded-lg bg-[#00a884] hover:bg-[#008f6f] text-white shadow-sm"
             onClick={handleSendText}
             disabled={!text.trim() || isSending}

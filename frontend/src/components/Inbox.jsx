@@ -11,6 +11,7 @@ export default function Inbox({ conversations, selectedId, onSelect, onPin, onRe
       {/* Filter Chips */}
       <div className="px-4 py-3 flex gap-2 border-b border-slate-100 overflow-x-auto no-scrollbar">
         <button
+          id="tour-inbox-filter-all"
           onClick={() => setFilter('all')}
           className={cn(
             "px-3 py-1 rounded-full text-xs font-medium transition-colors whitespace-nowrap border",
@@ -22,6 +23,7 @@ export default function Inbox({ conversations, selectedId, onSelect, onPin, onRe
           All
         </button>
         <button
+          id="tour-inbox-filter-open"
           onClick={() => setFilter('open')}
           className={cn(
             "px-3 py-1 rounded-full text-xs font-medium transition-colors whitespace-nowrap border",
@@ -33,6 +35,7 @@ export default function Inbox({ conversations, selectedId, onSelect, onPin, onRe
           Open
         </button>
         <button
+          id="tour-inbox-filter-unassigned"
           onClick={() => setFilter('unassigned')}
           className={cn(
             "px-3 py-1 rounded-full text-xs font-medium transition-colors whitespace-nowrap border",
@@ -68,7 +71,7 @@ export default function Inbox({ conversations, selectedId, onSelect, onPin, onRe
       </div>
 
       {/* List */}
-      <div className="flex-1 overflow-y-auto">
+      <div id="tour-inbox-list" className="flex-1 overflow-y-auto">
         <ul className="divide-y divide-slate-100">
           {conversations.map((c) => {
              const isSelected = selectedId === c.id;
