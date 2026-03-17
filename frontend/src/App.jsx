@@ -177,7 +177,7 @@ export default function App() {
   const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
-    if (storedUser && storedUser.attributes?.onboarding_v2 !== true) {
+    if (storedUser && storedUser.attributes?.onboarding_v3 !== true) {
       setShowOnboarding(true);
     } else {
       setShowOnboarding(false);
@@ -186,18 +186,18 @@ export default function App() {
 
   const handleOnboardingComplete = async () => {
     try {
-      // Mark v2 as completed in backend and frontend
+      // Mark v3 as completed in backend and frontend
       const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` };
       await fetch('/api/auth/onboarding', {
         method: 'POST',
         headers,
-        body: JSON.stringify({ version: 'v2' })
+        body: JSON.stringify({ version: 'v3' })
       });
 
       setShowOnboarding(false);
       const updatedUser = { 
         ...storedUser, 
-        attributes: { ...(storedUser.attributes || {}), onboarding_v2: true } 
+        attributes: { ...(storedUser.attributes || {}), onboarding_v3: true } 
       };
       localStorage.setItem('user', JSON.stringify(updatedUser));
       setStoredUser(updatedUser);
@@ -861,6 +861,7 @@ export default function App() {
                 </span>
               </Button>
               <Button
+                id="nav-flows"
                 variant={activePage === 'flows' ? 'secondary' : 'ghost'}
                 className="w-full flex items-center justify-start h-10 px-0 rounded-lg overflow-hidden shrink-0"
                 onClick={() => setActivePage('flows')}
@@ -874,6 +875,7 @@ export default function App() {
                 </span>
               </Button>
               <Button
+                id="nav-workflows"
                 variant={activePage === 'workflows' ? 'secondary' : 'ghost'}
                 className="w-full flex items-center justify-start h-10 px-0 rounded-lg overflow-hidden shrink-0"
                 onClick={() => setActivePage('workflows')}
@@ -888,6 +890,7 @@ export default function App() {
               </Button>
 
               <Button
+                id="nav-ai-agent"
                 variant={activePage === 'ai-agent' ? 'secondary' : 'ghost'}
                 className="w-full flex items-center justify-start h-10 px-0 rounded-lg overflow-hidden shrink-0"
                 onClick={() => setActivePage('ai-agent')}
