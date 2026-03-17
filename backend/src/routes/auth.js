@@ -146,14 +146,17 @@ router.post('/sync', auth.requireAuth, async (req, res, next) => {
 router.post('/onboarding', auth.requireAuth, async (req, res, next) => {
   try {
     const userId = req.user.id;
-    // Update onboarding_completed flag in attributes jsonb
+    const { version } = req.body;
+    const key = version ? `onboarding_${version}` : 'onboarding_completed';
+    
+    // Update onboarding flag in attributes jsonb
     await db.query(`
       UPDATE users 
-      SET attributes = COALESCE(attributes, '{}'::jsonb) || '{"onboarding_completed": true}'::jsonb
-      WHERE id = $1
-    `, [userId]);
+      SET attributes = COALESCE(attributes, '{}'::jsonb) || $1::jsonb
+      WHERE id = $2
+    `, [JSON.stringify({ [key]: true }), userId]);
 
-    res.json({ success: true, message: 'Onboarding marked as completed' });
+    res.json({ success: true, message: `Onboarding ${key} marked as completed` });
   } catch (err) {
     next(err);
   }

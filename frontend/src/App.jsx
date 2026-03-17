@@ -177,7 +177,7 @@ export default function App() {
   const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
-    if (storedUser && storedUser.attributes?.onboarding_completed !== true) {
+    if (storedUser && storedUser.attributes?.onboarding_v2 !== true) {
       setShowOnboarding(true);
     } else {
       setShowOnboarding(false);
@@ -186,18 +186,24 @@ export default function App() {
 
   const handleOnboardingComplete = async () => {
     try {
-      await completeOnboarding();
+      // Mark v2 as completed in backend and frontend
+      const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` };
+      await fetch('/api/auth/onboarding', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ version: 'v2' })
+      });
+
       setShowOnboarding(false);
-      // Update local storage so it doesn't show again on refresh
       const updatedUser = { 
         ...storedUser, 
-        attributes: { ...(storedUser.attributes || {}), onboarding_completed: true } 
+        attributes: { ...(storedUser.attributes || {}), onboarding_v2: true } 
       };
       localStorage.setItem('user', JSON.stringify(updatedUser));
       setStoredUser(updatedUser);
     } catch (err) {
       console.error('Failed to complete onboarding:', err);
-      setShowOnboarding(false); // Hide anyway to not block user
+      setShowOnboarding(false);
     }
   };
 
