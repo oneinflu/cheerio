@@ -1,447 +1,883 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { cn } from '../lib/utils';
-import { Card, CardContent } from './ui/Card';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Modal } from './ui/Modal';
-import { 
-  MessageSquare, Facebook, CheckCircle2, AlertCircle, Trash2, 
-  ArrowLeft, Instagram, Send, Puzzle, CreditCard, Phone, 
-  Database, Zap, Mail, Layout, Smartphone, ChevronRight,
-  Globe, ExternalLink, ShieldCheck
+import {
+  MessageSquare, Trash2,
+  ArrowLeft, Send, Puzzle, CreditCard, Phone,
+  Database, ExternalLink, ShieldCheck, Lock, Sparkles,
+  Globe2, Code2, Clock, Copy, Eye, EyeOff, Server
 } from 'lucide-react';
-import { 
-  getWhatsAppSettings, updateWhatsAppSettings, onboardWhatsApp, 
-  disconnectWhatsApp, getTelegramSettings, connectTelegram, 
-  disconnectTelegram 
+import {
+  getWhatsAppSettings, onboardWhatsApp,
+  disconnectWhatsApp, getTelegramSettings, connectTelegram,
+  disconnectTelegram
 } from '../api';
+
+// ─── Brand icon URLs (SimpleIcons CDN + Wikimedia) ────────────────────────────
+const ICONS = {
+  whatsapp:    'https://cdn.simpleicons.org/whatsapp/25D366',
+  telegram:    'https://cdn.simpleicons.org/telegram/26A5E4',
+  instagram:   'https://cdn.simpleicons.org/instagram/E4405F',
+  gmail:       'https://cdn.simpleicons.org/gmail/EA4335',
+  slack:       'https://cdn.simpleicons.org/slack/4A154B',
+  zoho:        'https://cdn.simpleicons.org/zoho/E42527',
+  salesforce:  'https://cdn.simpleicons.org/salesforce/00A1E0',
+  notion:      'https://cdn.simpleicons.org/notion/000000',
+  hubspot:     'https://cdn.simpleicons.org/hubspot/FF7A59',
+  linear:      'https://cdn.simpleicons.org/linear/5E6AD2',
+  github:      'https://cdn.simpleicons.org/github/181717',
+  jira:        'https://cdn.simpleicons.org/jira/0052CC',
+  stripe:      'https://cdn.simpleicons.org/stripe/635BFF',
+  razorpay:    'https://cdn.simpleicons.org/razorpay/02042B',
+  cashfree:    'https://logo.clearbit.com/cashfree.com',
+  payu:        'https://logo.clearbit.com/payu.in',
+  googlesheets:'https://cdn.simpleicons.org/googlesheets/34A853',
+  twilio:      'https://cdn.simpleicons.org/twilio/F22F46',
+  airtel:      'https://logo.clearbit.com/airtel.in',
+  exotel:      'https://logo.clearbit.com/exotel.com',
+  openai:      'https://cdn.simpleicons.org/openai/412991',
+  anthropic:   'https://cdn.simpleicons.org/anthropic/191919',
+};
+
+const CATEGORIES = [
+  { id: 'channels', name: 'Communication Channels', icon: MessageSquare },
+  { id: 'mcp',      name: 'MCP Connectors',          icon: Server },
+  { id: 'crm',      name: 'CRM & Productivity',       icon: Database },
+  { id: 'payments', name: 'Payments & Billing',        icon: CreditCard },
+  { id: 'voip',     name: 'VoIP & Calling',            icon: Phone },
+  { id: 'ai',       name: 'AI Providers',              icon: Sparkles },
+];
+
+const INTEGRATIONS_LIST = [
+  // ─── Channels ────────────────────────────────────────────────────
+  {
+    id: 'whatsapp', category: 'channels', name: 'WhatsApp Business',
+    logo: ICONS.whatsapp,
+    description: 'Official Meta Cloud API for WhatsApp Business messaging — send templates, media & interactive messages.',
+    accentColor: '#25D366',
+    fields: [],  // handled by custom renderer
+  },
+  {
+    id: 'telegram', category: 'channels', name: 'Telegram Bot',
+    logo: ICONS.telegram,
+    description: 'Connect support bots via BotFather to handle Telegram inquiries at scale.',
+    accentColor: '#26A5E4',
+    fields: [],  // handled by custom renderer
+  },
+  {
+    id: 'instagram', category: 'channels', name: 'Instagram DMs',
+    logo: ICONS.instagram, isUpcoming: true,
+    description: 'Manage Instagram Direct Messages and story mention replies through the Meta Graph API.',
+    accentColor: '#E4405F',
+    docsUrl: 'https://developers.facebook.com/docs/instagram-api/overview',
+    fields: [
+      { label: 'Facebook App ID',    key: 'app_id',     placeholder: '1234567890',         hint: 'From Meta for Developers → Your App → Settings → Basic' },
+      { label: 'App Secret',         key: 'app_secret', placeholder: '••••••••••••••••',   hint: 'Keep this confidential — never expose client-side', type: 'password' },
+      { label: 'Page Access Token',  key: 'page_token', placeholder: 'EAAxxxxx...',         hint: 'Long-lived page token from Graph API Explorer', type: 'password' },
+      { label: 'Instagram Account ID', key: 'ig_account_id', placeholder: '17841400000000000', hint: 'Numeric ID of the connected Instagram Business account' },
+      { label: 'Webhook Verify Token', key: 'verify_token', placeholder: 'my_verify_secret', hint: 'A random string you define — used to validate webhook callbacks' },
+    ],
+  },
+  {
+    id: 'email', category: 'channels', name: 'Business Email (IMAP/SMTP)',
+    logo: ICONS.gmail, isUpcoming: true,
+    description: 'Sync a shared GSuite or Outlook inbox so all team email lands directly in your conversation feed.',
+    accentColor: '#EA4335',
+    docsUrl: 'https://support.google.com/mail/answer/7126229',
+    fields: [
+      { label: 'Email Address',   key: 'email',     placeholder: 'support@company.com',  hint: 'The shared inbox address you want to monitor' },
+      { label: 'IMAP Host',       key: 'imap_host', placeholder: 'imap.gmail.com',        hint: 'Incoming mail server hostname' },
+      { label: 'IMAP Port',       key: 'imap_port', placeholder: '993',                   hint: '993 for SSL, 143 for STARTTLS' },
+      { label: 'SMTP Host',       key: 'smtp_host', placeholder: 'smtp.gmail.com',        hint: 'Outgoing mail server hostname' },
+      { label: 'SMTP Port',       key: 'smtp_port', placeholder: '465',                   hint: '465 for SSL, 587 for STARTTLS' },
+      { label: 'App Password',    key: 'password',  placeholder: 'xxxx xxxx xxxx xxxx',   hint: 'Use an App Password, not your main password (Gmail: myaccount.google.com/apppasswords)', type: 'password' },
+    ],
+  },
+  {
+    id: 'slack', category: 'channels', name: 'Slack',
+    logo: ICONS.slack, isUpcoming: true,
+    description: 'Forward conversations and alerts to Slack channels, and reply directly from your Slack workspace.',
+    accentColor: '#4A154B',
+    docsUrl: 'https://api.slack.com/apps',
+    fields: [
+      { label: 'Bot User OAuth Token', key: 'bot_token',     placeholder: 'xoxb-...',         hint: 'From Slack App → OAuth & Permissions → Bot Token', type: 'password' },
+      { label: 'Signing Secret',       key: 'signing_secret', placeholder: 'abcd1234...',       hint: 'From Slack App → Basic Information → App Credentials', type: 'password' },
+      { label: 'Default Channel ID',   key: 'channel_id',    placeholder: 'C0123ABC456',       hint: 'Right-click a channel → View channel details → Channel ID' },
+    ],
+  },
+
+  // ─── MCP Connectors ──────────────────────────────────────────────
+  {
+    id: 'zoho-mcp', category: 'mcp', name: 'Zoho MCP',
+    logo: ICONS.zoho, isUpcoming: true,
+    description: 'Model Context Protocol server for Zoho CRM — lets AI read deals, contacts and tickets in real time.',
+    accentColor: '#E42527',
+    docsUrl: 'https://www.zoho.com/crm/developer/docs/api/v6/',
+    mcpServer: 'https://mcp.zoho.com/v1/sse',
+    fields: [
+      { label: 'Client ID',          key: 'client_id',     placeholder: '1000.XXXX...',          hint: 'From Zoho API Console → Self Client or Server-based app' },
+      { label: 'Client Secret',      key: 'client_secret', placeholder: 'xxxxxxxx...',             hint: 'Keep secret — used to exchange auth code for tokens', type: 'password' },
+      { label: 'Refresh Token',      key: 'refresh_token', placeholder: '1000.xxxx...yyyy',        hint: 'Long-lived token — generate from Zoho OAuth Playground', type: 'password' },
+      { label: 'Data Center Region', key: 'region',        placeholder: 'com / eu / in / au / jp', hint: 'Must match the region where your Zoho org is hosted' },
+    ],
+  },
+  {
+    id: 'salesforce-mcp', category: 'mcp', name: 'Salesforce MCP',
+    logo: ICONS.salesforce, isUpcoming: true,
+    description: 'Direct LLM context mapping for Salesforce Objects — Opportunities, Cases, Contacts and custom SObjects.',
+    accentColor: '#00A1E0',
+    docsUrl: 'https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/',
+    mcpServer: 'https://mcp.salesforce.com/v1/sse',
+    fields: [
+      { label: 'Consumer Key (Client ID)',     key: 'consumer_key',    placeholder: 'Paste Consumer Key',              hint: 'From Setup → App Manager → Connected App → View' },
+      { label: 'Consumer Secret',              key: 'consumer_secret', placeholder: '••••••••',                        hint: 'Reveal from the Connected App detail page', type: 'password' },
+      { label: 'Username',                     key: 'username',        placeholder: 'user@org.salesforce.com',         hint: 'API-enabled Salesforce user (prefer a dedicated integration user)' },
+      { label: 'Security Token',               key: 'security_token',  placeholder: 'Append to password',              hint: 'Reset from My Settings → Personal → Reset My Security Token', type: 'password' },
+      { label: 'Instance / Environment URL',   key: 'instance_url',   placeholder: 'https://yourorg.salesforce.com',  hint: 'Use login.salesforce.com for prod, test.salesforce.com for sandbox' },
+    ],
+  },
+  {
+    id: 'notion-mcp', category: 'mcp', name: 'Notion MCP',
+    logo: ICONS.notion, isUpcoming: true,
+    description: 'Let AI read and write to your Notion Databases — wikis, project trackers and knowledge bases.',
+    accentColor: '#000000',
+    docsUrl: 'https://developers.notion.com/docs/getting-started',
+    mcpServer: 'https://mcp.notion.com/sse',
+    fields: [
+      { label: 'Internal Integration Secret', key: 'token',    placeholder: 'secret_xxxxxxxxxx...', hint: 'From notion.so/my-integrations → Your Integration → Show/copy secret', type: 'password' },
+      { label: 'Root Page / Database ID',     key: 'page_id',  placeholder: '8a2b3c4d5e6f...',       hint: 'Open the page in Notion → Share → Copy link → extract the 32-char ID' },
+    ],
+  },
+  {
+    id: 'hubspot-mcp', category: 'mcp', name: 'HubSpot MCP',
+    logo: ICONS.hubspot, isUpcoming: true,
+    description: 'MCP bridge to HubSpot — read contacts, deals, tickets and company timelines for AI-powered context.',
+    accentColor: '#FF7A59',
+    docsUrl: 'https://developers.hubspot.com/docs/api/overview',
+    mcpServer: 'https://mcp.hubspot.com/v1/sse',
+    fields: [
+      { label: 'Private App Token', key: 'token', placeholder: 'pat-eu1-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx', hint: 'HubSpot → Settings → Integrations → Private Apps → Create or copy token', type: 'password' },
+      { label: 'Portal / Hub ID',   key: 'hub_id', placeholder: '12345678', hint: 'Found in HubSpot URL: app.hubspot.com/contacts/{hub_id}/...' },
+    ],
+  },
+  {
+    id: 'linear-mcp', category: 'mcp', name: 'Linear MCP',
+    logo: ICONS.linear, isUpcoming: true,
+    description: 'Surface Linear issues, projects and cycles inside conversations for instant engineering context.',
+    accentColor: '#5E6AD2',
+    docsUrl: 'https://developers.linear.app/docs',
+    mcpServer: 'https://mcp.linear.app/sse',
+    fields: [
+      { label: 'API Key', key: 'api_key', placeholder: 'lin_api_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', hint: 'Linear → Settings → API → Personal API Keys → Create key', type: 'password' },
+      { label: 'Team Key (optional)', key: 'team_key', placeholder: 'ENG', hint: 'Filter MCP context to a specific Linear team (leave blank for all teams)' },
+    ],
+  },
+  {
+    id: 'github-mcp', category: 'mcp', name: 'GitHub MCP',
+    logo: ICONS.github, isUpcoming: true,
+    description: 'Connect GitHub repos so AI can reference issues, PRs and commits directly in customer conversations.',
+    accentColor: '#181717',
+    docsUrl: 'https://docs.github.com/en/rest',
+    mcpServer: 'https://api.githubcopilot.com/mcp/',
+    fields: [
+      { label: 'Personal Access Token (classic)', key: 'token', placeholder: 'ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', hint: 'GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic). Scopes: repo, read:org', type: 'password' },
+      { label: 'Default Repository', key: 'repo', placeholder: 'owner/repository-name', hint: 'Used as fallback when no repo is detected from conversation context' },
+    ],
+  },
+  {
+    id: 'jira-mcp', category: 'mcp', name: 'Jira MCP',
+    logo: ICONS.jira, isUpcoming: true,
+    description: 'Pull Jira tickets, sprints and epics into AI context — link support issues to engineering backlog.',
+    accentColor: '#0052CC',
+    docsUrl: 'https://developer.atlassian.com/cloud/jira/platform/rest/v3/',
+    mcpServer: 'https://mcp.atlassian.com/v1/sse',
+    fields: [
+      { label: 'Atlassian Email',   key: 'email',   placeholder: 'you@company.com',                hint: 'The email linked to your Atlassian account' },
+      { label: 'API Token',         key: 'token',   placeholder: 'ATATxxxxxxxxxxxxxxxxxxxxxxxx',    hint: 'id.atlassian.com → Security → API tokens → Create', type: 'password' },
+      { label: 'Jira Cloud URL',    key: 'base_url', placeholder: 'https://yourorg.atlassian.net', hint: 'Your Jira cloud instance base URL' },
+      { label: 'Default Project Key', key: 'project', placeholder: 'ENG or SUPPORT',               hint: 'Used as the fallback project when creating/searching issues' },
+    ],
+  },
+
+  // ─── CRM & Productivity ───────────────────────────────────────────
+  {
+    id: 'hubspot', category: 'crm', name: 'HubSpot CRM',
+    logo: ICONS.hubspot, isUpcoming: true,
+    description: 'Auto-sync conversation contacts and notes to HubSpot timeline. Create deals from conversations.',
+    accentColor: '#FF7A59',
+    docsUrl: 'https://developers.hubspot.com/docs/api/crm/contacts',
+    fields: [
+      { label: 'Private App Token', key: 'token',  placeholder: 'pat-eu1-...',  hint: 'Settings → Integrations → Private Apps → Create app token', type: 'password' },
+      { label: 'Default Pipeline ID', key: 'pipeline_id', placeholder: 'default', hint: 'Pipeline where new deals are created from conversations (optional)' },
+    ],
+  },
+  {
+    id: 'zoho-crm', category: 'crm', name: 'Zoho CRM',
+    logo: ICONS.zoho, isUpcoming: true,
+    description: 'Sync leads, contacts and activities bidirectionally between Greeto and Zoho CRM.',
+    accentColor: '#E42527',
+    docsUrl: 'https://www.zoho.com/crm/developer/docs/',
+    fields: [
+      { label: 'Client ID',          key: 'client_id',     placeholder: '1000.XXXX...', hint: 'Zoho API Console → Server-based App' },
+      { label: 'Client Secret',      key: 'client_secret', placeholder: '••••••••',     type: 'password', hint: 'From the same API Console page' },
+      { label: 'Refresh Token',      key: 'refresh_token', placeholder: '1000.xxxx...', type: 'password', hint: 'Generate from accounts.zoho.com/oauth/playground' },
+      { label: 'Region',             key: 'region',        placeholder: 'com / eu / in', hint: 'Must match where your Zoho account is registered' },
+    ],
+  },
+  {
+    id: 'google-sheets', category: 'crm', name: 'Google Sheets',
+    logo: ICONS.googlesheets, isUpcoming: true,
+    description: 'Export new leads, conversations and tags directly to a Google Sheet for reporting.',
+    accentColor: '#34A853',
+    docsUrl: 'https://developers.google.com/sheets/api/guides/concepts',
+    fields: [
+      { label: 'Service Account JSON Key', key: 'sa_json', placeholder: 'Paste full JSON contents...', hint: 'GCP Console → IAM → Service Accounts → Create key (JSON). Share the sheet with the service account email.' },
+      { label: 'Spreadsheet ID',           key: 'sheet_id', placeholder: '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms', hint: 'Extract from the Google Sheets URL between /d/ and /edit' },
+      { label: 'Sheet / Tab Name',         key: 'tab_name', placeholder: 'Lead Data',                   hint: 'The exact name of the worksheet tab to write to' },
+    ],
+  },
+
+  // ─── Payments ─────────────────────────────────────────────────────
+  {
+    id: 'razorpay', category: 'payments', name: 'Razorpay',
+    logo: ICONS.razorpay, isUpcoming: true,
+    description: 'Accept payments, send payment links via WhatsApp, and auto-sync order status to conversations.',
+    accentColor: '#02042B',
+    docsUrl: 'https://razorpay.com/docs/api/',
+    fields: [
+      { label: 'Key ID',       key: 'key_id',     placeholder: 'rzp_live_xxxxxxxxxxxxxxxxxx',  hint: 'Dashboard → Settings → API Keys → Generate live key' },
+      { label: 'Key Secret',   key: 'key_secret', placeholder: '••••••••••••••••••••••••',     hint: 'Copy immediately — Razorpay only shows it once', type: 'password' },
+      { label: 'Webhook Secret', key: 'webhook_secret', placeholder: 'whsec_...',             hint: 'Dashboard → Settings → Webhooks → Add new endpoint → copy secret', type: 'password' },
+    ],
+  },
+  {
+    id: 'stripe', category: 'payments', name: 'Stripe',
+    logo: ICONS.stripe, isUpcoming: true,
+    description: 'Global payment infrastructure — send payment links and track invoice status within conversations.',
+    accentColor: '#635BFF',
+    docsUrl: 'https://stripe.com/docs/api',
+    fields: [
+      { label: 'Secret Key',       key: 'secret_key',     placeholder: 'sk_live_...',   hint: 'Dashboard → Developers → API keys → Secret key (use restricted key for least privilege)', type: 'password' },
+      { label: 'Webhook Signing Secret', key: 'webhook_secret', placeholder: 'whsec_...', hint: 'Stripe → Webhooks → Add endpoint → Signing secret', type: 'password' },
+      { label: 'Publishable Key',  key: 'publishable_key', placeholder: 'pk_live_...',  hint: 'Safe to expose client-side — used for Stripe.js' },
+    ],
+  },
+  {
+    id: 'cashfree', category: 'payments', name: 'Cashfree',
+    logo: ICONS.cashfree, isUpcoming: true,
+    description: 'Payment gateway and payout automation for Indian merchants.',
+    accentColor: '#1D8348',
+    docsUrl: 'https://docs.cashfree.com/docs/',
+    fields: [
+      { label: 'App ID',     key: 'app_id',     placeholder: 'CF_APP_ID',    hint: 'Cashfree Dashboard → Settings → Credentials' },
+      { label: 'Secret Key', key: 'secret_key', placeholder: '••••••••',     hint: 'Production secret from the same credentials page', type: 'password' },
+      { label: 'Environment', key: 'env',       placeholder: 'PROD / TEST',  hint: 'Use TEST for sandbox, PROD for live transactions' },
+    ],
+  },
+
+  // ─── VoIP & Calling ───────────────────────────────────────────────
+  {
+    id: 'twilio', category: 'voip', name: 'Twilio',
+    logo: ICONS.twilio, isUpcoming: true,
+    description: 'SMS, Voice and WhatsApp communication powered by Twilio — click-to-call from any conversation.',
+    accentColor: '#F22F46',
+    docsUrl: 'https://www.twilio.com/docs/usage/api',
+    fields: [
+      { label: 'Account SID',  key: 'account_sid',  placeholder: 'ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',  hint: 'Twilio Console → Account info panel → Account SID' },
+      { label: 'Auth Token',   key: 'auth_token',   placeholder: '••••••••••••••••••••••••••••••••',    hint: 'Same panel — click eye icon to reveal', type: 'password' },
+      { label: 'Twilio Phone', key: 'phone_number', placeholder: '+14155552671',                         hint: 'E.164 format — the Twilio number you purchased' },
+    ],
+  },
+  {
+    id: 'exotel', category: 'voip', name: 'Exotel',
+    logo: ICONS.exotel, isUpcoming: true,
+    description: 'Cloud telephony for India — IVR, click-to-call and call recording synced to conversation history.',
+    accentColor: '#E56000',
+    docsUrl: 'https://developer.exotel.com/api/',
+    fields: [
+      { label: 'SID (Account ID)', key: 'sid',        placeholder: 'exotel_sid',     hint: 'Exotel Dashboard → Settings → API Credentials' },
+      { label: 'API Key',          key: 'api_key',    placeholder: 'xxxxxxxx',        hint: 'From the same API Credentials page' },
+      { label: 'API Token',        key: 'api_token',  placeholder: '••••••••',        hint: 'Token paired with the API Key above', type: 'password' },
+      { label: 'Subdomain',        key: 'subdomain',  placeholder: '@api.exotel.com', hint: 'Your Exotel account subdomain (e.g. mycompany@api.in.exotel.com)' },
+    ],
+  },
+  {
+    id: 'airtel', category: 'voip', name: 'Airtel IQ',
+    logo: ICONS.airtel, isUpcoming: true,
+    description: 'Enterprise cloud calling and verified SMS via Airtel IQ API.',
+    accentColor: '#E40000',
+    docsUrl: 'https://developers.airtel.in/',
+    fields: [
+      { label: 'Client ID',     key: 'client_id',     placeholder: 'Enter Airtel Client ID',  hint: 'Airtel Developer Console → My Applications → Client ID' },
+      { label: 'Client Secret', key: 'client_secret', placeholder: '••••••••',                 hint: 'Paired secret for OAuth token generation', type: 'password' },
+      { label: 'DID Number',    key: 'did',           placeholder: '+91XXXXXXXXXX',             hint: 'Your Airtel IQ virtual number in E.164 format' },
+    ],
+  },
+
+  // ─── AI Providers ─────────────────────────────────────────────────
+  {
+    id: 'openai', category: 'ai', name: 'OpenAI',
+    logo: ICONS.openai, isUpcoming: true,
+    description: 'Power AI-assisted replies, summarisation and classification with GPT-4o and embedding models.',
+    accentColor: '#412991',
+    docsUrl: 'https://platform.openai.com/docs/api-reference',
+    fields: [
+      { label: 'API Key',        key: 'api_key',   placeholder: 'sk-proj-...',         hint: 'platform.openai.com → API keys → Create new secret key', type: 'password' },
+      { label: 'Organization ID', key: 'org_id',  placeholder: 'org-xxxxxxxxxxxxxxxxxxxxxxxx', hint: 'Optional — needed if your key belongs to multiple orgs' },
+      { label: 'Default Model',  key: 'model',     placeholder: 'gpt-4o',              hint: 'e.g. gpt-4o, gpt-4o-mini — affects cost and quality' },
+    ],
+  },
+  {
+    id: 'anthropic', category: 'ai', name: 'Anthropic / Claude',
+    logo: ICONS.anthropic, isUpcoming: true,
+    description: 'Use Claude models for nuanced, long-context AI assistance within conversations.',
+    accentColor: '#191919',
+    docsUrl: 'https://docs.anthropic.com/en/api/getting-started',
+    fields: [
+      { label: 'API Key',       key: 'api_key', placeholder: 'sk-ant-api03-...',  hint: 'console.anthropic.com → Settings → API Keys → Create Key', type: 'password' },
+      { label: 'Default Model', key: 'model',   placeholder: 'claude-sonnet-4-6', hint: 'e.g. claude-opus-4-6, claude-sonnet-4-6, claude-haiku-4-5' },
+    ],
+  },
+];
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function CopyButton({ value }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    navigator.clipboard.writeText(value).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+  return (
+    <button onClick={copy} className="ml-2 text-slate-400 hover:text-slate-700 transition-colors" title="Copy">
+      <Copy className={cn("w-3.5 h-3.5", copied && "text-green-500")} />
+    </button>
+  );
+}
+
+function RevealInput({ placeholder, value, onChange, disabled }) {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="relative">
+      <Input
+        type={show ? 'text' : 'password'}
+        placeholder={placeholder}
+        value={value}
+        onChange={onChange}
+        disabled={disabled}
+        className="h-11 rounded-xl bg-white border-slate-200 px-4 font-mono text-sm pr-10 disabled:opacity-50"
+      />
+      <button
+        type="button"
+        onClick={() => setShow(s => !s)}
+        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+      >
+        {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+      </button>
+    </div>
+  );
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function SettingsPage({ currentUser }) {
   const teamId = useMemo(() => {
     if (!currentUser) return null;
     const ids = currentUser.teamIds || [];
-    if (ids.length > 0) return ids[0];
-    return null;
+    return ids.length > 0 ? ids[0] : null;
   }, [currentUser]);
 
-  const [activeIntegration, setActiveIntegration] = useState(null);
+  const [activeIntegrationId, setActiveIntegrationId] = useState(null);
+  const [fieldValues, setFieldValues] = useState({});
 
-  // --- WhatsApp State ---
-  const [whatsappSettings, setWhatsappSettings] = useState({
-    phone_number_id: '',
-    business_account_id: '',
-    permanent_token: '',
-    display_phone_number: '',
-    is_active: false
-  });
+  // WhatsApp
+  const [whatsappSettings, setWhatsappSettings]       = useState({ phone_number_id:'', business_account_id:'', permanent_token:'', display_phone_number:'', is_active:false });
   const [allWhatsappSettings, setAllWhatsappSettings] = useState([]);
-  const [discoveredPhones, setDiscoveredPhones] = useState([]);
+  const [discoveredPhones, setDiscoveredPhones]       = useState([]);
   const [isPhoneSelectModalOpen, setIsPhoneSelectModalOpen] = useState(false);
-  const [discoveredWabaId, setDiscoveredWabaId] = useState('');
-  const [discoveredToken, setDiscoveredToken] = useState('');
-  const [loadingWhatsapp, setLoadingWhatsapp] = useState(false);
-  const [savingWhatsapp, setSavingWhatsapp] = useState(false);
-  const [whatsappError, setWhatsappError] = useState(null);
+  const [discoveredWabaId, setDiscoveredWabaId]       = useState('');
+  const [discoveredToken, setDiscoveredToken]         = useState('');
+  const [loadingWhatsapp, setLoadingWhatsapp]         = useState(false);
 
-  // --- Telegram State ---
+  // Telegram
   const [telegramSettings, setTelegramSettings] = useState([]);
-  const [loadingTelegram, setLoadingTelegram] = useState(false);
-  const [savingTelegram, setSavingTelegram] = useState(false);
-  const [telegramError, setTelegramError] = useState(null);
-  const [botTokenInput, setBotTokenInput] = useState('');
-  const [botDisplayName, setBotDisplayName] = useState('');
+  const [savingTelegram, setSavingTelegram]     = useState(false);
+  const [botTokenInput, setBotTokenInput]       = useState('');
+  const [botDisplayName, setBotDisplayName]     = useState('');
 
-  // --- Meta SDK & Onboarding ---
   const [sdkLoaded, setSdkLoaded] = useState(false);
   useEffect(() => {
-    if (window.FB) {
-      setSdkLoaded(true);
-      return;
-    }
-    window.fbAsyncInit = function() {
-      window.FB.init({
-        appId      : '321531509460250', 
-        cookie     : true,
-        xfbml      : true,
-        version    : 'v21.0'
-      });
+    if (window.FB) { setSdkLoaded(true); return; }
+    window.fbAsyncInit = function () {
+      window.FB.init({ appId: '321531509460250', cookie: true, xfbml: true, version: 'v21.0' });
       setSdkLoaded(true);
     };
-
-    (function(d, s, id) {
-      var js, fjs = d.getElementsByTagName(s)[0];
+    (function (d, s, id) {
       if (d.getElementById(id)) return;
-      js = d.createElement(s); js.id = id;
-      js.src = "https://connect.facebook.net/en_US/sdk.js";
-      fjs.parentNode.insertBefore(js, fjs);
+      var js = d.createElement(s); js.id = id; js.src = 'https://connect.facebook.net/en_US/sdk.js';
+      d.getElementsByTagName(s)[0].parentNode.insertBefore(js, d.getElementsByTagName(s)[0]);
     }(document, 'script', 'facebook-jssdk'));
   }, []);
 
-  // Load WhatsApp Settings
   useEffect(() => {
     if (!teamId) return;
-    const load = async () => {
+    (async () => {
       try {
-        setLoadingWhatsapp(true);
-        const res = await getWhatsAppSettings(teamId);
-        if (res) {
-          if (res.settings) setWhatsappSettings(res.settings);
-          if (res.allSettings) setAllWhatsappSettings(res.allSettings);
-        }
-      } catch (err) {
-        console.error('Failed to load WhatsApp settings:', err);
-      } finally {
-        setLoadingWhatsapp(false);
-      }
-    };
-    load();
+        const [wa, tg] = await Promise.all([getWhatsAppSettings(teamId), getTelegramSettings(teamId)]);
+        if (wa?.settings)    setWhatsappSettings(wa.settings);
+        if (wa?.allSettings) setAllWhatsappSettings(wa.allSettings);
+        if (tg?.settings)    setTelegramSettings(tg.settings);
+      } catch (err) { console.error('Error loading integrations', err); }
+    })();
   }, [teamId]);
 
-  // Load Telegram settings
-  useEffect(() => {
-    if (!teamId) return;
-    const load = async () => {
-      try {
-        setLoadingTelegram(true);
-        const res = await getTelegramSettings(teamId);
-        if (res && res.settings) setTelegramSettings(res.settings);
-      } catch (err) {
-        console.error('Failed to load Telegram settings:', err);
-      } finally {
-        setLoadingTelegram(false);
-      }
-    };
-    load();
-  }, [teamId]);
+  const activeIntegration = useMemo(() =>
+    INTEGRATIONS_LIST.find(i => i.id === activeIntegrationId), [activeIntegrationId]);
 
-  const handleSaveWhatsApp = async () => {
-    if (!teamId) return;
-    try {
-      setSavingWhatsapp(true);
-      setWhatsappError(null);
-      await updateWhatsAppSettings(whatsappSettings, teamId);
-      alert('WhatsApp settings saved successfully!');
-    } catch (err) {
-      setWhatsappError('Failed to save WhatsApp settings');
-    } finally {
-      setSavingWhatsapp(false);
-    }
-  };
-
+  // Handlers
   const handleConnectWhatsApp = () => {
-    if (!window.FB) {
-      alert('Facebook SDK not loaded yet. Please wait a moment.');
-      return;
-    }
+    if (!window.FB) return alert('SDK loading...');
     setLoadingWhatsapp(true);
     window.FB.login((response) => {
       if (response.authResponse) {
-        const accessToken = response.authResponse.accessToken;
-        onboardWhatsApp(accessToken, teamId)
-          .then(res => {
-            if (res.success) {
-              if (res.data.phones && res.data.phones.length > 1) {
-                setDiscoveredPhones(res.data.phones);
-                setDiscoveredWabaId(res.data.businessAccountId);
-                setDiscoveredToken(res.data.accessToken);
-                setIsPhoneSelectModalOpen(true);
-              } else if (res.data.phones && res.data.phones.length === 1) {
-                const phone = res.data.phones[0];
-                const newSetting = {
-                  phone_number_id: phone.id,
-                  business_account_id: res.data.businessAccountId,
-                  display_phone_number: phone.displayPhoneNumber,
-                  permanent_token: accessToken,
-                  is_active: true
-                };
-                setWhatsappSettings(newSetting);
-                setAllWhatsappSettings(prev => {
-                  const filtered = prev.filter(s => s.phone_number_id !== phone.id);
-                  return [...filtered, newSetting];
-                });
-                alert('Successfully connected: ' + (phone.displayPhoneNumber || phone.id));
-              } else {
-                 setWhatsappError('No phone numbers found in this Business Account');
-              }
-            } else {
-              setWhatsappError(res.error || 'Failed to onboard');
+        onboardWhatsApp(response.authResponse.accessToken, teamId).then(res => {
+          if (res.success) {
+            if (res.data.phones?.length > 1) {
+              setDiscoveredPhones(res.data.phones);
+              setDiscoveredWabaId(res.data.businessAccountId);
+              setDiscoveredToken(res.data.accessToken);
+              setIsPhoneSelectModalOpen(true);
+            } else if (res.data.phones?.length === 1) {
+              const p = res.data.phones[0];
+              const s = { phone_number_id: p.id, business_account_id: res.data.businessAccountId, display_phone_number: p.displayPhoneNumber, permanent_token: response.authResponse.accessToken, is_active: true };
+              setWhatsappSettings(s);
+              setAllWhatsappSettings(prev => [...prev.filter(x => x.phone_number_id !== p.id), s]);
             }
-          })
-          .catch(() => setWhatsappError('Failed to connect to backend'))
-          .finally(() => setLoadingWhatsapp(false));
-      } else {
-        setLoadingWhatsapp(false);
-      }
+          }
+        }).finally(() => setLoadingWhatsapp(false));
+      } else setLoadingWhatsapp(false);
     }, { scope: 'whatsapp_business_management,whatsapp_business_messaging,business_management,public_profile' });
   };
 
-  const handleDisconnectWhatsApp = async (phoneNumberId) => {
-    if (!window.confirm('Disconnect this number?')) return;
+  const handleConnectTelegram = async () => {
     try {
-      setLoadingWhatsapp(true);
-      const res = await disconnectWhatsApp(phoneNumberId, teamId);
+      setSavingTelegram(true);
+      const res = await connectTelegram(botTokenInput, botDisplayName || 'Bot', teamId);
       if (res.success) {
-        setAllWhatsappSettings(prev => prev.filter(s => s.phone_number_id !== phoneNumberId));
-        if (whatsappSettings.phone_number_id === phoneNumberId) {
-          setWhatsappSettings({ phone_number_id: '', business_account_id: '', permanent_token: '', display_phone_number: '', is_active: false });
-        }
+        setBotTokenInput('');
+        const up = await getTelegramSettings(teamId);
+        setTelegramSettings(up.settings);
       }
-    } catch (err) {
-      alert('Failed to disconnect');
-    } finally {
-      setLoadingWhatsapp(false);
-    }
+    } finally { setSavingTelegram(false); }
   };
 
   const handleSelectPhone = async (phone) => {
-    try {
-      setLoadingWhatsapp(true);
-      const payload = { phone_number_id: phone.id, business_account_id: discoveredWabaId, permanent_token: discoveredToken, display_phone_number: phone.displayPhoneNumber, is_active: true };
-      const res = await updateWhatsAppSettings(payload, teamId);
-      if (res) {
-        setAllWhatsappSettings(prev => [...prev.filter(s => s.phone_number_id !== phone.id), res]);
-        if (!whatsappSettings.phone_number_id) setWhatsappSettings(res);
-      }
-    } catch (err) {
-      alert('Failed to link phone');
-    } finally {
-      setLoadingWhatsapp(false);
-    }
+    const s = { phone_number_id: phone.id, business_account_id: discoveredWabaId, display_phone_number: phone.displayPhoneNumber, permanent_token: discoveredToken, is_active: true };
+    setWhatsappSettings(s);
+    setAllWhatsappSettings(prev => [...prev.filter(x => x.phone_number_id !== phone.id), s]);
+    setIsPhoneSelectModalOpen(false);
   };
 
-  const handleConnectTelegram = async () => {
-    if (!botTokenInput) return setTelegramError('Bot token is required');
-    try {
-      setSavingTelegram(true);
-      const res = await connectTelegram(botTokenInput, botDisplayName || 'Telegram Bot', teamId);
-      if (res.success) {
-        setBotTokenInput(''); setBotDisplayName('');
-        const updated = await getTelegramSettings(teamId);
-        if (updated?.settings) setTelegramSettings(updated.settings);
-      } else {
-        setTelegramError(res.error || 'Failed to connect');
-      }
-    } catch {
-      setTelegramError('Connection failed');
-    } finally {
-      setSavingTelegram(false);
-    }
-  };
+  const setField = (key, value) => setFieldValues(prev => ({ ...prev, [activeIntegrationId]: { ...(prev[activeIntegrationId] || {}), [key]: value } }));
+  const getField = (key) => fieldValues[activeIntegrationId]?.[key] || '';
 
-  const handleDisconnectTelegram = async (botToken) => {
-    if (!window.confirm('Disconnect bot?')) return;
-    try {
-      setSavingTelegram(true);
-      const res = await disconnectTelegram(botToken, teamId);
-      if (res.success) {
-        const updated = await getTelegramSettings(teamId);
-        if (updated?.settings) setTelegramSettings(updated.settings);
-      }
-    } finally {
-      setSavingTelegram(false);
-    }
-  };
-
-  const IntegrationCard = ({ id, name, description, icon: Icon, color, status, isUpcoming }) => (
-    <Card 
-      onClick={() => !isUpcoming && setActiveIntegration(id)}
-      className={cn(
-        "group h-full border-slate-200 transition-all duration-300 relative overflow-hidden flex flex-col justify-between",
-        isUpcoming ? "opacity-60 grayscale-[0.5] cursor-not-allowed hover:border-slate-300" : "cursor-pointer hover:border-blue-400 hover:shadow-lg hover:shadow-blue-500/5 hover:-translate-y-1"
-      )}
-    >
-      <CardContent className="p-4 flex flex-col gap-3">
-        <div className="flex items-start justify-between">
-          <div className={cn("p-2 rounded-xl flex items-center justify-center shadow-sm", color)}>
-            <Icon className="w-5 h-5 text-white" />
+  // ─── Card Grid ──────────────────────────────────────────────────────
+  const renderIntegrationCard = (item) => {
+    const isConnected = (item.id === 'whatsapp' && allWhatsappSettings.length > 0) || (item.id === 'telegram' && telegramSettings.length > 0);
+    return (
+      <div
+        key={item.id}
+        onClick={() => setActiveIntegrationId(item.id)}
+        className="group relative bg-white border border-slate-100 rounded-2xl p-4 cursor-pointer transition-all duration-200 hover:border-blue-300 hover:shadow-lg hover:-translate-y-0.5"
+      >
+        <div className="flex items-start justify-between mb-3">
+          <div className="w-11 h-11 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center p-2 overflow-hidden">
+            <img
+              src={item.logo} alt={item.name}
+              className="w-full h-full object-contain"
+              onError={(e) => { e.target.src = "https://cdn.simpleicons.org/zapier/FF4A00"; }}
+            />
           </div>
-          {isUpcoming ? (
-            <span className="text-[10px] font-bold uppercase tracking-tight text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
+          {item.isUpcoming ? (
+            <span className="bg-amber-50 text-amber-600 border border-amber-200 text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-widest">
               Soon
             </span>
-          ) : status ? (
-            <span className="text-[10px] font-bold uppercase tracking-tight text-green-600 bg-green-50 px-2 py-0.5 rounded-full flex items-center gap-1">
-              <span className="w-1 h-1 rounded-full bg-green-500" /> {status}
+          ) : isConnected ? (
+            <span className="bg-green-50 text-green-600 border border-green-200 text-[9px] font-bold px-2 py-0.5 rounded-full uppercase flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" /> Live
             </span>
-          ) : null}
+          ) : (
+            <span className="bg-blue-50 text-blue-500 border border-blue-200 text-[9px] font-bold px-2 py-0.5 rounded-full uppercase">
+              Connect
+            </span>
+          )}
         </div>
-        
-        <div>
-          <h4 className="text-sm font-bold text-slate-900 group-hover:text-blue-600 transition-colors">{name}</h4>
-          <p className="text-xs text-slate-500 mt-1 line-clamp-2 leading-relaxed">{description}</p>
-        </div>
-      </CardContent>
-    </Card>
-  );
-
-  const CategorySection = ({ title, items }) => (
-    <div className="space-y-4 mb-10">
-      <div className="flex items-center gap-3">
-        <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">{title}</h3>
-        <div className="h-px bg-slate-200 flex-1" />
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {items.map((item, idx) => <IntegrationCard key={idx} {...item} />)}
-      </div>
-    </div>
-  );
-
-  const renderOverview = () => {
-    const categories = [
-      {
-        title: "Channels",
-        items: [
-          { id: 'whatsapp', name: 'WhatsApp', description: 'Official Business API via Meta.', icon: MessageSquare, color: 'bg-green-500', status: allWhatsappSettings.length > 0 ? 'Connected' : null },
-          { id: 'telegram', name: 'Telegram', description: 'Bot integration for support.', icon: Send, color: 'bg-blue-500', status: telegramSettings.length > 0 ? 'Connected' : null },
-          { id: 'instagram', name: 'Instagram', description: 'Direct Messages & Comments.', icon: Instagram, color: 'bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-500', isUpcoming: true },
-          { id: 'email', name: 'Email Inbox', description: 'Shared team email inbox.', icon: Mail, color: 'bg-slate-700', isUpcoming: true },
-        ]
-      },
-      {
-        title: "Payments",
-        items: [
-          { id: 'razorpay', name: 'Razorpay', description: 'Payment links & status.', icon: CreditCard, color: 'bg-blue-600', isUpcoming: true },
-          { id: 'cashfree', name: 'Cashfree', description: 'Payouts and collections.', icon: Zap, color: 'bg-cyan-500', isUpcoming: true },
-          { id: 'stripe', name: 'Stripe', description: 'Global payments & checkout.', icon: Globe, color: 'bg-indigo-600', isUpcoming: true },
-        ]
-      },
-      {
-        title: "CRM & Productivity",
-        items: [
-          { id: 'sheets', name: 'Google Sheets', description: 'Sync leads to spreadsheets.', icon: Layout, color: 'bg-emerald-600', isUpcoming: true },
-          { id: 'hubspot', name: 'HubSpot', description: 'Full CRM data sync.', icon: Database, color: 'bg-orange-500', isUpcoming: true },
-          { id: 'salesforce', name: 'Salesforce', description: 'Enterprise lead management.', icon: ShieldCheck, color: 'bg-sky-500', isUpcoming: true },
-        ]
-      },
-      {
-        title: "VoIP & Calling",
-        items: [
-          { id: 'airtel', name: 'Airtel IQ', description: 'Business calling & SMS.', icon: Phone, color: 'bg-red-600', isUpcoming: true },
-          { id: 'twilio', name: 'Twilio', description: 'Programmable voice & SMS.', icon: Smartphone, color: 'bg-rose-500', isUpcoming: true },
-        ]
-      }
-    ];
-
-    return (
-      <div className="p-8 max-w-[1600px] mx-auto">
-        {categories.map((cat, idx) => <CategorySection key={idx} {...cat} />)}
+        <h4 className="text-sm font-bold text-slate-900 mb-0.5 leading-tight">{item.name}</h4>
+        <p className="text-[11px] text-slate-400 line-clamp-2 leading-relaxed">{item.description}</p>
       </div>
     );
   };
 
-  const renderWhatsAppDetail = () => (
-    <div className="p-8 max-w-4xl mx-auto">
-      <Button variant="ghost" size="sm" className="mb-6 text-slate-500" onClick={() => setActiveIntegration(null)}>
-        <ArrowLeft className="w-4 h-4 mr-2" /> Back
-      </Button>
-      <Card className="border-none shadow-xl rounded-2xl overflow-hidden">
-        <div className="bg-gradient-to-r from-green-600 to-green-400 p-10 text-white">
-          <h2 className="text-3xl font-black mb-2">WhatsApp Business</h2>
-          <p className="text-green-50/80">Link your phone numbers to the unified inbox.</p>
-        </div>
-        <CardContent className="p-8">
-          {!allWhatsappSettings.length ? (
-            <div className="flex flex-col items-center py-10 gap-6">
-              <div className="text-center max-w-sm">
-                <p className="text-lg font-bold text-slate-900">Connect to Meta</p>
-                <p className="text-sm text-slate-500 mt-2">Authorize your Facebook Business account to link your WhatsApp numbers.</p>
+  const renderOverview = () => (
+    <div className="p-6 max-w-7xl mx-auto space-y-10">
+      {CATEGORIES.map(cat => {
+        const items = INTEGRATIONS_LIST.filter(i => i.category === cat.id);
+        if (!items.length) return null;
+        const CatIcon = cat.icon;
+        return (
+          <div key={cat.id} className="space-y-4">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 bg-slate-900 rounded-lg"><CatIcon className="w-3 h-3 text-white" /></div>
+              <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.18em]">{cat.name}</h3>
+              <div className="h-px bg-slate-100 flex-1" />
+              <span className="text-[10px] text-slate-300 font-medium">{items.length} apps</span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+              {items.map(renderIntegrationCard)}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  // ─── Generic Detail (Coming Soon) ───────────────────────────────────
+  const renderGenericDetail = () => {
+    const intg = activeIntegration;
+    const isDisabled = intg.isUpcoming;
+    const isMCP = intg.category === 'mcp';
+    const webhookUrl = `https://api.greeto.io/webhooks/${intg.id}`;
+
+    return (
+      <div className="p-6 max-w-3xl mx-auto space-y-5">
+        <Button variant="ghost" size="sm" className="text-slate-500 hover:text-slate-900 -ml-2" onClick={() => setActiveIntegrationId(null)}>
+          <ArrowLeft className="w-4 h-4 mr-1.5" /> All Integrations
+        </Button>
+
+        {/* Header card */}
+        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+          <div className="p-6 flex items-center gap-5 border-b border-slate-100" style={{ background: `linear-gradient(135deg, ${intg.accentColor}10 0%, #fff 60%)` }}>
+            <div className="w-14 h-14 bg-white rounded-2xl border border-slate-100 shadow-sm flex items-center justify-center p-3 shrink-0">
+              <img src={intg.logo} alt={intg.name} className="w-full h-full object-contain"
+                onError={(e) => { e.target.src = "https://cdn.simpleicons.org/zapier/FF4A00"; }} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-xl font-black text-slate-900">{intg.name}</h2>
+                {isDisabled && (
+                  <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-600 border border-amber-200 text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                    <Clock className="w-3 h-3" /> Coming Soon
+                  </span>
+                )}
               </div>
-              <Button onClick={handleConnectWhatsApp} disabled={loadingWhatsapp || !sdkLoaded} className="bg-[#1877F2] hover:bg-[#166fe5] text-white px-10 h-12 rounded-full font-bold">
-                <Facebook className="w-5 h-5 mr-3 fill-current" /> Connect with Meta
+              <p className="text-sm text-slate-500 mt-1 leading-relaxed">{intg.description}</p>
+              {intg.docsUrl && (
+                <a href={intg.docsUrl} target="_blank" rel="noreferrer"
+                  className="inline-flex items-center gap-1 mt-2 text-[11px] text-blue-500 hover:text-blue-700 font-medium">
+                  <ExternalLink className="w-3 h-3" /> Official Documentation
+                </a>
+              )}
+            </div>
+          </div>
+
+          {/* Coming soon notice */}
+          {isDisabled && (
+            <div className="mx-5 mt-5 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-start gap-3">
+              <Lock className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-xs font-bold text-amber-700">Integration in Beta Testing</p>
+                <p className="text-[11px] text-amber-600 mt-0.5">
+                  Preview the required credentials below. You can fill them in advance — we'll activate this connection in the next release.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* MCP Server info */}
+          {isMCP && intg.mcpServer && (
+            <div className="mx-5 mt-5 bg-slate-900 rounded-xl px-4 py-3">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">MCP Server Endpoint</p>
+              <div className="flex items-center justify-between gap-2">
+                <code className="text-green-400 text-xs font-mono break-all">{intg.mcpServer}</code>
+                <CopyButton value={intg.mcpServer} />
+              </div>
+              <p className="text-[10px] text-slate-500 mt-2">Transport: HTTP+SSE — configure your MCP client to point to this URL with your credentials below.</p>
+            </div>
+          )}
+
+          {/* Credential fields */}
+          {intg.fields.length > 0 && (
+            <div className="p-5 space-y-5">
+              <div className="flex items-center gap-2">
+                <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Credential Configuration</p>
+                {isDisabled && <span className="text-[10px] text-slate-300 font-medium">(read-only preview)</span>}
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {intg.fields.map((f) => (
+                  <div key={f.key} className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-slate-600 flex items-center gap-1">
+                      {f.label}
+                      {f.type === 'password' && <Lock className="w-2.5 h-2.5 text-slate-300" />}
+                    </label>
+                    {f.type === 'password' ? (
+                      <RevealInput
+                        placeholder={f.placeholder}
+                        value={getField(f.key)}
+                        onChange={(e) => setField(f.key, e.target.value)}
+                        disabled={isDisabled}
+                        hint={f.hint}
+                      />
+                    ) : (
+                      <Input
+                        placeholder={f.placeholder}
+                        value={getField(f.key)}
+                        onChange={(e) => setField(f.key, e.target.value)}
+                        disabled={isDisabled}
+                        className="h-11 rounded-xl bg-white border-slate-200 px-4 text-sm disabled:opacity-50"
+                      />
+                    )}
+                    {f.hint && <p className="text-[10px] text-slate-400 leading-snug">{f.hint}</p>}
+                  </div>
+                ))}
+              </div>
+
+              {/* Webhook URL row */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-slate-600">Webhook Callback URL</label>
+                <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-4 h-11">
+                  <code className="text-xs text-slate-600 font-mono flex-1 truncate">{webhookUrl}</code>
+                  <CopyButton value={webhookUrl} />
+                </div>
+                <p className="text-[10px] text-slate-400">Point your {intg.name} webhook settings to this URL for real-time event sync.</p>
+              </div>
+
+              {/* Save / footer */}
+              <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+                <div className="flex items-center gap-2 text-slate-400">
+                  <ShieldCheck className="w-4 h-4" />
+                  <p className="text-[10px] font-medium">Credentials encrypted with AES-256-GCM</p>
+                </div>
+                <Button
+                  disabled={isDisabled}
+                  className="h-10 px-6 rounded-full bg-slate-900 text-white text-sm font-bold shadow-lg disabled:opacity-40"
+                >
+                  Save & Connect
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Quick links */}
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { icon: ExternalLink, title: 'Developer Console', desc: `Open ${intg.name} dashboard to create API credentials.` },
+            { icon: Globe2,        title: 'Help Docs',         desc: `Step-by-step setup guide for this integration.` },
+            { icon: Code2,         title: 'API Reference',     desc: `Explore the ${intg.name} API schema and endpoints.` },
+          ].map((tile) => {
+            const TIcon = tile.icon;
+            return (
+              <div key={tile.title} className="bg-white border border-slate-100 rounded-xl p-4">
+                <div className="w-7 h-7 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center mb-3">
+                  <TIcon className="w-3.5 h-3.5 text-slate-500" />
+                </div>
+                <p className="text-xs font-bold text-slate-900">{tile.title}</p>
+                <p className="text-[10px] text-slate-400 mt-1 leading-snug">{tile.desc}</p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  // ─── WhatsApp Detail ────────────────────────────────────────────────
+  const renderWhatsAppDetail = () => (
+    <div className="p-6 max-w-3xl mx-auto space-y-5">
+      <Button variant="ghost" size="sm" className="text-slate-500 -ml-2" onClick={() => setActiveIntegrationId(null)}>
+        <ArrowLeft className="w-4 h-4 mr-1.5" /> All Integrations
+      </Button>
+      <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+        <div className="bg-gradient-to-br from-[#25D366] to-[#128C7E] p-6 text-white flex items-center gap-4">
+          <div className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-xl p-2.5 flex items-center justify-center ring-1 ring-white/30">
+            <img src={ICONS.whatsapp} className="w-full h-full" alt="WhatsApp" />
+          </div>
+          <div>
+            <h2 className="text-2xl font-black">WhatsApp Business</h2>
+            <p className="text-green-100 text-sm">Official Meta Cloud API</p>
+          </div>
+        </div>
+        <div className="p-6">
+          {!allWhatsappSettings.length ? (
+            <div className="flex flex-col items-center py-12 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+              <div className="w-16 h-16 bg-white rounded-2xl shadow border border-slate-100 flex items-center justify-center mb-5 p-3">
+                <img src={ICONS.whatsapp} className="w-full h-full object-contain" alt="WhatsApp" />
+              </div>
+              <h3 className="text-lg font-black text-slate-900 mb-1">One-Click Meta Sync</h3>
+              <p className="text-sm text-slate-500 text-center max-w-xs mb-6">We'll automatically discover your verified numbers and WABA accounts.</p>
+              <Button onClick={handleConnectWhatsApp} disabled={loadingWhatsapp || !sdkLoaded}
+                className="bg-[#1877F2] hover:bg-[#166fe5] text-white px-10 h-12 rounded-full font-black text-sm shadow-lg shadow-blue-400/30">
+                {loadingWhatsapp ? 'Authorizing...' : 'Connect with Meta'}
               </Button>
             </div>
           ) : (
-            <div className="space-y-6">
-              <div className="grid gap-4">
-                {allWhatsappSettings.map(s => (
-                  <div key={s.phone_number_id} className={cn("flex items-center justify-between border-2 p-5 rounded-2xl transition-all", whatsappSettings.phone_number_id === s.phone_number_id ? "border-green-400 bg-green-50/30 shadow-md" : "border-slate-100 hover:border-slate-200")}>
-                    <div>
-                      <h4 className="font-bold text-slate-900">{s.display_phone_number || s.phone_number_id}</h4>
-                      <p className="text-[10px] text-slate-400 font-mono mt-1 uppercase tracking-tighter">ID: {s.phone_number_id}</p>
+            <div className="space-y-4">
+              {allWhatsappSettings.map(s => (
+                <div key={s.phone_number_id}
+                  className={cn("flex items-center justify-between border-2 p-4 rounded-xl transition-all",
+                    whatsappSettings.phone_number_id === s.phone_number_id ? "border-green-400 bg-green-50/30" : "border-slate-100")}>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center">
+                      <img src={ICONS.whatsapp} className="w-6 h-6" alt="WA" />
                     </div>
-                    <div className="flex items-center gap-3">
-                      <div className={cn("text-[10px] px-3 py-1 rounded-full font-bold tracking-wider uppercase", s.is_active ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-400")}>
-                        {s.is_active ? 'Active' : 'Paused'}
-                      </div>
-                      <Button variant="ghost" size="icon" onClick={() => handleDisconnectWhatsApp(s.phone_number_id)} className="text-slate-300 hover:text-red-500">
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
+                    <div>
+                      <p className="font-bold text-slate-900">{s.display_phone_number || 'Business Account'}</p>
+                      <p className="text-[10px] text-slate-400 font-mono mt-0.5">{s.phone_number_id}</p>
                     </div>
                   </div>
-                ))}
+                  <div className="flex items-center gap-3">
+                    {s.is_active && <span className="bg-green-100 text-green-600 text-[10px] font-bold px-2.5 py-1 rounded-full">LIVE</span>}
+                    <Button variant="ghost" size="icon" onClick={() => disconnectWhatsApp(s.phone_number_id, teamId)}
+                      className="w-9 h-9 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50">
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+              <div className="pt-4 border-t border-slate-100 flex justify-end">
+                <Button onClick={handleConnectWhatsApp} variant="outline"
+                  className="h-10 px-6 rounded-full border-2 font-bold text-sm text-slate-600">
+                  + Add Another Number
+                </Button>
               </div>
-              <Button variant="outline" onClick={handleConnectWhatsApp} className="w-full border-dashed py-6 rounded-2xl text-slate-500 font-medium">+ Add Another Number</Button>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 
+  // ─── Telegram Detail ────────────────────────────────────────────────
   const renderTelegramDetail = () => (
-    <div className="p-8 max-w-4xl mx-auto">
-      <Button variant="ghost" size="sm" className="mb-6 text-slate-500" onClick={() => setActiveIntegration(null)}>
-        <ArrowLeft className="w-4 h-4 mr-2" /> Back
+    <div className="p-6 max-w-3xl mx-auto space-y-5">
+      <Button variant="ghost" size="sm" className="text-slate-500 -ml-2" onClick={() => setActiveIntegrationId(null)}>
+        <ArrowLeft className="w-4 h-4 mr-1.5" /> All Integrations
       </Button>
-      <Card className="border-none shadow-xl rounded-2xl overflow-hidden">
-        <div className="bg-gradient-to-r from-blue-600 to-blue-400 p-10 text-white">
-          <h2 className="text-3xl font-black mb-2">Telegram Bot</h2>
-          <p className="text-blue-50/80">Connect your support bots via API token.</p>
-        </div>
-        <CardContent className="p-8">
-          <div className="space-y-6 max-w-md mx-auto">
-            {telegramSettings.length > 0 && (
-              <div className="grid gap-3 mb-8">
-                {telegramSettings.map(bot => (
-                  <div key={bot.id} className="flex items-center justify-between p-4 bg-blue-50/50 border border-blue-100 rounded-xl">
-                    <div>
-                      <p className="font-bold text-slate-900">@{bot.bot_username}</p>
-                      <p className="text-xs text-slate-500">{bot.display_name}</p>
-                    </div>
-                    <Button variant="ghost" size="sm" onClick={() => handleDisconnectTelegram(bot.bot_token)} className="text-red-500 font-bold">Disconnect</Button>
-                  </div>
-                ))}
-              </div>
-            )}
-            <div className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Bot Token</label>
-                <Input type="password" value={botTokenInput} onChange={(e) => setBotTokenInput(e.target.value)} placeholder="000000000:AA..." className="h-12 bg-slate-50 border-slate-200" />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Display Name</label>
-                <Input value={botDisplayName} onChange={(e) => setBotDisplayName(e.target.value)} placeholder="Support Bot" className="h-12 bg-slate-50 border-slate-200" />
-              </div>
-              <Button onClick={handleConnectTelegram} disabled={savingTelegram || !botTokenInput} className="w-full bg-blue-600 hover:bg-blue-700 h-12 rounded-xl text-white font-bold shadow-lg shadow-blue-500/20">
-                {savingTelegram ? 'Connecting...' : 'Connect Bot'}
-              </Button>
-            </div>
+      <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+        <div className="bg-gradient-to-br from-[#26A5E4] to-[#1a8bc5] p-6 text-white flex items-center gap-4">
+          <div className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-xl p-2.5 flex items-center justify-center ring-1 ring-white/30">
+            <img src={ICONS.telegram} className="w-full h-full" alt="Telegram" />
           </div>
-        </CardContent>
-      </Card>
+          <div>
+            <h2 className="text-2xl font-black">Telegram Bot</h2>
+            <p className="text-blue-100 text-sm">BotFather-powered channels</p>
+          </div>
+        </div>
+        <div className="p-6 space-y-6">
+          {telegramSettings.length > 0 && (
+            <div className="space-y-3">
+              {telegramSettings.map(bot => (
+                <div key={bot.id} className="flex items-center justify-between p-4 bg-blue-50/50 border border-blue-100 rounded-xl">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 bg-white rounded-xl flex items-center justify-center shadow-sm">
+                      <Send className="w-4 h-4 text-blue-500" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-slate-900 text-sm">@{bot.bot_username}</p>
+                      <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wide">{bot.display_name}</p>
+                    </div>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={() => disconnectTelegram(bot.bot_token, teamId)}
+                    className="text-red-500 text-xs font-bold hover:bg-red-50 rounded-lg px-3 h-8">
+                    Disconnect
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="bg-slate-50 p-5 rounded-xl border border-slate-100 space-y-4">
+            <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Add New Bot</p>
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-bold text-slate-600 flex items-center gap-1">
+                HTTP API Token <Lock className="w-2.5 h-2.5 text-slate-300" />
+              </label>
+              <RevealInput
+                placeholder="000000000:AAHxxxxxxxxxxxxxxxxxxxxxx-xxxxxxxxxx"
+                value={botTokenInput}
+                onChange={(e) => setBotTokenInput(e.target.value)}
+              />
+              <p className="text-[10px] text-slate-400">Get this from <a href="https://t.me/botfather" target="_blank" rel="noreferrer" className="text-blue-500 font-medium">@BotFather</a> → /newbot or /mybots → API Token</p>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-bold text-slate-600">Display Name</label>
+              <Input
+                value={botDisplayName} onChange={(e) => setBotDisplayName(e.target.value)}
+                placeholder="Support Bot — Primary"
+                className="h-11 rounded-xl bg-white border-slate-200 px-4 text-sm"
+              />
+              <p className="text-[10px] text-slate-400">Internal label to identify this bot in your workspace</p>
+            </div>
+            <Button onClick={handleConnectTelegram} disabled={savingTelegram || !botTokenInput}
+              className="w-full bg-slate-900 hover:bg-black h-11 rounded-xl text-white font-bold text-sm shadow-lg disabled:opacity-40">
+              {savingTelegram ? 'Validating...' : 'Connect Bot'}
+            </Button>
+          </div>
+        </div>
+      </div>
     </div>
   );
+
+  const renderDetail = () => {
+    if (!activeIntegration) return null;
+    if (activeIntegration.id === 'whatsapp') return renderWhatsAppDetail();
+    if (activeIntegration.id === 'telegram') return renderTelegramDetail();
+    return renderGenericDetail();
+  };
 
   return (
-    <div className="flex-1 overflow-y-auto bg-slate-50/30">
-      <div className="bg-white border-b border-slate-200 sticky top-0 z-20">
-        <div className="px-8 py-6 max-w-[1600px] mx-auto">
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight">App Directory</h1>
-          <p className="text-sm text-slate-500 mt-1 mb-0 font-medium">Connect and manage your third-party tools.</p>
+    <div className="flex-1 overflow-y-auto bg-slate-50">
+      {/* Header */}
+      <div className="bg-white border-b border-slate-200 sticky top-0 z-30">
+        <div className="px-8 py-5 max-w-7xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-slate-900 rounded-xl"><Puzzle className="w-5 h-5 text-white" /></div>
+            <div>
+              <h1 className="text-xl font-black text-slate-900 tracking-tight">Integrations</h1>
+              <p className="text-xs text-slate-400 font-medium">Connect your stack — channels, CRM, payments & AI</p>
+            </div>
+          </div>
+          <div className="hidden md:flex items-center gap-2">
+            <span className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider bg-slate-50 px-3 py-1.5 rounded-full border border-slate-100">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-500" /> API Nominal
+            </span>
+            <span className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider bg-slate-50 px-3 py-1.5 rounded-full border border-slate-100">
+              <ShieldCheck className="w-3 h-3" /> AES-256 Encrypted
+            </span>
+          </div>
         </div>
       </div>
 
-      {activeIntegration === null ? renderOverview() : 
-       activeIntegration === 'whatsapp' ? renderWhatsAppDetail() : 
-       activeIntegration === 'telegram' ? renderTelegramDetail() : null}
+      {activeIntegrationId === null ? renderOverview() : renderDetail()}
 
-      <Modal isOpen={isPhoneSelectModalOpen} onClose={() => setIsPhoneSelectModalOpen(false)} title="Select Numbers">
-        <div className="space-y-4">
-          <div className="max-h-80 overflow-y-auto pr-1">
+      {/* Phone select modal */}
+      <Modal isOpen={isPhoneSelectModalOpen} onClose={() => setIsPhoneSelectModalOpen(false)} title="Select WhatsApp Numbers">
+        <div className="space-y-4 p-2">
+          <p className="text-sm text-slate-500">Multiple verified numbers found. Select which to connect.</p>
+          <div className="max-h-80 overflow-y-auto space-y-2 pr-1">
             {discoveredPhones.map(phone => (
-              <div key={phone.id} className="flex items-center justify-between p-4 border border-slate-100 rounded-xl mb-2">
-                <div><p className="font-bold text-sm">{phone.displayPhoneNumber || phone.id}</p></div>
-                <Button size="sm" onClick={() => handleSelectPhone(phone)} disabled={loadingWhatsapp} className="rounded-full">Link</Button>
+              <div key={phone.id} className="flex items-center justify-between p-4 bg-slate-50 border border-slate-100 rounded-xl hover:border-green-300 transition-all">
+                <div>
+                  <p className="font-bold text-slate-900 text-sm">{phone.displayPhoneNumber || phone.id}</p>
+                  <p className="text-[10px] text-slate-400 font-mono mt-0.5">ID: {phone.id}</p>
+                </div>
+                <Button onClick={() => handleSelectPhone(phone)} disabled={loadingWhatsapp}
+                  className="rounded-full px-5 h-9 font-bold text-xs">
+                  Connect
+                </Button>
               </div>
             ))}
           </div>

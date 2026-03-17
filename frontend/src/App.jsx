@@ -747,11 +747,11 @@ export default function App() {
       {/* Sidebar Navigation */}
       <aside className="group w-16 hover:w-64 transition-all duration-300 ease-in-out flex-none border-r border-slate-200 bg-white flex flex-col py-4 space-y-4 relative z-50">
         <div className="flex items-center justify-start h-10 w-full px-3">
-          <div className="h-10 w-10 min-w-10 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-xl shrink-0">
-            M
+          <div className="h-10 w-10 min-w-10 flex items-center justify-center shrink-0">
+            <img src="/favicon.png" alt="Logo" className="h-10 w-10 object-contain" />
           </div>
-          <span className="ml-3 font-semibold text-xl whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100 flex-1 text-slate-900">
-            Menu
+          <span className="ml-3 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100 flex-1">
+            <img src="/logo.svg" alt="Greeto" className="h-7 object-contain" />
           </span>
         </div>
         <nav className="flex-1 flex flex-col space-y-2 w-full px-3 overflow-hidden">

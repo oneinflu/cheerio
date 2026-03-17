@@ -35,8 +35,7 @@ export default function LandingPage({ onLoginClick }) {
             <header className="w-full py-4 px-6 lg:px-24 flex justify-between items-center sticky top-0 bg-white/80 backdrop-blur-md z-50 border-b border-slate-100">
                 <div className="flex items-center gap-12">
                     <div className="flex items-center gap-2">
-                        <div className="h-8 w-8 bg-[#00E676] rounded-lg flex items-center justify-center font-bold text-lg shadow-[2px_2px_0px_#000]">G</div>
-                        <span className="font-black text-2xl tracking-tighter">Greeto</span>
+                        <img src="/logo.svg" alt="Greeto" className="h-8 object-contain" />
                     </div>
 
                     <nav className="hidden lg:flex items-center gap-8 text-[15px] font-semibold">
