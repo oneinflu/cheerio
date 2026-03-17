@@ -99,8 +99,10 @@ export default function App() {
     if (!isLoggedIn) {
       if (isLoginView) {
         window.history.pushState(null, '', '/login');
+        document.title = 'Sign In to Greeto — AI-Powered Customer Messaging';
       } else {
         window.history.pushState(null, '', '/');
+        document.title = 'Greeto — Customer Conversations on Autopilot | WhatsApp & AI Inbox';
       }
       return;
     }
@@ -113,6 +115,27 @@ export default function App() {
       path = `/workflows/${identifier}`;
     }
     window.history.pushState(null, '', path);
+
+    // Update browser tab title with SEO-friendly names
+    const pageTitles = {
+      inbox:           'Inbox — Manage Customer Conversations',
+      dashboard:       'Dashboard — Analytics & Live Metrics',
+      contacts:        'Contacts — Customer Directory',
+      labels:          'Labels — Organize Conversations',
+      campaigns:       'Campaigns — Broadcast & Marketing',
+      templates:       'Message Templates — WhatsApp Templates',
+      'email-templates':'Email Templates — Greeto',
+      flows:           'Flows — WhatsApp Interactive Flows',
+      workflows:       'Workflows — No-Code Automation Builder',
+      rules:           'Automation Rules — Smart Triggers',
+      'ai-agent':      'AI Agent — Intelligent Auto-Replies',
+      'team-members':  'Team Members — Manage Your Team',
+      settings:        'Integrations — Connect Your Tools',
+      instagram:       'Instagram — Social Inbox',
+      telegram:        'Telegram — Bot Inbox',
+      gallery:         'File Manager — Media Assets',
+    };
+    document.title = pageTitles[activePage] ? `${pageTitles[activePage]} | Greeto` : 'Greeto';
   }, [activePage, editingWorkflow, isLoggedIn, isLoginView]);
 
   useEffect(() => {
