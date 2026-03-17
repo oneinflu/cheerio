@@ -521,14 +521,14 @@ async function sendInteractive(conversationId, interactive) {
 }
 
 async function sendTypingIndicator(conversationId, action) {
+  const enabled = String(process.env.WHATSAPP_ENABLE_TYPING_INDICATOR || '').toLowerCase() === 'true';
+  if (!enabled) return;
   const clientConn = await db.getClient();
   try {
     const details = await getConversationDetails(clientConn, conversationId);
     const customConfig = await waConfig.getConfigByPhone(details.phoneNumberId);
-    // Best effort, no db persistence or 24h check needed for typing indicators
     await client.sendSenderAction(details.phoneNumberId, details.toWaId, action, customConfig);
   } catch (err) {
-    // silently fail for typing indicators
     console.warn(`[sendTypingIndicator] failed for conv=${conversationId}`, err.message);
   } finally {
     clientConn.release();

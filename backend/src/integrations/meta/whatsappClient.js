@@ -181,6 +181,8 @@ async function getJSON(url, customConfig = null) {
  * Send a sender action (e.g. typing_on, typing_off).
  */
 async function sendSenderAction(phoneNumberId, toWaId, action, customConfig = null) {
+  const enabled = String(process.env.WHATSAPP_ENABLE_TYPING_INDICATOR || '').toLowerCase() === 'true';
+  if (!enabled) return { status: 204, data: { skipped: true } };
   const url = `${GRAPH_BASE}/${phoneNumberId}/messages`;
   return postJSON(url, {
     messaging_product: 'whatsapp',
