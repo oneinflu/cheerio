@@ -107,7 +107,7 @@ export default function InstagramPage({ currentUser, socket }) {
   };
 
   return (
-    <div className="flex h-full bg-white">
+    <div className="flex flex-1 h-full w-full bg-white overflow-hidden">
       {/* Instagram Inbox - Left Sidebar */}
       <div className="w-80 border-r border-slate-200 flex flex-col bg-slate-50">
         <div className="px-4 py-4 border-b border-slate-200 bg-white">

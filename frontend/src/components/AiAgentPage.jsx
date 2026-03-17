@@ -197,7 +197,7 @@ export default function AiAgentPage() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 overflow-hidden">
+    <div className="flex flex-col flex-1 h-full w-full bg-slate-50 overflow-hidden">
       {/* Header */}
       <div className="h-16 border-b border-slate-200 bg-white flex items-center justify-between px-8 shrink-0">
         <div className="flex items-center gap-3">

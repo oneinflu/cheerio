@@ -39,15 +39,17 @@ const ICONS = {
   exotel:      'https://logo.clearbit.com/exotel.com',
   openai:      'https://cdn.simpleicons.org/openai/412991',
   anthropic:   'https://cdn.simpleicons.org/anthropic/191919',
+  xolox:       'https://logo.clearbit.com/xolox.in',
 };
 
 const CATEGORIES = [
-  { id: 'channels', name: 'Communication Channels', icon: MessageSquare },
-  { id: 'mcp',      name: 'MCP Connectors',          icon: Server },
-  { id: 'crm',      name: 'CRM & Productivity',       icon: Database },
-  { id: 'payments', name: 'Payments & Billing',        icon: CreditCard },
-  { id: 'voip',     name: 'VoIP & Calling',            icon: Phone },
-  { id: 'ai',       name: 'AI Providers',              icon: Sparkles },
+  { id: 'channels',  name: 'Communication Channels', icon: MessageSquare },
+  { id: 'livechat',  name: 'Live Chat & Website',    icon: Globe2 },
+  { id: 'mcp',       name: 'MCP Connectors',          icon: Server },
+  { id: 'crm',       name: 'CRM & Productivity',      icon: Database },
+  { id: 'payments',  name: 'Payments & Billing',       icon: CreditCard },
+  { id: 'voip',      name: 'VoIP & Calling',           icon: Phone },
+  { id: 'ai',        name: 'AI Providers',             icon: Sparkles },
 ];
 
 const INTEGRATIONS_LIST = [
@@ -105,6 +107,24 @@ const INTEGRATIONS_LIST = [
       { label: 'Bot User OAuth Token', key: 'bot_token',     placeholder: 'xoxb-...',         hint: 'From Slack App → OAuth & Permissions → Bot Token', type: 'password' },
       { label: 'Signing Secret',       key: 'signing_secret', placeholder: 'abcd1234...',       hint: 'From Slack App → Basic Information → App Credentials', type: 'password' },
       { label: 'Default Channel ID',   key: 'channel_id',    placeholder: 'C0123ABC456',       hint: 'Right-click a channel → View channel details → Channel ID' },
+    ],
+  },
+
+  // ─── Live Chat & Website ─────────────────────────────────────────
+  {
+    id: 'pulse-xolox', category: 'livechat', name: 'Pulse by XOLOX',
+    logo: ICONS.xolox,
+    logoFallback: '⚡',
+    description: 'Embed Pulse on your website to capture live visitors, qualify leads with AI, and route hot conversations directly into your Greeto inbox in real time.',
+    accentColor: '#6366f1',
+    docsUrl: 'https://xolox.in/pulse',
+    badge: 'Featured',
+    fields: [
+      { label: 'Pulse Site ID',       key: 'site_id',    placeholder: 'pulse_xxxxxxxxxxxx',            hint: 'Generated when you create a site in your XOLOX Pulse dashboard' },
+      { label: 'API Secret Key',      key: 'api_secret', placeholder: '••••••••••••••••••••••••',       hint: 'XOLOX Pulse → Settings → API → Copy secret key', type: 'password' },
+      { label: 'Webhook Endpoint',    key: 'webhook_url', placeholder: 'https://yourapp.com/webhook',  hint: 'Greeto will POST live-visitor events here. Leave blank to use auto-generated URL.' },
+      { label: 'Widget Theme Color',  key: 'theme_color', placeholder: '#6366f1',                      hint: 'Hex color for the Pulse chat widget launcher button' },
+      { label: 'Greeting Message',    key: 'greeting',    placeholder: 'Hi 👋 How can we help you today?', hint: 'First message visitors see when they open the Pulse chat widget' },
     ],
   },
 
@@ -201,6 +221,22 @@ const INTEGRATIONS_LIST = [
     ],
   },
 
+  {
+    id: 'xolox-mcp', category: 'mcp', name: 'XOLOX MCP',
+    logo: ICONS.xolox,
+    logoFallback: '⚡',
+    description: 'Model Context Protocol server for XOLOX — gives AI agents real-time access to Pulse visitor sessions, lead scores, conversation history and CRM records.',
+    accentColor: '#6366f1',
+    docsUrl: 'https://xolox.in/developers/mcp',
+    mcpServer: 'https://mcp.xolox.in/v1/sse',
+    badge: 'New',
+    fields: [
+      { label: 'XOLOX API Key',     key: 'api_key',     placeholder: 'xolox_live_xxxxxxxxxxxxxxxxxxxx', hint: 'XOLOX Dashboard → Settings → Developer → API Keys → Create', type: 'password' },
+      { label: 'Workspace ID',      key: 'workspace_id', placeholder: 'ws_xxxxxxxxxxxxxxxx',             hint: 'Found in XOLOX Dashboard URL: app.xolox.in/ws/{workspace_id}' },
+      { label: 'MCP Scope',         key: 'scope',        placeholder: 'visitors,leads,crm',              hint: 'Comma-separated scopes: visitors, leads, crm, conversations, analytics' },
+    ],
+  },
+
   // ─── CRM & Productivity ───────────────────────────────────────────
   {
     id: 'hubspot', category: 'crm', name: 'HubSpot CRM',
@@ -224,6 +260,21 @@ const INTEGRATIONS_LIST = [
       { label: 'Client Secret',      key: 'client_secret', placeholder: '••••••••',     type: 'password', hint: 'From the same API Console page' },
       { label: 'Refresh Token',      key: 'refresh_token', placeholder: '1000.xxxx...', type: 'password', hint: 'Generate from accounts.zoho.com/oauth/playground' },
       { label: 'Region',             key: 'region',        placeholder: 'com / eu / in', hint: 'Must match where your Zoho account is registered' },
+    ],
+  },
+  {
+    id: 'xolox-crm', category: 'crm', name: 'XOLOX CRM',
+    logo: ICONS.xolox,
+    logoFallback: '⚡',
+    description: 'Native two-way sync with XOLOX CRM — auto-create contacts from conversations, push deal stages, and pull visitor intelligence directly into your Greeto inbox.',
+    accentColor: '#6366f1',
+    docsUrl: 'https://xolox.in/developers/crm-api',
+    badge: 'New',
+    fields: [
+      { label: 'API Key',           key: 'api_key',      placeholder: 'xolox_live_xxxxxxxxxxxxxxxxxxxx', hint: 'XOLOX Dashboard → Settings → Developer → API Keys → Create', type: 'password' },
+      { label: 'Workspace ID',      key: 'workspace_id', placeholder: 'ws_xxxxxxxxxxxxxxxx',             hint: 'Found in your XOLOX workspace URL' },
+      { label: 'Default Pipeline',  key: 'pipeline_id',  placeholder: 'pipeline_xxxxxxxx',               hint: 'CRM pipeline where new deals are created from Greeto conversations (optional)' },
+      { label: 'Sync Direction',    key: 'sync_mode',    placeholder: 'bidirectional',                   hint: 'Options: bidirectional, greeto-to-xolox, xolox-to-greeto' },
     ],
   },
   {
@@ -495,16 +546,31 @@ export default function SettingsPage({ currentUser }) {
         className="group relative bg-white border border-slate-100 rounded-2xl p-4 cursor-pointer transition-all duration-200 hover:border-blue-300 hover:shadow-lg hover:-translate-y-0.5"
       >
         <div className="flex items-start justify-between mb-3">
-          <div className="w-11 h-11 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center p-2 overflow-hidden">
-            <img
-              src={item.logo} alt={item.name}
-              className="w-full h-full object-contain"
-              onError={(e) => { e.target.src = "https://cdn.simpleicons.org/zapier/FF4A00"; }}
-            />
+          <div className="w-11 h-11 rounded-xl flex items-center justify-center p-2 overflow-hidden shrink-0"
+            style={{ background: item.logoFallback ? `${item.accentColor}14` : '#f8fafc', border: `1px solid ${item.logoFallback ? item.accentColor + '25' : '#f1f5f9'}` }}>
+            {item.logoFallback ? (
+              <span className="text-xl leading-none">{item.logoFallback}</span>
+            ) : (
+              <img
+                src={item.logo} alt={item.name}
+                className="w-full h-full object-contain"
+                onError={(e) => { e.target.style.display='none'; e.target.parentNode.innerHTML = `<span style="font-size:18px">🔌</span>`; }}
+              />
+            )}
           </div>
           {item.isUpcoming ? (
             <span className="bg-amber-50 text-amber-600 border border-amber-200 text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-widest">
               Soon
+            </span>
+          ) : item.badge === 'New' ? (
+            <span className="text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-widest"
+              style={{ background: 'rgba(99,102,241,0.1)', color: '#6366f1', border: '1px solid rgba(99,102,241,0.25)' }}>
+              New
+            </span>
+          ) : item.badge === 'Featured' ? (
+            <span className="text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-widest"
+              style={{ background: 'rgba(99,102,241,0.12)', color: '#6366f1', border: '1px solid rgba(99,102,241,0.3)' }}>
+              ⚡ Featured
             </span>
           ) : isConnected ? (
             <span className="bg-green-50 text-green-600 border border-green-200 text-[9px] font-bold px-2 py-0.5 rounded-full uppercase flex items-center gap-1">

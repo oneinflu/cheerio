@@ -540,7 +540,7 @@ export default function WorkflowsKanban({ currentUser, onOpenBuilder }) {
   });
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-slate-50/50 overflow-hidden">
+    <div className="flex-1 flex flex-col h-full bg-white overflow-hidden">
       <div className="border-b border-slate-200 bg-white shadow-sm z-10">
         <div className="px-8 py-5 flex justify-between items-center">
           <div>

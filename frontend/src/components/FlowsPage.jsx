@@ -10,7 +10,7 @@ export default function FlowsPage() {
   }, [view]);
 
   return (
-    <div className="w-full h-screen bg-slate-50/50">
+    <div className="w-full h-full bg-white">
       {view === 'list' ? (
         <FlowsList onCreate={() => setView('create')} />
       ) : (

@@ -1,5 +1,79 @@
 'use strict';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+
+/* ─── Splash / Preloader ────────────────────────────────────────────── */
+function Preloader({ onDone }) {
+  // phase: 'enter' → 'shake' → 'logo' → 'out'
+  const [phase, setPhase] = useState('enter');
+  const doneRef = useRef(false);
+
+  useEffect(() => {
+    // favicon enters (0–600ms), then shakes (600–1700ms)
+    const t1 = setTimeout(() => setPhase('shake'), 600);
+    // logo fades in at 1700ms
+    const t2 = setTimeout(() => setPhase('logo'),  1700);
+    // overlay fades out at 2700ms, done at 3100ms
+    const t3 = setTimeout(() => setPhase('out'),   2700);
+    const t4 = setTimeout(() => {
+      if (!doneRef.current) { doneRef.current = true; onDone(); }
+    }, 3100);
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); clearTimeout(t4); };
+  }, [onDone]);
+
+  const overlayStyle = {
+    position: 'fixed', inset: 0, zIndex: 99999,
+    background: '#080810',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    transition: 'opacity 0.45s ease',
+    opacity: phase === 'out' ? 0 : 1,
+    pointerEvents: phase === 'out' ? 'none' : 'all',
+  };
+
+  return (
+    <div style={overlayStyle}>
+      {/* Subtle glow behind icon */}
+      <div style={{
+        position: 'absolute', width: 260, height: 260, borderRadius: '50%',
+        background: 'radial-gradient(50% 50% at 50% 50%, rgba(0,230,118,0.14) 0%, transparent 100%)',
+        filter: 'blur(30px)',
+        transition: 'opacity 0.5s',
+        opacity: phase === 'logo' ? 0.6 : 0.4,
+      }} />
+
+      {/* Favicon — shows during enter + shake phases */}
+      {phase !== 'logo' && (
+        <img
+          src="/favicon.png"
+          alt="Greeto"
+          style={{
+            width: 80, height: 80,
+            objectFit: 'contain',
+            position: 'absolute',
+            animation: phase === 'enter'
+              ? 'favicon-enter 0.55s cubic-bezier(0.34,1.56,0.64,1) forwards'
+              : 'handshake 1.1s ease-in-out forwards',
+          }}
+        />
+      )}
+
+      {/* Logo — fades in replacing favicon */}
+      {phase === 'logo' && (
+        <img
+          src="/logo.svg"
+          alt="Greeto"
+          style={{
+            height: 44,
+            objectFit: 'contain',
+            filter: 'brightness(0) invert(1)',
+            opacity: 0.92,
+            position: 'absolute',
+            animation: 'logo-enter 0.65s cubic-bezier(0.34,1.2,0.64,1) forwards',
+          }}
+        />
+      )}
+    </div>
+  );
+}
 import Inbox from './components/Inbox.jsx';
 import Chat from './components/Chat.jsx';
 import NotesPanel from './components/NotesPanel.jsx';
@@ -40,6 +114,8 @@ const validPages = [
 ];
 
 export default function App() {
+  // Only show preloader on public landing/login — skip if user is already logged in
+  const [showPreloader, setShowPreloader] = useState(() => !localStorage.getItem('user'));
   const [storedUser, setStoredUser] = useState(() => {
     try {
       const saved = localStorage.getItem('user');
@@ -322,6 +398,7 @@ export default function App() {
   }, [storedUser]);
 
   const handleLogin = (user) => {
+    setShowPreloader(false); // always kill preloader before entering app
     setStoredUser(user);
     setIsLoggedIn(true);
     setIsLoginView(false);
@@ -765,303 +842,179 @@ export default function App() {
     return <LandingPage onLoginClick={() => setIsLoginView(true)} />;
   }
 
+  // ── Sidebar helpers ────────────────────────────────────────────────────────
+  const navActive = (page) => Array.isArray(page) ? page.includes(activePage) : activePage === page;
+  const navBtn = (page) => ({
+    display: 'flex', alignItems: 'center', justifyContent: 'flex-start',
+    width: '100%', height: 40, padding: 0, border: 'none', cursor: 'pointer',
+    borderRadius: 10, overflow: 'hidden', flexShrink: 0, position: 'relative',
+    background: navActive(page) ? 'rgba(0,230,118,0.1)' : 'transparent',
+    color: navActive(page) ? '#00E676' : 'rgba(255,255,255,0.5)',
+    borderLeft: navActive(page) ? '2px solid #00E676' : '2px solid transparent',
+    boxShadow: navActive(page) ? 'inset 0 0 20px rgba(0,230,118,0.06)' : 'none',
+    transition: 'all 0.2s ease',
+  });
+
   return (
-    <div className="flex h-screen w-full bg-slate-50 text-slate-950 font-sans">
+    <div style={{ display: 'flex', height: '100vh', width: '100%', background: '#0d0d18', color: '#ffffff', fontFamily: 'inherit' }}>
       {/* Sidebar Navigation */}
-      <aside className="group w-16 hover:w-64 transition-all duration-300 ease-in-out flex-none border-r border-slate-200 bg-white flex flex-col py-4 space-y-4 relative z-50">
-        <div className="flex items-center justify-start h-10 w-full px-3">
-          <div className="h-10 w-10 min-w-10 flex items-center justify-center shrink-0">
-            <img src="/favicon.png" alt="Logo" className="h-10 w-10 object-contain" />
+      <aside className="group" style={{
+        width: 64, minWidth: 64, flexShrink: 0,
+        background: '#08080f',
+        borderRight: '1px solid rgba(255,255,255,0.05)',
+        display: 'flex', flexDirection: 'column', paddingTop: 16, paddingBottom: 16,
+        position: 'relative', zIndex: 50, overflow: 'hidden',
+        transition: 'width 0.3s ease',
+      }}
+      onMouseEnter={e => e.currentTarget.style.width = '240px'}
+      onMouseLeave={e => e.currentTarget.style.width = '64px'}
+      >
+        {/* Green glow orb at bottom */}
+        <div style={{
+          position: 'absolute', bottom: 0, left: '50%', transform: 'translateX(-50%)',
+          width: 200, height: 200, borderRadius: '50%', pointerEvents: 'none',
+          background: 'radial-gradient(50% 50% at 50% 100%, rgba(0,230,118,0.12) 0%, transparent 100%)',
+          filter: 'blur(20px)',
+        }} />
+        {/* Top green accent line */}
+        <div style={{
+          position: 'absolute', top: 0, left: 0, right: 0, height: 1,
+          background: 'linear-gradient(90deg, transparent, rgba(0,230,118,0.4), transparent)',
+        }} />
+
+        {/* Logo */}
+        <div style={{ display: 'flex', alignItems: 'center', height: 40, width: '100%', padding: '0 12px', marginBottom: 16 }}>
+          <div style={{ width: 40, height: 40, minWidth: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <img src="/favicon.png" alt="Logo" style={{ height: 36, width: 36, objectFit: 'contain' }} />
           </div>
-          <span className="ml-3 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100 flex-1">
-            <img src="/logo.svg" alt="Greeto" className="h-7 object-contain" />
+          <span className="whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100 flex-1" style={{ marginLeft: 10 }}>
+            <img src="/logo.svg" alt="Greeto" style={{ height: 26, objectFit: 'contain', filter: 'brightness(0) invert(1)', opacity: 0.9 }} />
           </span>
         </div>
-        <nav className="flex-1 flex flex-col space-y-2 w-full px-3 overflow-hidden">
-          <Button
-            id="nav-dashboard"
-            variant={activePage === 'dashboard' ? 'secondary' : 'ghost'}
-            className="w-full flex items-center justify-start h-10 px-0 rounded-lg overflow-hidden shrink-0"
-            onClick={() => setActivePage('dashboard')}
-            title="Dashboard"
-          >
-            <div className="w-10 h-10 flex items-center justify-center shrink-0">
-              <LayoutDashboard size={20} />
-            </div>
-            <span className="ml-3 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100">
-              Dashboard
-            </span>
-          </Button>
 
-          <Button
-            id="tour-nav-inbox"
-            variant={activePage === 'inbox' ? 'secondary' : 'ghost'}
-            className="w-full flex items-center justify-start h-10 px-0 rounded-lg overflow-hidden shrink-0 relative"
-            onClick={() => setActivePage('inbox')}
-            title="Inbox"
-          >
-            <div className="w-10 h-10 flex items-center justify-center shrink-0 relative">
-              <MessageSquare 
-                size={20} 
-                className={activePage === 'inbox' ? "text-blue-600" : "text-slate-500"} 
-              />
+        <nav style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4, width: '100%', padding: '0 10px', overflow: 'hidden' }}>
+          <button id="nav-dashboard" style={navBtn('dashboard')} onClick={() => setActivePage('dashboard')} title="Dashboard">
+            <div style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <LayoutDashboard size={18} />
+            </div>
+            <span className="ml-2 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100 text-sm font-medium">Dashboard</span>
+          </button>
+
+          <button id="tour-nav-inbox" style={navBtn('inbox')} onClick={() => setActivePage('inbox')} title="Inbox">
+            <div style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, position: 'relative' }}>
+              <MessageSquare size={18} />
               {Number(totalUnread) > 0 && (
-                <span className="absolute top-1 right-1 bg-red-600 text-white text-[9px] font-bold h-4 min-w-[16px] px-1 rounded-full flex items-center justify-center border-2 border-white shadow-sm ring-1 ring-red-100">
+                <span style={{ position: 'absolute', top: 4, right: 4, background: '#ef4444', color: '#fff', fontSize: 9, fontWeight: 700, height: 14, minWidth: 14, padding: '0 3px', borderRadius: 99, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   {totalUnread > 99 ? '99+' : totalUnread}
                 </span>
               )}
             </div>
-            <span className="ml-3 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-64 opacity-0 group-hover:opacity-100 flex-1 text-left flex items-center justify-between pr-4">
-              <span className={activePage === 'inbox' ? "font-bold text-slate-900" : "font-medium text-slate-600"}>
-                Inbox
-              </span>
+            <span className="whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100 flex-1 text-sm font-medium" style={{ marginLeft: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingRight: 12 }}>
+              <span>Inbox</span>
               {Number(totalUnread) > 0 && (
-                <span className="bg-red-600 text-white px-2 py-0.5 rounded-full text-[10px] font-bold shadow-sm">
-                  {totalUnread}
-                </span>
+                <span style={{ background: '#ef4444', color: '#fff', padding: '1px 7px', borderRadius: 99, fontSize: 10, fontWeight: 700 }}>{totalUnread}</span>
               )}
             </span>
-          </Button>
+          </button>
 
-          <div className="flex flex-col space-y-1">
-            <Button
-              variant={['contacts', 'labels'].includes(activePage) ? 'secondary' : 'ghost'}
-              className="w-full flex items-center justify-between h-10 px-0 rounded-lg overflow-hidden shrink-0"
-              onClick={() => setIsContactsMenuOpen(!isContactsMenuOpen)}
-              title="Contacts Menu"
-            >
-              <div className="flex items-center">
-                <div className="w-10 h-10 flex items-center justify-center shrink-0">
-                  <Users size={20} />
+          {/* Contacts with sub-menu */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <button style={{...navBtn(['contacts','labels']), justifyContent: 'space-between'}} onClick={() => setIsContactsMenuOpen(!isContactsMenuOpen)} title="Contacts">
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <div style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <Users size={18} />
                 </div>
-                <span className="ml-3 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100 text-left">
-                  Contacts
-                </span>
+                <span className="ml-2 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100 text-sm font-medium">Contacts</span>
               </div>
-              <div className="pr-3 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100 flex items-center shrink-0">
-                {isContactsMenuOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-              </div>
-            </Button>
-
+              <span className="whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100 pr-3">
+                {isContactsMenuOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+              </span>
+            </button>
             {isContactsMenuOpen && (
-              <div className="pl-10 space-y-1 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100">
-                <Button
-                  variant={activePage === 'contacts' ? 'secondary' : 'ghost'}
-                  className="w-full flex items-center justify-start h-8 px-3 rounded-lg text-sm text-slate-600 hover:text-slate-900"
-                  onClick={() => setActivePage('contacts')}
-                  title="All Contacts"
-                >
-                  All Contacts
-                </Button>
-                <Button
-                  variant={activePage === 'labels' ? 'secondary' : 'ghost'}
-                  className="w-full flex items-center justify-start h-8 px-3 rounded-lg text-sm text-slate-600 hover:text-slate-900"
-                  onClick={() => setActivePage('labels')}
-                  title="Labels"
-                >
-                  Labels
-                </Button>
+              <div className="whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100" style={{ paddingLeft: 40, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <button style={{ background: activePage === 'contacts' ? 'rgba(0,230,118,0.08)' : 'transparent', color: activePage === 'contacts' ? '#00E676' : 'rgba(255,255,255,0.45)', border: 'none', cursor: 'pointer', borderRadius: 8, padding: '6px 12px', fontSize: 13, textAlign: 'left', width: '100%' }} onClick={() => setActivePage('contacts')}>All Contacts</button>
+                <button style={{ background: activePage === 'labels' ? 'rgba(0,230,118,0.08)' : 'transparent', color: activePage === 'labels' ? '#00E676' : 'rgba(255,255,255,0.45)', border: 'none', cursor: 'pointer', borderRadius: 8, padding: '6px 12px', fontSize: 13, textAlign: 'left', width: '100%' }} onClick={() => setActivePage('labels')}>Labels</button>
               </div>
             )}
           </div>
 
-          <Button
-            id="nav-campaigns"
-            variant={activePage === 'campaigns' ? 'secondary' : 'ghost'}
-            className="w-full flex items-center justify-start h-10 px-0 rounded-lg overflow-hidden shrink-0"
-            onClick={() => setActivePage('campaigns')}
-            title="Campaigns"
-          >
-            <div className="w-10 h-10 flex items-center justify-center shrink-0">
-              <Megaphone size={20} />
-            </div>
-            <span className="ml-3 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100">
-              Campaigns
-            </span>
-          </Button>
+          <button id="nav-campaigns" style={navBtn('campaigns')} onClick={() => setActivePage('campaigns')} title="Campaigns">
+            <div style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Megaphone size={18} /></div>
+            <span className="ml-2 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100 text-sm font-medium">Campaigns</span>
+          </button>
+
           {['admin', 'super_admin', 'quality_manager'].includes((currentUser.role || '').toLowerCase()) && (
             <>
-              <Button
-                variant={activePage === 'team-members' ? 'secondary' : 'ghost'}
-                className="w-full flex items-center justify-start h-10 px-0 rounded-lg overflow-hidden shrink-0"
-                onClick={() => setActivePage('team-members')}
-                title="Team Members"
-              >
-                <div className="w-10 h-10 flex items-center justify-center shrink-0">
-                  <Shield size={20} />
-                </div>
-                <span className="ml-3 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100">
-                  Team Members
-                </span>
-              </Button>
-
-              <Button
-                id="nav-templates"
-                variant={activePage === 'templates' ? 'secondary' : 'ghost'}
-                className="w-full flex items-center justify-start h-10 px-0 rounded-lg overflow-hidden shrink-0"
-                onClick={() => setActivePage('templates')}
-                title="Templates"
-              >
-                <div className="w-10 h-10 flex items-center justify-center shrink-0">
-                  <FileText size={20} />
-                </div>
-                <span className="ml-3 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100">
-                  Templates
-                </span>
-              </Button>
-
-              <Button
-                variant={activePage === 'email-templates' ? 'secondary' : 'ghost'}
-                className="w-full flex items-center justify-start h-10 px-0 rounded-lg overflow-hidden shrink-0"
-                onClick={() => setActivePage('email-templates')}
-                title="Email Templates"
-              >
-                <div className="w-10 h-10 flex items-center justify-center shrink-0">
-                  <Mail size={20} />
-                </div>
-                <span className="ml-3 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100">
-                  Email Templates
-                </span>
-              </Button>
-              <Button
-                id="nav-flows"
-                variant={activePage === 'flows' ? 'secondary' : 'ghost'}
-                className="w-full flex items-center justify-start h-10 px-0 rounded-lg overflow-hidden shrink-0"
-                onClick={() => setActivePage('flows')}
-                title="Flows"
-              >
-                <div className="w-10 h-10 flex items-center justify-center shrink-0">
-                  <GitBranch size={20} />
-                </div>
-                <span className="ml-3 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100">
-                  Flows
-                </span>
-              </Button>
-              <Button
-                id="nav-workflows"
-                variant={activePage === 'workflows' ? 'secondary' : 'ghost'}
-                className="w-full flex items-center justify-start h-10 px-0 rounded-lg overflow-hidden shrink-0"
-                onClick={() => setActivePage('workflows')}
-                title="Workflows"
-              >
-                <div className="w-10 h-10 flex items-center justify-center shrink-0">
-                  <Workflow size={20} />
-                </div>
-                <span className="ml-3 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100">
-                  Workflows
-                </span>
-              </Button>
-
-              <Button
-                id="nav-ai-agent"
-                variant={activePage === 'ai-agent' ? 'secondary' : 'ghost'}
-                className="w-full flex items-center justify-start h-10 px-0 rounded-lg overflow-hidden shrink-0"
-                onClick={() => setActivePage('ai-agent')}
-                title="AI Agent"
-              >
-                <div className="w-10 h-10 flex items-center justify-center shrink-0">
-                  <Bot size={20} />
-                </div>
-                <span className="ml-3 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100">
-                  AI Agent
-                </span>
-              </Button>
-
-              <Button
-                variant={activePage === 'rules' ? 'secondary' : 'ghost'}
-                className="w-full flex items-center justify-start h-10 px-0 rounded-lg overflow-hidden shrink-0"
-                onClick={() => setActivePage('rules')}
-                title="Rules"
-              >
-                <div className="w-10 h-10 flex items-center justify-center shrink-0">
-                  <Zap size={20} />
-                </div>
-                <span className="ml-3 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100">
-                  Rules
-                </span>
-              </Button>
-              <Button
-                variant={activePage === 'instagram' ? 'secondary' : 'ghost'}
-                className="w-full flex items-center justify-start h-10 px-0 rounded-lg overflow-hidden shrink-0"
-                onClick={() => setActivePage('instagram')}
-                title="Instagram Integration"
-              >
-                <div className="w-10 h-10 flex items-center justify-center shrink-0">
-                  <Instagram size={20} />
-                </div>
-                <span className="ml-3 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100">
-                  Instagram
-                </span>
-              </Button>
-              <Button
-                variant={activePage === 'telegram' ? 'secondary' : 'ghost'}
-                className="w-full flex items-center justify-start h-10 px-0 rounded-lg overflow-hidden shrink-0"
-                onClick={() => setActivePage('telegram')}
-                title="Telegram Bot Integration"
-              >
-                <div className="w-10 h-10 flex items-center justify-center shrink-0">
-                  <MessageSquare size={20} />
-                </div>
-                <span className="ml-3 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100">
-                  Telegram
-                </span>
-              </Button>
-              <Button
-                variant={activePage === 'gallery' ? 'secondary' : 'ghost'}
-                className="w-full flex items-center justify-start h-10 px-0 rounded-lg overflow-hidden shrink-0"
-                onClick={() => setActivePage('gallery')}
-                title="Gallery Media File Manager"
-              >
-                <div className="w-10 h-10 flex items-center justify-center shrink-0">
-                  <FileText size={20} />
-                </div>
-                <span className="ml-3 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100">
-                  File Manager
-                </span>
-              </Button>
+              <button style={navBtn('team-members')} onClick={() => setActivePage('team-members')} title="Team Members">
+                <div style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Shield size={18} /></div>
+                <span className="ml-2 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100 text-sm font-medium">Team Members</span>
+              </button>
+              <button id="nav-templates" style={navBtn('templates')} onClick={() => setActivePage('templates')} title="Templates">
+                <div style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><FileText size={18} /></div>
+                <span className="ml-2 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100 text-sm font-medium">Templates</span>
+              </button>
+              <button style={navBtn('email-templates')} onClick={() => setActivePage('email-templates')} title="Email Templates">
+                <div style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Mail size={18} /></div>
+                <span className="ml-2 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100 text-sm font-medium">Email Templates</span>
+              </button>
+              <button id="nav-flows" style={navBtn('flows')} onClick={() => setActivePage('flows')} title="Flows">
+                <div style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><GitBranch size={18} /></div>
+                <span className="ml-2 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100 text-sm font-medium">Flows</span>
+              </button>
+              <button id="nav-workflows" style={navBtn('workflows')} onClick={() => setActivePage('workflows')} title="Workflows">
+                <div style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Workflow size={18} /></div>
+                <span className="ml-2 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100 text-sm font-medium">Workflows</span>
+              </button>
+              <button id="nav-ai-agent" style={navBtn('ai-agent')} onClick={() => setActivePage('ai-agent')} title="AI Agent">
+                <div style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Bot size={18} /></div>
+                <span className="ml-2 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100 text-sm font-medium">AI Agent</span>
+              </button>
+              <button style={navBtn('rules')} onClick={() => setActivePage('rules')} title="Rules">
+                <div style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Zap size={18} /></div>
+                <span className="ml-2 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100 text-sm font-medium">Rules</span>
+              </button>
+              <button style={navBtn('instagram')} onClick={() => setActivePage('instagram')} title="Instagram">
+                <div style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Instagram size={18} /></div>
+                <span className="ml-2 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100 text-sm font-medium">Instagram</span>
+              </button>
+              <button style={navBtn('telegram')} onClick={() => setActivePage('telegram')} title="Telegram">
+                <div style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><MessageSquare size={18} /></div>
+                <span className="ml-2 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100 text-sm font-medium">Telegram</span>
+              </button>
+              <button style={navBtn('gallery')} onClick={() => setActivePage('gallery')} title="File Manager">
+                <div style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><FileText size={18} /></div>
+                <span className="ml-2 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100 text-sm font-medium">File Manager</span>
+              </button>
             </>
           )}
-
-
         </nav>
-        <div className="flex flex-col space-y-2 pb-4 w-full px-3 overflow-hidden">
-          <Button
-            id="tour-nav-settings"
-            variant={activePage === 'settings' ? 'secondary' : 'ghost'}
-            className="w-full flex items-center justify-start h-10 px-0 rounded-lg overflow-hidden shrink-0 mt-auto"
-            onClick={() => setActivePage('settings')}
-            title="Integrations"
-          >
-            <div className="w-10 h-10 flex items-center justify-center shrink-0">
-              <Puzzle className="w-5 h-5 text-slate-500" />
-            </div>
-            <span className="ml-3 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100">
-              Integrations
-            </span>
-          </Button>
-          <div className="w-full flex items-center justify-start h-10 px-0 shrink-0">
-            <div className="w-10 h-10 flex items-center justify-center shrink-0">
-              <div className="w-8 h-8 bg-slate-200 rounded-full flex items-center justify-center text-xs font-medium text-slate-700">
+
+        {/* Bottom section */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '0 10px 8px', overflow: 'hidden' }}>
+          <button id="tour-nav-settings" style={navBtn('settings')} onClick={() => setActivePage('settings')} title="Integrations">
+            <div style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Puzzle size={18} /></div>
+            <span className="ml-2 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100 text-sm font-medium">Integrations</span>
+          </button>
+
+          {/* User avatar */}
+          <div style={{ display: 'flex', alignItems: 'center', height: 40, padding: '0', flexShrink: 0 }}>
+            <div style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'linear-gradient(135deg, #00E676, #0ea5e9)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: '#0a0a14' }}>
                 {currentUser?.name?.substring(0, 2).toUpperCase() || 'JD'}
               </div>
             </div>
-            <span className="ml-3 text-sm font-medium text-slate-700 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100">
+            <span className="ml-2 text-sm font-medium whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100" style={{ color: 'rgba(255,255,255,0.7)' }}>
               {currentUser?.name || 'Profile'}
             </span>
           </div>
-          <Button
-            variant="ghost"
-            className="w-full flex items-center justify-start h-10 px-0 rounded-lg text-slate-400 hover:text-red-600 overflow-hidden shrink-0"
-            onClick={handleLogout}
-            title="Log Out"
-          >
-            <div className="w-10 h-10 flex items-center justify-center shrink-0">
-              <LogOut size={20} />
-            </div>
-            <span className="ml-3 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100">
-              Log Out
-            </span>
-          </Button>
+
+          {/* Logout */}
+          <button style={{ display: 'flex', alignItems: 'center', height: 40, padding: 0, background: 'transparent', border: 'none', cursor: 'pointer', borderRadius: 10, color: 'rgba(255,255,255,0.35)', width: '100%', flexShrink: 0 }} onClick={handleLogout} title="Log Out"
+            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; e.currentTarget.style.color = '#f87171'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(255,255,255,0.35)'; }}>
+            <div style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><LogOut size={18} /></div>
+            <span className="ml-2 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100 text-sm font-medium">Log Out</span>
+          </button>
         </div>
       </aside>
 
@@ -1435,6 +1388,7 @@ export default function App() {
         )}
       </div>
       <Toaster />
+      {showPreloader && !isLoggedIn && <Preloader onDone={() => setShowPreloader(false)} />}
       {showOnboarding && (
         <OnboardingTour 
           onComplete={handleOnboardingComplete} 
