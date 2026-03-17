@@ -84,11 +84,7 @@ export default function CustomerCard({ conversationId, onLeadStageUpdated }) {
     if (!formData.number) return;
     navigator.clipboard.writeText(formData.number);
     setCopied(true);
-    toast({
-      description: "Phone number copied to clipboard",
-      duration: 2000,
-    });
-    setTimeout(() => setCopied(false), 2000);
+    setTimeout(() => setCopied(false), 1200);
   };
 
   const handleSubmit = async () => {
@@ -167,15 +163,22 @@ export default function CustomerCard({ conversationId, onLeadStageUpdated }) {
                   disabled
                   className="h-8 bg-slate-50 text-slate-500 flex-1"
                 />
-                <Button 
-                  variant="outline" 
-                  size="icon" 
-                  className="h-8 w-8" 
-                  onClick={handleCopyNumber}
-                  title="Copy number"
-                >
-                  {copied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4 text-slate-500" />}
-                </Button>
+                <div className="relative">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={handleCopyNumber}
+                    title="Copy number"
+                  >
+                    {copied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4 text-slate-500" />}
+                  </Button>
+                  {copied && (
+                    <div style={{ position: 'absolute', bottom: '110%', left: '50%', transform: 'translateX(-50%)', background: '#1e293b', color: '#fff', fontSize: 11, padding: '3px 8px', borderRadius: 5, whiteSpace: 'nowrap', pointerEvents: 'none', zIndex: 50 }}>
+                      Copied!
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
             <div>

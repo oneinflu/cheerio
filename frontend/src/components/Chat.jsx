@@ -1042,6 +1042,7 @@ export default function Chat({ socket, conversationId, channelExternalId, messag
           <div className="flex-1 relative">
             <Input
               className="pr-10 py-3 h-auto max-h-32 min-h-[44px]"
+              style={{ color: '#111827', background: '#ffffff', caretColor: '#111827' }}
               placeholder="Type a message..."
               value={text}
               onChange={handleInputChange}
