@@ -265,7 +265,11 @@ async function sendText(conversationId, text) {
       await finalizeOutboundMessage(clientConn, messageId, details.conversationId, null, false);
       await clientConn.query('COMMIT');
       emitStatus(details.conversationId, messageId, 'failed');
-      throw new Error(apiErr.response?.data?.error?.message || apiErr.message || 'Failed to send text');
+      const status = Number(apiErr.status || apiErr.response?.status) || 500;
+      const e = new Error(apiErr.response?.data?.error?.message || apiErr.message || 'Failed to send text');
+      e.status = status;
+      e.expose = status < 500;
+      throw e;
     }
 
     const externalId =
@@ -343,7 +347,11 @@ async function sendMedia(conversationId, kind, link, caption) {
       await finalizeOutboundMessage(clientConn, messageId, details.conversationId, null, false);
       await clientConn.query('COMMIT');
       emitStatus(details.conversationId, messageId, 'failed');
-      throw new Error(apiErr.response?.data?.error?.message || apiErr.message || 'Failed to send media');
+      const status = Number(apiErr.status || apiErr.response?.status) || 500;
+      const e = new Error(apiErr.response?.data?.error?.message || apiErr.message || 'Failed to send media');
+      e.status = status;
+      e.expose = status < 500;
+      throw e;
     }
 
     const externalId =
@@ -417,7 +425,11 @@ async function sendTemplate(conversationId, name, languageCode, components) {
       await finalizeOutboundMessage(clientConn, messageId, details.conversationId, null, false);
       await clientConn.query('COMMIT');
       emitStatus(details.conversationId, messageId, 'failed');
-      throw new Error(apiErr.response?.data?.error?.message || apiErr.message || 'Failed to send template');
+      const status = Number(apiErr.status || apiErr.response?.status) || 500;
+      const e = new Error(apiErr.response?.data?.error?.message || apiErr.message || 'Failed to send template');
+      e.status = status;
+      e.expose = status < 500;
+      throw e;
     }
 
     const externalId =
@@ -490,7 +502,11 @@ async function sendInteractive(conversationId, interactive) {
       await finalizeOutboundMessage(clientConn, messageId, details.conversationId, null, false);
       await clientConn.query('COMMIT');
       emitStatus(details.conversationId, messageId, 'failed');
-      throw new Error(apiErr.response?.data?.error?.message || apiErr.message || 'Failed to send interactive message');
+      const status = Number(apiErr.status || apiErr.response?.status) || 500;
+      const e = new Error(apiErr.response?.data?.error?.message || apiErr.message || 'Failed to send interactive message');
+      e.status = status;
+      e.expose = status < 500;
+      throw e;
     }
 
     const externalId =

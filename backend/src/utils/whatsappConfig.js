@@ -3,13 +3,13 @@ const db = require('../../db');
 
 // .env fallback token — always used when DB token is missing or expired
 const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
-const ENV_PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID;
-const ENV_BUSINESS_ACCOUNT_ID = process.env.WHATSAPP_BUSINESS_ACCOUNT_ID;
+const WHATSAPP_PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID;
+const WHATSAPP_BUSINESS_ACCOUNT_ID = process.env.WHATSAPP_BUSINESS_ACCOUNT_ID;
 
 function envFallback(overrides = {}) {
   return {
-    phoneNumberId: ENV_PHONE_NUMBER_ID,
-    businessAccountId: ENV_BUSINESS_ACCOUNT_ID,
+    phoneNumberId: WHATSAPP_PHONE_NUMBER_ID,
+    businessAccountId: WHATSAPP_BUSINESS_ACCOUNT_ID,
     token: WHATSAPP_TOKEN,
     isCustom: false,
     ...overrides,
@@ -42,11 +42,14 @@ async function getConfig(teamId) {
     }
   }
 
-  if (WHATSAPP_TOKEN && ENV_PHONE_NUMBER_ID) {
+  if (WHATSAPP_TOKEN && WHATSAPP_PHONE_NUMBER_ID) {
     return envFallback();
   }
 
-  throw new Error('No active WhatsApp configuration found for this team. Please connect a number in Settings.');
+  const e = new Error('No active WhatsApp configuration found for this team. Please connect a number in Settings.');
+  e.status = 400;
+  e.expose = true;
+  throw e;
 }
 
 async function getConfigByPhone(phoneNumberId) {
@@ -70,11 +73,14 @@ async function getConfigByPhone(phoneNumberId) {
     }
   }
 
-  if (WHATSAPP_TOKEN && ENV_PHONE_NUMBER_ID) {
-    return envFallback({ phoneNumberId: phoneNumberId || ENV_PHONE_NUMBER_ID });
+  if (WHATSAPP_TOKEN && WHATSAPP_PHONE_NUMBER_ID) {
+    return envFallback({ phoneNumberId: phoneNumberId || WHATSAPP_PHONE_NUMBER_ID });
   }
 
-  throw new Error('No active WhatsApp configuration found for this phone number. Please connect a number in Settings.');
+  const e = new Error('No active WhatsApp configuration found for this phone number. Please connect a number in Settings.');
+  e.status = 400;
+  e.expose = true;
+  throw e;
 }
 
 async function getAllConfigs(teamId) {
@@ -98,11 +104,10 @@ async function getAllConfigs(teamId) {
     }
   }
 
-  if (WHATSAPP_TOKEN && ENV_PHONE_NUMBER_ID) {
+  if (WHATSAPP_TOKEN && WHATSAPP_PHONE_NUMBER_ID) {
     return [envFallback()];
   }
   return [];
 }
 
 module.exports = { getConfig, getConfigByPhone, getAllConfigs };
-
