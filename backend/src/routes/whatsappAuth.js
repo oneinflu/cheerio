@@ -154,6 +154,19 @@ router.post('/onboard', auth.requireRole('admin', 'super_admin'), async (req, re
           is_active = true,
           updated_at = NOW()
       `, [teamId, phoneNumberId, businessAccountId, accessToken, displayPhoneNumber]);
+
+      // 3. IMPORTANT: Subscribe our App to the WABA's webhooks
+      // Without this, Meta will NOT send us message events (the "automatic" part)
+      try {
+        console.log(`[WhatsApp Auth] Subscribing app to WABA: ${businessAccountId}`);
+        await axios.post(`${GRAPH_BASE}/${businessAccountId}/subscribed_apps`, null, {
+          params: { access_token: accessToken }
+        });
+        console.log(`[WhatsApp Auth] Successfully subscribed to WABA: ${businessAccountId}`);
+      } catch (subErr) {
+        console.warn(`[WhatsApp Auth] Subscription failed for WABA ${businessAccountId}:`, subErr.response?.data || subErr.message);
+        // We don't fail the whole request as templating might still work
+      }
     }
 
     res.json({

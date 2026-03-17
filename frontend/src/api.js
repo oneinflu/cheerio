@@ -1012,6 +1012,17 @@ export async function onboardWhatsApp(accessToken, teamId) {
   });
   return res.json();
 }
+
+export async function disconnectWhatsApp(phoneNumberId, teamId) {
+  const params = new URLSearchParams();
+  if (teamId) params.append('teamId', teamId);
+  const headers = getAuthHeaders();
+  const res = await fetch(`/api/settings/whatsapp/${phoneNumberId}?${params.toString()}`, {
+    method: 'DELETE',
+    headers,
+  });
+  return res.json();
+}
 export async function getTelegramSettings(teamId) {
   const params = new URLSearchParams();
   if (teamId) params.append('teamId', teamId);

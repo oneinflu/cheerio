@@ -329,8 +329,42 @@ router.put('/whatsapp', auth.requireRole('admin', 'super_admin'), async (req, re
        RETURNING *`,
       [teamId, phone_number_id, business_account_id, permanent_token, display_phone_number, is_active === undefined ? true : is_active]
     );
+
+    // If we have a token and WABA ID, ensure we are subscribed to webhooks
+    if (permanent_token && business_account_id) {
+      try {
+        const GRAPH_BASE = 'https://graph.facebook.com/v21.0';
+        const axios = require('axios');
+        console.log(`[Settings] Ensuring subscription for WABA: ${business_account_id}`);
+        await axios.post(`${GRAPH_BASE}/${business_account_id}/subscribed_apps`, null, {
+          params: { access_token: permanent_token }
+        });
+      } catch (subErr) {
+        console.warn(`[Settings] Webhook subscription failed for WABA ${business_account_id}:`, subErr.message);
+      }
+    }
     
     res.json(result.rows[0]);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete('/whatsapp/:phone_number_id', auth.requireRole('admin', 'super_admin'), async (req, res, next) => {
+  try {
+    const teamId = await resolveTeamId(req);
+    const { phone_number_id } = req.params;
+
+    const result = await db.query(
+      `DELETE FROM whatsapp_settings WHERE team_id = $1 AND phone_number_id = $2`,
+      [teamId, phone_number_id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'WhatsApp setting not found' });
+    }
+
+    res.json({ success: true, message: 'WhatsApp number disconnected' });
   } catch (err) {
     next(err);
   }

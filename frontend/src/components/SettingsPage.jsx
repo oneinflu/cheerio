@@ -1,11 +1,12 @@
 'use strict';
 import React, { useEffect, useMemo, useState } from 'react';
+import { cn } from '../lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Modal } from './ui/Modal';
-import { ListChecks, Clock, MessageSquare, Facebook, CheckCircle2, AlertCircle } from 'lucide-react';
-import { getLeadStages, createLeadStage, updateLeadStage, deleteLeadStage, getWorkingHours, saveWorkingHours, getWhatsAppSettings, updateWhatsAppSettings, onboardWhatsApp, getTelegramSettings, connectTelegram, disconnectTelegram } from '../api';
+import { ListChecks, Clock, MessageSquare, Facebook, CheckCircle2, AlertCircle, Trash2 } from 'lucide-react';
+import { getLeadStages, createLeadStage, updateLeadStage, deleteLeadStage, getWorkingHours, saveWorkingHours, getWhatsAppSettings, updateWhatsAppSettings, onboardWhatsApp, disconnectWhatsApp, getTelegramSettings, connectTelegram, disconnectTelegram } from '../api';
 
 export default function SettingsPage({ currentUser }) {
   const teamId = useMemo(() => {
@@ -304,6 +305,32 @@ export default function SettingsPage({ currentUser }) {
     }, {
       scope: 'whatsapp_business_management,whatsapp_business_messaging,business_management,public_profile'
     });
+  };
+
+  const handleDisconnectWhatsApp = async (phoneNumberId) => {
+    if (!window.confirm('Are you sure you want to disconnect this WhatsApp number? This will stop receiving messages from it.')) return;
+    try {
+      setLoadingWhatsapp(true);
+      const res = await disconnectWhatsApp(phoneNumberId, teamId);
+      if (res.success) {
+        setAllWhatsappSettings(prev => prev.filter(s => s.phone_number_id !== phoneNumberId));
+        if (whatsappSettings.phone_number_id === phoneNumberId) {
+          setWhatsappSettings({
+            phone_number_id: '',
+            business_account_id: '',
+            permanent_token: '',
+            display_phone_number: '',
+            is_active: false
+          });
+        }
+        alert('WhatsApp number disconnected successfully!');
+      }
+    } catch (err) {
+      console.error('Failed to disconnect WhatsApp:', err);
+      alert('Failed to disconnect WhatsApp number');
+    } finally {
+      setLoadingWhatsapp(false);
+    }
   };
 
   const handleSelectPhone = async (phone) => {
@@ -637,17 +664,52 @@ export default function SettingsPage({ currentUser }) {
 
                     <div className="space-y-2 mt-2">
                       {allWhatsappSettings.map(s => (
-                        <div key={s.phone_number_id} className="flex items-center justify-between bg-white border border-green-100 rounded-lg p-2 px-3 shadow-sm">
+                        <div 
+                          key={s.phone_number_id} 
+                          className={cn(
+                            "flex items-center justify-between border rounded-xl p-3 px-4 shadow-sm cursor-pointer transition-all duration-200",
+                            whatsappSettings.phone_number_id === s.phone_number_id 
+                              ? "bg-green-50 border-green-300 ring-4 ring-green-100/50" 
+                              : "bg-white border-slate-200 hover:border-green-300 hover:shadow-md"
+                          )}
+                          onClick={() => setWhatsappSettings(s)}
+                        >
                           <div className="text-left">
-                            <p className="text-xs font-bold text-slate-800">{s.display_phone_number || s.phone_number_id}</p>
-                            <p className="text-[10px] text-slate-500">ID: {s.phone_number_id}</p>
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-bold text-slate-800">{s.display_phone_number || s.phone_number_id}</p>
+                              {s.is_active && <div className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />}
+                            </div>
+                            <p className="text-[10px] text-slate-500 font-mono mt-0.5">ID: {s.phone_number_id}</p>
                           </div>
-                          <div className={`text-[10px] px-2 py-0.5 rounded-full ${s.is_active ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
-                            {s.is_active ? 'Active' : 'Paused'}
+                          
+                          <div className="flex items-center gap-3">
+                            <div className={cn(
+                              "text-[10px] px-2.5 py-1 rounded-full font-semibold uppercase tracking-wider",
+                              s.is_active ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-500"
+                            )}>
+                              {s.is_active ? 'Active' : 'Paused'}
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDisconnectWhatsApp(s.phone_number_id);
+                              }}
+                              title="Delete number"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
                           </div>
                         </div>
                       ))}
                     </div>
+                    {allWhatsappSettings.length > 0 && (
+                      <p className="text-[10px] text-slate-400 text-center italic mt-2">
+                        Tip: Click a number above to edit or re-sync its configuration.
+                      </p>
+                    )}
                   </div>
 
                   <div className="pt-2 flex flex-col gap-2">
