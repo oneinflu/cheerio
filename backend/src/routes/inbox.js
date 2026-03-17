@@ -21,7 +21,7 @@ router.get('/inbox', auth.requireRole('admin', 'super_admin', 'quality_manager',
 router.get('/inbox/counts', auth.requireRole('admin', 'super_admin', 'quality_manager', 'agent', 'supervisor'), async (req, res, next) => {
   try {
     const teamId = (req.query && req.query.teamId) || (req.user.teamIds && req.user.teamIds[0]) || null;
-    const counts = await svc.getInboxCounts(teamId, req.user.id);
+    const counts = await svc.getInboxCounts(teamId, req.user.id, req.user.role);
     res.status(200).json(counts);
   } catch (err) {
     return next(err);

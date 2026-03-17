@@ -377,6 +377,12 @@ export default function App() {
     loadInbox();
   }, [currentUser, inboxFilter, phoneNumberId]);
 
+  useEffect(() => {
+    loadInboxCounts();
+    const interval = setInterval(loadInboxCounts, 30000);
+    return () => clearInterval(interval);
+  }, [currentUser]);
+
   const filteredConversations = useMemo(() => {
     if (!conversations) return [];
     return conversations.filter(c => {
@@ -767,22 +773,27 @@ export default function App() {
           <Button
             id="tour-nav-inbox"
             variant={activePage === 'inbox' ? 'secondary' : 'ghost'}
-            className="w-full flex items-center justify-start h-10 px-0 rounded-lg overflow-hidden shrink-0 relative group/inbox"
+            className="w-full flex items-center justify-start h-10 px-0 rounded-lg overflow-hidden shrink-0 relative"
             onClick={() => setActivePage('inbox')}
             title="Inbox"
           >
             <div className="w-10 h-10 flex items-center justify-center shrink-0 relative">
-              <MessageSquare size={20} className={activePage === 'inbox' ? "text-blue-600 scale-110 transition-transform" : ""} />
-              {totalUnread > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 bg-red-600 text-white text-[9px] font-bold h-4 min-w-[16px] px-1 rounded-full flex items-center justify-center border border-white shadow-sm animate-in zoom-in duration-300">
+              <MessageSquare 
+                size={20} 
+                className={activePage === 'inbox' ? "text-blue-600" : "text-slate-500"} 
+              />
+              {Number(totalUnread) > 0 && (
+                <span className="absolute top-1 right-1 bg-red-600 text-white text-[9px] font-bold h-4 min-w-[16px] px-1 rounded-full flex items-center justify-center border-2 border-white shadow-sm ring-1 ring-red-100">
                   {totalUnread > 99 ? '99+' : totalUnread}
                 </span>
               )}
             </div>
-            <span className="ml-3 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100 flex-1 text-left flex items-center justify-between">
-              <span className="font-medium">Inbox</span>
-              {totalUnread > 0 && (
-                <span className="bg-red-50 text-red-600 px-1.5 py-0.5 rounded-full text-[10px] font-bold mr-3 group-hover:opacity-100 opacity-0 transition-opacity">
+            <span className="ml-3 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-64 opacity-0 group-hover:opacity-100 flex-1 text-left flex items-center justify-between pr-4">
+              <span className={activePage === 'inbox' ? "font-bold text-slate-900" : "font-medium text-slate-600"}>
+                Inbox
+              </span>
+              {Number(totalUnread) > 0 && (
+                <span className="bg-red-600 text-white px-2 py-0.5 rounded-full text-[10px] font-bold shadow-sm">
                   {totalUnread}
                 </span>
               )}

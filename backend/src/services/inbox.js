@@ -280,16 +280,17 @@ async function listConversations(teamId, userId, userRole, filter = 'open', phon
   });
 }
 
-async function getInboxCounts(teamId, userId) {
+async function getInboxCounts(teamId, userId, userRole) {
   try {
+    const isPrivileged = PRIVILEGED_ROLES.has(userRole);
     const res = await db.query(
       `
       SELECT 
         COUNT(*)::int as all,
-        COUNT(*) FILTER (WHERE ca.assignee_user_id IS NULL AND c.status != 'closed')::int as unassigned,
-        COUNT(*) FILTER (WHERE ca.assignee_user_id = $1 AND c.status != 'closed')::int as assigned_to_me,
-        COUNT(*) FILTER (WHERE pc.conversation_id IS NOT NULL AND c.status != 'closed')::int as pinned,
-        COUNT(*) FILTER (WHERE c.status = 'closed')::int as resolved,
+        COUNT(*) FILTER (WHERE ca.assignee_user_id IS NULL AND c.status != 'closed' AND c.team_id = $1)::int as unassigned,
+        COUNT(*) FILTER (WHERE ca.assignee_user_id = $2 AND c.status != 'closed' AND c.team_id = $1)::int as assigned_to_me,
+        COUNT(*) FILTER (WHERE pc.conversation_id IS NOT NULL AND c.status != 'closed' AND c.team_id = $1)::int as pinned,
+        COUNT(*) FILTER (WHERE c.status = 'closed' AND c.team_id = $1)::int as resolved,
         (
           SELECT COUNT(*)::int 
           FROM messages m 
@@ -298,18 +299,24 @@ async function getInboxCounts(teamId, userId) {
           WHERE m.direction = 'inbound' 
             AND m.read_at IS NULL 
             AND c2.status != 'closed'
-            AND (ca2.assignee_user_id = $1 OR ca2.assignee_user_id IS NULL)
+            AND c2.team_id = $1
+            AND (
+              $3 = true 
+              OR ca2.assignee_user_id = $2 
+              OR ca2.assignee_user_id IS NULL
+            )
         ) as unread
       FROM conversations c
       LEFT JOIN conversation_assignments ca ON ca.conversation_id = c.id AND ca.released_at IS NULL
-      LEFT JOIN pinned_conversations pc ON pc.conversation_id = c.id AND pc.user_id = $1
+      LEFT JOIN pinned_conversations pc ON pc.conversation_id = c.id AND pc.user_id = $2
+      WHERE c.team_id = $1
       `,
-      [userId]
+      [teamId, userId, isPrivileged]
     );
     return res.rows[0];
   } catch (err) {
     console.error('[InboxService] Failed to get counts:', err);
-    return { all: 0, unassigned: 0, assigned_to_me: 0, pinned: 0, resolved: 0 };
+    return { all: 0, unassigned: 0, assigned_to_me: 0, pinned: 0, resolved: 0, unread: 0 };
   }
 }
 
