@@ -27,7 +27,7 @@ import AiAgentPage from './components/AiAgentPage.jsx';
 import OnboardingTour from './components/OnboardingTour.jsx';
 import { connectSocket } from './socket.js';
 import { getInbox, getInboxCounts, getMessages, claimConversation, reassignConversation, forceReassignConversation, releaseConversation, markAsRead, resolveConversation, deleteConversation, blockConversation, unblockConversation, pinConversation, updateWorkflow, getTeamUser, getTeamUsers, reassignExternalLead, toggleAiForConversation, completeOnboarding } from './api.js';
-import { LayoutDashboard, MessageSquare, Users, Megaphone, Settings, LogOut, Search, Bell, FileText, Workflow, Shield, ChevronsUpDown, Check, Zap, GitBranch, Instagram, ChevronDown, ChevronRight, Mail, Bot, ArrowRight, PauseCircle, PlayCircle } from 'lucide-react';
+import { LayoutDashboard, MessageSquare, Users, Megaphone, Settings, LogOut, Search, Bell, FileText, Workflow, Shield, ChevronsUpDown, Check, Zap, GitBranch, Instagram, ChevronDown, ChevronRight, Mail, Bot, ArrowRight, PauseCircle, PlayCircle, Puzzle } from 'lucide-react';
 import { Button } from './components/ui/Button';
 import { Badge } from './components/ui/Badge';
 import { Card, CardHeader, CardTitle, CardContent } from './components/ui/Card';
@@ -1003,17 +1003,17 @@ export default function App() {
         </nav>
         <div className="flex flex-col space-y-2 pb-4 w-full px-3 overflow-hidden">
           <Button
-            id="nav-settings"
+            id="tour-nav-settings"
             variant={activePage === 'settings' ? 'secondary' : 'ghost'}
-            className="w-full flex items-center justify-start h-10 px-0 rounded-lg overflow-hidden shrink-0"
+            className="w-full flex items-center justify-start h-10 px-0 rounded-lg overflow-hidden shrink-0 mt-auto"
             onClick={() => setActivePage('settings')}
-            title="Settings"
+            title="Integrations"
           >
             <div className="w-10 h-10 flex items-center justify-center shrink-0">
-              <Settings size={20} />
+              <Puzzle className="w-5 h-5 text-slate-500" />
             </div>
             <span className="ml-3 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100">
-              Settings
+              Integrations
             </span>
           </Button>
           <div className="w-full flex items-center justify-start h-10 px-0 shrink-0">

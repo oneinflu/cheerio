@@ -1,12 +1,11 @@
-'use strict';
 import React, { useEffect, useMemo, useState } from 'react';
 import { cn } from '../lib/utils';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/Card';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Modal } from './ui/Modal';
-import { ListChecks, Clock, MessageSquare, Facebook, CheckCircle2, AlertCircle, Trash2 } from 'lucide-react';
-import { getLeadStages, createLeadStage, updateLeadStage, deleteLeadStage, getWorkingHours, saveWorkingHours, getWhatsAppSettings, updateWhatsAppSettings, onboardWhatsApp, disconnectWhatsApp, getTelegramSettings, connectTelegram, disconnectTelegram } from '../api';
+import { MessageSquare, Facebook, CheckCircle2, AlertCircle, Trash2, ArrowLeft, Instagram, Send, Puzzle } from 'lucide-react';
+import { getWhatsAppSettings, updateWhatsAppSettings, onboardWhatsApp, disconnectWhatsApp, getTelegramSettings, connectTelegram, disconnectTelegram } from '../api';
 
 export default function SettingsPage({ currentUser }) {
   const teamId = useMemo(() => {
@@ -16,94 +15,9 @@ export default function SettingsPage({ currentUser }) {
     return null;
   }, [currentUser]);
 
-  const [leadStages, setLeadStages] = useState([]);
-  const [loadingStages, setLoadingStages] = useState(false);
-  const [stagesError, setStagesError] = useState(null);
-  const [savingStageId, setSavingStageId] = useState(null);
-  const [addingStage, setAddingStage] = useState(false);
-  const [isAddStageModalOpen, setIsAddStageModalOpen] = useState(false);
-  const [newStageName, setNewStageName] = useState('');
-  const [newStageColor, setNewStageColor] = useState('#0f172a');
-  const [newStageClosed, setNewStageClosed] = useState(false);
+  const [activeIntegration, setActiveIntegration] = useState(null); // 'whatsapp', 'telegram', 'instagram'
 
-  const [timezone, setTimezone] = useState('Asia/Kolkata');
-  const [workingHours, setWorkingHours] = useState({
-    mon: { closed: false, open: '09:00', close: '18:00' },
-    tue: { closed: false, open: '09:00', close: '18:00' },
-    wed: { closed: false, open: '09:00', close: '18:00' },
-    thu: { closed: false, open: '09:00', close: '18:00' },
-    fri: { closed: false, open: '09:00', close: '18:00' },
-    sat: { closed: true, open: '09:00', close: '18:00' },
-    sun: { closed: true, open: '09:00', close: '18:00' },
-  });
-  const [loadingHours, setLoadingHours] = useState(false);
-  const [savingHours, setSavingHours] = useState(false);
-  const [hoursError, setHoursError] = useState(null);
-  const [isHoursModalOpen, setIsHoursModalOpen] = useState(false);
-
-  const dayLabels = {
-    mon: 'Monday',
-    tue: 'Tuesday',
-    wed: 'Wednesday',
-    thu: 'Thursday',
-    fri: 'Friday',
-    sat: 'Saturday',
-    sun: 'Sunday',
-  };
-
-  useEffect(() => {
-    if (!teamId) return;
-    const load = async () => {
-      try {
-        setLoadingStages(true);
-        const res = await getLeadStages(teamId);
-        if (res && Array.isArray(res.stages)) {
-          setLeadStages(res.stages);
-          setStagesError(null);
-        } else {
-          setLeadStages([]);
-          setStagesError('Failed to load lead stages');
-        }
-      } catch (err) {
-        setStagesError('Failed to load lead stages');
-      } finally {
-        setLoadingStages(false);
-      }
-    };
-    load();
-  }, [teamId]);
-
-  useEffect(() => {
-    if (!teamId) return;
-    const load = async () => {
-      try {
-        setLoadingHours(true);
-        const res = await getWorkingHours(teamId);
-        if (res && res.hours) {
-          setTimezone(res.timezone || 'Asia/Kolkata');
-          setWorkingHours({
-            mon: { closed: false, open: '09:00', close: '18:00' },
-            tue: { closed: false, open: '09:00', close: '18:00' },
-            wed: { closed: false, open: '09:00', close: '18:00' },
-            thu: { closed: false, open: '09:00', close: '18:00' },
-            fri: { closed: false, open: '09:00', close: '18:00' },
-            sat: { closed: true, open: '09:00', close: '18:00' },
-            sun: { closed: true, open: '09:00', close: '18:00' },
-            ...res.hours,
-          });
-          setHoursError(null);
-        } else {
-          setHoursError('Failed to load working hours');
-        }
-      } catch (err) {
-        setHoursError('Failed to load working hours');
-      } finally {
-        setLoadingHours(false);
-      }
-    };
-    load();
-  }, [teamId]);
-
+  // --- WhatsApp State ---
   const [whatsappSettings, setWhatsappSettings] = useState({
     phone_number_id: '',
     business_account_id: '',
@@ -120,6 +34,37 @@ export default function SettingsPage({ currentUser }) {
   const [savingWhatsapp, setSavingWhatsapp] = useState(false);
   const [whatsappError, setWhatsappError] = useState(null);
 
+  // --- Telegram State ---
+  const [telegramSettings, setTelegramSettings] = useState([]);
+  const [loadingTelegram, setLoadingTelegram] = useState(false);
+  const [savingTelegram, setSavingTelegram] = useState(false);
+  const [telegramError, setTelegramError] = useState(null);
+  const [botTokenInput, setBotTokenInput] = useState('');
+  const [botDisplayName, setBotDisplayName] = useState('');
+
+  // --- Meta SDK & Onboarding ---
+  const [sdkLoaded, setSdkLoaded] = useState(false);
+  useEffect(() => {
+    window.fbAsyncInit = function() {
+      window.FB.init({
+        appId      : '321531509460250', 
+        cookie     : true,
+        xfbml      : true,
+        version    : 'v21.0'
+      });
+      setSdkLoaded(true);
+    };
+
+    (function(d, s, id) {
+      var js, fjs = d.getElementsByTagName(s)[0];
+      if (d.getElementById(id)) return;
+      js = d.createElement(s); js.id = id;
+      js.src = "https://connect.facebook.net/en_US/sdk.js";
+      fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+  }, []);
+
+  // Load WhatsApp Settings
   useEffect(() => {
     if (!teamId) return;
     const load = async () => {
@@ -143,28 +88,6 @@ export default function SettingsPage({ currentUser }) {
     load();
   }, [teamId]);
 
-  const handleSaveWhatsApp = async () => {
-    if (!teamId) return;
-    try {
-      setSavingWhatsapp(true);
-      setWhatsappError(null);
-      await updateWhatsAppSettings(whatsappSettings, teamId);
-      alert('WhatsApp settings saved successfully!');
-    } catch (err) {
-      setWhatsappError('Failed to save WhatsApp settings');
-    } finally {
-      setSavingWhatsapp(false);
-    }
-  };
-
-  // Telegram Configuration
-  const [telegramSettings, setTelegramSettings] = useState([]);
-  const [loadingTelegram, setLoadingTelegram] = useState(false);
-  const [savingTelegram, setSavingTelegram] = useState(false);
-  const [telegramError, setTelegramError] = useState(null);
-  const [botTokenInput, setBotTokenInput] = useState('');
-  const [botDisplayName, setBotDisplayName] = useState('');
-
   // Load Telegram settings
   useEffect(() => {
     if (!teamId) return;
@@ -184,73 +107,20 @@ export default function SettingsPage({ currentUser }) {
     load();
   }, [teamId]);
 
-  const handleConnectTelegram = async () => {
-    if (!botTokenInput) {
-      setTelegramError('Bot token is required');
-      return;
-    }
+
+  const handleSaveWhatsApp = async () => {
+    if (!teamId) return;
     try {
-      setSavingTelegram(true);
-      setTelegramError(null);
-      const res = await connectTelegram(botTokenInput, botDisplayName || 'Telegram Bot', teamId);
-      if (res.success) {
-        setBotTokenInput('');
-        setBotDisplayName('');
-        const updated = await getTelegramSettings(teamId);
-        if (updated && updated.settings) {
-          setTelegramSettings(updated.settings);
-        }
-        alert('Telegram bot connected successfully!');
-      } else {
-        setTelegramError(res.error || 'Failed to connect bot');
-      }
+      setSavingWhatsapp(true);
+      setWhatsappError(null);
+      await updateWhatsAppSettings(whatsappSettings, teamId);
+      alert('WhatsApp settings saved successfully!');
     } catch (err) {
-      setTelegramError('Failed to connect Telegram bot');
+      setWhatsappError('Failed to save WhatsApp settings');
     } finally {
-      setSavingTelegram(false);
+      setSavingWhatsapp(false);
     }
   };
-
-  const handleDisconnectTelegram = async (botToken) => {
-    if (!window.confirm('Are you sure you want to disconnect this Telegram bot?')) return;
-    try {
-      setSavingTelegram(true);
-      const res = await disconnectTelegram(botToken, teamId);
-      if (res.success) {
-        const updated = await getTelegramSettings(teamId);
-        if (updated && updated.settings) {
-          setTelegramSettings(updated.settings);
-        }
-        alert('Telegram bot disconnected successfully!');
-      }
-    } catch (err) {
-      setTelegramError('Failed to disconnect Telegram bot');
-    } finally {
-      setSavingTelegram(false);
-    }
-  };
-
-  // Meta SDK & Onboarding
-  const [sdkLoaded, setSdkLoaded] = useState(false);
-  useEffect(() => {
-    window.fbAsyncInit = function() {
-      window.FB.init({
-        appId      : '321531509460250', // Ideally from config/env
-        cookie     : true,
-        xfbml      : true,
-        version    : 'v21.0'
-      });
-      setSdkLoaded(true);
-    };
-
-    (function(d, s, id) {
-      var js, fjs = d.getElementsByTagName(s)[0];
-      if (d.getElementById(id)) return;
-      js = d.createElement(s); js.id = id;
-      js.src = "https://connect.facebook.net/en_US/sdk.js";
-      fjs.parentNode.insertBefore(js, fjs);
-    }(document, 'script', 'facebook-jssdk'));
-  }, []);
 
   const handleConnectWhatsApp = () => {
     if (!window.FB) {
@@ -266,13 +136,11 @@ export default function SettingsPage({ currentUser }) {
           .then(res => {
             if (res.success) {
               if (res.data.phones && res.data.phones.length > 1) {
-                // Multiple phones found, show selection modal
                 setDiscoveredPhones(res.data.phones);
                 setDiscoveredWabaId(res.data.businessAccountId);
                 setDiscoveredToken(res.data.accessToken);
                 setIsPhoneSelectModalOpen(true);
               } else if (res.data.phones && res.data.phones.length === 1) {
-                // One phone found, it was already auto-saved by backend
                 const phone = res.data.phones[0];
                 const newSetting = {
                   phone_number_id: phone.id,
@@ -363,692 +231,502 @@ export default function SettingsPage({ currentUser }) {
   };
 
 
-
-  const handleCreateStage = async () => {
-    if (!newStageName.trim()) {
-      setStagesError('Stage name is required');
+  const handleConnectTelegram = async () => {
+    if (!botTokenInput) {
+      setTelegramError('Bot token is required');
       return;
     }
     try {
-      setAddingStage(true);
-      const created = await createLeadStage({
-        name: newStageName.trim(),
-        color: newStageColor || null,
-        is_closed: newStageClosed,
-      }, teamId);
-      if (created && created.id) {
-        setLeadStages((prev) => [...prev, created]);
-        setStagesError(null);
-        setIsAddStageModalOpen(false);
-        setNewStageName('');
-        setNewStageColor('#0f172a');
-        setNewStageClosed(false);
+      setSavingTelegram(true);
+      setTelegramError(null);
+      const res = await connectTelegram(botTokenInput, botDisplayName || 'Telegram Bot', teamId);
+      if (res.success) {
+        setBotTokenInput('');
+        setBotDisplayName('');
+        const updated = await getTelegramSettings(teamId);
+        if (updated && updated.settings) {
+          setTelegramSettings(updated.settings);
+        }
+        alert('Telegram bot connected successfully!');
       } else {
-        setStagesError('Failed to add stage');
+        setTelegramError(res.error || 'Failed to connect bot');
       }
     } catch (err) {
-      setStagesError('Failed to add stage');
+      setTelegramError('Failed to connect Telegram bot');
     } finally {
-      setAddingStage(false);
+      setSavingTelegram(false);
     }
   };
 
-  const handleStageChange = (id, field, value) => {
-    setLeadStages((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, [field]: value } : s))
-    );
-  };
-
-  const handleStageBlur = async (stage) => {
-    if (!teamId) return;
-    setSavingStageId(stage.id);
+  const handleDisconnectTelegram = async (botToken) => {
+    if (!window.confirm('Are you sure you want to disconnect this Telegram bot?')) return;
     try {
-      await updateLeadStage(stage.id, {
-        name: stage.name,
-        color: stage.color,
-        is_closed: stage.is_closed,
-      }, teamId);
-    } catch (err) {
-    } finally {
-      setSavingStageId(null);
-    }
-  };
-
-  const handleDeleteStage = async (id) => {
-    if (!teamId) return;
-    if (!window.confirm('Delete this stage?')) return;
-    try {
-      await deleteLeadStage(id, teamId);
-      setLeadStages((prev) => prev.filter((s) => s.id !== id));
-    } catch (err) {}
-  };
-
-  const handleHoursChange = (day, field, value) => {
-    setWorkingHours((prev) => ({
-      ...prev,
-      [day]: {
-        ...prev[day],
-        [field]: value,
-      },
-    }));
-  };
-
-  const handleSaveHours = async () => {
-    if (!teamId) return;
-    try {
-      setSavingHours(true);
-      const payload = {
-        timezone,
-        hours: workingHours,
-      };
-      const res = await saveWorkingHours(payload, teamId);
-      if (res && res.hours) {
-        setTimezone(res.timezone || timezone);
-        setWorkingHours(res.hours);
-        setHoursError(null);
-      } else {
-        setHoursError('Failed to save working hours');
+      setSavingTelegram(true);
+      const res = await disconnectTelegram(botToken, teamId);
+      if (res.success) {
+        const updated = await getTelegramSettings(teamId);
+        if (updated && updated.settings) {
+          setTelegramSettings(updated.settings);
+        }
+        alert('Telegram bot disconnected successfully!');
       }
     } catch (err) {
-      setHoursError('Failed to save working hours');
+      setTelegramError('Failed to disconnect Telegram bot');
     } finally {
-      setSavingHours(false);
+      setSavingTelegram(false);
     }
   };
 
-  return (
-    <div className="flex-1 overflow-y-auto">
-      <div className="border-b border-slate-200 bg-white">
-        <div className="px-8 py-6 flex items-center justify-between">
-          <div>
-            <h1 className="text-lg font-semibold text-slate-900">Settings</h1>
-            <p className="text-sm text-slate-500">
-              Configure lead stages and working hours for your team.
-            </p>
-          </div>
-        </div>
-      </div>
 
-      <div className="p-8 grid grid-cols-1 xl:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <ListChecks className="h-4 w-4 text-slate-500" />
-              Lead Stages
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-xs text-slate-500">
-              Define the stages a lead moves through, like New, Contacted, Enrolled.
-            </p>
-
-            {stagesError && (
-              <div className="text-xs text-red-600 border border-red-200 bg-red-50 rounded-md px-3 py-2">
-                {stagesError}
-              </div>
-            )}
-
-            <div className="space-y-2 max-h-72 overflow-y-auto border border-slate-200 rounded-md">
-              {loadingStages && leadStages.length === 0 ? (
-                <div className="px-4 py-6 text-xs text-slate-500">Loading stages...</div>
-              ) : leadStages.length === 0 ? (
-                <div className="px-4 py-6 text-xs text-slate-500">
-                  No stages yet. Add your first stage.
-                </div>
-              ) : (
-                leadStages.map((stage) => (
-                  <div
-                    key={stage.id}
-                    className="flex items-center gap-2 px-4 py-2 border-b border-slate-100 last:border-b-0"
-                  >
-                    <div className="w-2 h-8 rounded-full mr-1" style={{ backgroundColor: stage.color || '#0f172a' }} />
-                    <div className="flex-1 flex flex-col gap-1">
-                      <Input
-                        value={stage.name || ''}
-                        onChange={(e) =>
-                          handleStageChange(stage.id, 'name', e.target.value)
-                        }
-                        onBlur={() => handleStageBlur(stage)}
-                        placeholder="Stage name"
-                        className="h-8 text-xs"
-                      />
-                      <div className="flex items-center gap-3">
-                        <input
-                          type="color"
-                          className="h-6 w-10 p-0 border border-slate-200 rounded"
-                          value={stage.color || '#0f172a'}
-                          onChange={(e) =>
-                            handleStageChange(stage.id, 'color', e.target.value)
-                          }
-                          onBlur={() => handleStageBlur(stage)}
-                        />
-                        <label className="flex items-center gap-1 text-[11px] text-slate-600">
-                          <input
-                            type="checkbox"
-                            checked={stage.is_closed}
-                            onChange={(e) =>
-                              handleStageChange(stage.id, 'is_closed', e.target.checked)
-                            }
-                            onBlur={() => handleStageBlur(stage)}
-                          />
-                          Closed stage
-                        </label>
-                      </div>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-slate-400 hover:text-red-600"
-                      onClick={() => handleDeleteStage(stage.id)}
-                    >
-                      ×
-                    </Button>
-                    {savingStageId === stage.id && (
-                      <span className="text-[10px] text-slate-400 ml-1">Saving...</span>
-                    )}
-                  </div>
-                ))
-              )}
-            </div>
-
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setIsAddStageModalOpen(true)}
-              disabled={addingStage}
-            >
-              Add Stage
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Clock className="h-4 w-4 text-slate-500" />
-              Working Hours
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-xs text-slate-500">
-              Set the hours when your team is considered available for leads.
-            </p>
-
-            {hoursError && (
-              <div className="text-xs text-red-600 border border-red-200 bg-red-50 rounded-md px-3 py-2">
-                {hoursError}
-              </div>
-            )}
-
-            <div className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-              <div className="flex flex-col">
-                <span className="font-medium text-slate-700">
-                  {timezone || 'Timezone not set'}
-                </span>
-                <span className="text-[11px] text-slate-500">
-                  Configure daily open and close times for your team.
-                </span>
-              </div>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => setIsHoursModalOpen(true)}
-              >
-                Set Working Hours
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+  const renderOverview = () => (
+    <div className="p-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         
-        {/* WhatsApp Business Account */}
-        <Card className="border-none shadow-sm h-full flex flex-col">
-          <CardHeader className="flex flex-row items-center justify-between py-4 pb-2 border-b border-slate-50">
-            <div className="flex items-center gap-2">
-              <div className="p-2 bg-green-50 rounded-lg">
-                <MessageSquare className="w-5 h-5 text-green-600" />
-              </div>
-              <div>
-                <CardTitle className="text-base font-semibold text-slate-800">WhatsApp Business</CardTitle>
-                <div className="text-[11px] text-slate-500 font-normal">Connect your own API credentials</div>
-              </div>
+        {/* WhatsApp Card */}
+        <Card 
+          className="group cursor-pointer hover:shadow-md transition-all duration-300 border-slate-200 hover:border-green-300 relative overflow-hidden flex flex-col"
+          onClick={() => setActiveIntegration('whatsapp')}
+        >
+          <div className="absolute top-0 right-0 w-32 h-32 bg-green-500/5 rounded-bl-full -z-10 transition-transform group-hover:scale-110" />
+          <CardContent className="p-6 flex-1 flex flex-col">
+            <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center mb-4">
+              <MessageSquare className="w-6 h-6 text-green-600" />
             </div>
-            <div className="flex items-center gap-2">
-              <div className={`h-2 w-2 rounded-full ${whatsappSettings.is_active ? 'bg-green-500' : 'bg-slate-300'}`} />
-              <span className="text-[10px] font-medium text-slate-500 uppercase tracking-wider">
-                {whatsappSettings.is_active ? 'Connected' : 'Disconnected'}
+            <h3 className="text-lg font-bold text-slate-900 mb-1">WhatsApp Business</h3>
+            <p className="text-sm text-slate-500 flex-1">
+              Connect multiple WhatsApp numbers via Meta API.
+            </p>
+            <div className="mt-6 flex items-center justify-between border-t border-slate-100 pt-4">
+              <span className={cn(
+                "text-xs font-semibold px-2.5 py-1 rounded-full",
+                allWhatsappSettings.length > 0 ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-500"
+              )}>
+                {allWhatsappSettings.length > 0 ? `${allWhatsappSettings.length} Connected` : 'Not connected'}
               </span>
-            </div>
-          </CardHeader>
-          <CardContent className="pt-4 flex-1 flex flex-col overflow-hidden">
-            <div className="flex-1 flex flex-col items-center justify-center py-6 text-center space-y-6">
-              {!allWhatsappSettings.some(s => s.phone_number_id) ? (
-                <>
-                  <div className="max-w-xs space-y-2">
-                    <p className="text-sm text-slate-600 font-medium">
-                      One-click connection to Meta
-                    </p>
-                    <p className="text-[11px] text-slate-500">
-                      We will automatically fetch your Business ID and Phone Number IDs from your Facebook account.
-                    </p>
-                  </div>
-                  <Button
-                    onClick={handleConnectWhatsApp}
-                    disabled={loadingWhatsapp || !sdkLoaded}
-                    className="bg-[#1877F2] hover:bg-[#166fe5] text-white flex items-center gap-3 px-8 h-11 rounded-full shadow-lg shadow-blue-500/20 transition-all hover:scale-[1.02]"
-                  >
-                    {loadingWhatsapp ? (
-                      <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    ) : (
-                      <Facebook className="w-5 h-5 fill-current" />
-                    )}
-                    <span className="font-semibold">Connect with Meta</span>
-                  </Button>
-                  {!sdkLoaded && <p className="text-[10px] text-slate-400">Loading Meta SDK...</p>}
-                </>
-              ) : (
-                <div className="w-full space-y-4">
-                  <div className="bg-green-50/50 border border-green-100 rounded-xl p-4 flex flex-col items-stretch gap-3">
-                    <div className="flex items-start gap-4">
-                      <div className="mt-1">
-                        <CheckCircle2 className="w-5 h-5 text-green-500" />
-                      </div>
-                      <div className="text-left flex-1">
-                        <h4 className="text-sm font-bold text-slate-800">Accounts Connected</h4>
-                        <p className="text-xs text-slate-600 mt-0.5">
-                          You have {allWhatsappSettings.length} number(s) linked to this team.
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2 mt-2">
-                      {allWhatsappSettings.map(s => (
-                        <div 
-                          key={s.phone_number_id} 
-                          className={cn(
-                            "flex items-center justify-between border rounded-xl p-3 px-4 shadow-sm cursor-pointer transition-all duration-200",
-                            whatsappSettings.phone_number_id === s.phone_number_id 
-                              ? "bg-green-50 border-green-300 ring-4 ring-green-100/50" 
-                              : "bg-white border-slate-200 hover:border-green-300 hover:shadow-md"
-                          )}
-                          onClick={() => setWhatsappSettings(s)}
-                        >
-                          <div className="text-left">
-                            <div className="flex items-center gap-2">
-                              <p className="text-sm font-bold text-slate-800">{s.display_phone_number || s.phone_number_id}</p>
-                              {s.is_active && <div className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />}
-                            </div>
-                            <p className="text-[10px] text-slate-500 font-mono mt-0.5">ID: {s.phone_number_id}</p>
-                          </div>
-                          
-                          <div className="flex items-center gap-3">
-                            <div className={cn(
-                              "text-[10px] px-2.5 py-1 rounded-full font-semibold uppercase tracking-wider",
-                              s.is_active ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-500"
-                            )}>
-                              {s.is_active ? 'Active' : 'Paused'}
-                            </div>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDisconnectWhatsApp(s.phone_number_id);
-                              }}
-                              title="Delete number"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    {allWhatsappSettings.length > 0 && (
-                      <p className="text-[10px] text-slate-400 text-center italic mt-2">
-                        Tip: Click a number above to edit or re-sync its configuration.
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="pt-2 flex flex-col gap-2">
-                    <Button
-                      variant="outline"
-                      onClick={handleConnectWhatsApp}
-                      className="text-slate-500 text-xs border-slate-200 h-8 px-4 w-full"
-                    >
-                      Connect more numbers
-                    </Button>
-                  </div>
-                </div>
-              )}
-              
-              {whatsappError && (
-                <div className="flex items-center gap-2 text-red-500 text-xs mt-2 bg-red-50 px-3 py-2 rounded-md border border-red-100 italic">
-                  <AlertCircle className="w-3.5 h-3.5" />
-                  {whatsappError}
-                </div>
-              )}
-            </div>
-            
-            <div className="pt-4 border-t border-slate-50 flex items-center justify-between mt-auto">
-              <div>
-                <label className="flex items-center gap-2 cursor-pointer group">
-                  <input
-                    type="checkbox"
-                    className="rounded border-slate-300 text-green-600 focus:ring-green-500/20"
-                    checked={whatsappSettings.is_active}
-                    onChange={(e) => setWhatsappSettings(prev => ({ ...prev, is_active: e.target.checked }))}
-                  />
-                  <span className="text-[11px] font-medium text-slate-600 group-hover:text-slate-900 transition-colors">Active Integration</span>
-                </label>
-              </div>
-              <Button
-                onClick={handleSaveWhatsApp}
-                disabled={savingWhatsapp || loadingWhatsapp || !whatsappSettings.phone_number_id}
-                className="bg-slate-900 hover:bg-black text-white h-9 px-6 text-xs font-semibold rounded-lg"
-              >
-                {savingWhatsapp ? 'Saving...' : 'Save Configuration'}
+              <Button variant="ghost" size="sm" className="text-slate-400 group-hover:text-green-600 -mr-2">
+                Configure <ArrowRight className="w-4 h-4 ml-1" />
               </Button>
             </div>
           </CardContent>
         </Card>
 
-        {/* Telegram Bot Configuration */}
-        <Card className="border-none shadow-sm h-full flex flex-col">
-          <CardHeader className="flex flex-row items-center justify-between py-4 pb-2 border-b border-slate-50">
-            <div className="flex items-center gap-2">
-              <div className="p-2 bg-blue-50 rounded-lg">
-                <MessageSquare className="w-5 h-5 text-blue-600" />
-              </div>
-              <div>
-                <CardTitle className="text-base font-semibold text-slate-800">Telegram Bot</CardTitle>
-                <div className="text-[11px] text-slate-500 font-normal">Connect your Telegram bot</div>
-              </div>
+        {/* Telegram Card */}
+        <Card 
+          className="group cursor-pointer hover:shadow-md transition-all duration-300 border-slate-200 hover:border-blue-300 relative overflow-hidden flex flex-col"
+          onClick={() => setActiveIntegration('telegram')}
+        >
+          <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-bl-full -z-10 transition-transform group-hover:scale-110" />
+          <CardContent className="p-6 flex-1 flex flex-col">
+            <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center mb-4">
+              <Send className="w-6 h-6 text-blue-600" />
             </div>
-            <div className="flex items-center gap-2">
-              <div className={`h-2 w-2 rounded-full ${telegramSettings.length > 0 ? 'bg-blue-500' : 'bg-slate-300'}`} />
-              <span className="text-[10px] font-medium text-slate-500 uppercase tracking-wider">
-                {telegramSettings.length > 0 ? 'Connected' : 'Disconnected'}
+            <h3 className="text-lg font-bold text-slate-900 mb-1">Telegram Bot</h3>
+            <p className="text-sm text-slate-500 flex-1">
+              Sync messages from Telegram bots seamlessly.
+            </p>
+            <div className="mt-6 flex items-center justify-between border-t border-slate-100 pt-4">
+               <span className={cn(
+                "text-xs font-semibold px-2.5 py-1 rounded-full",
+                telegramSettings.length > 0 ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-500"
+              )}>
+                {telegramSettings.length > 0 ? `${telegramSettings.length} Connected` : 'Not connected'}
               </span>
+              <Button variant="ghost" size="sm" className="text-slate-400 group-hover:text-blue-600 -mr-2">
+                Configure <ArrowRight className="w-4 h-4 ml-1" />
+              </Button>
             </div>
-          </CardHeader>
-          <CardContent className="pt-4 flex-1 flex flex-col overflow-hidden">
-            <div className="flex-1 flex flex-col items-center justify-center py-6 text-center space-y-6">
-              {telegramSettings.length === 0 ? (
-                <>
-                  <div className="max-w-xs space-y-2">
-                    <p className="text-sm text-slate-600 font-medium">
-                      Connect your Telegram bot
-                    </p>
-                    <p className="text-[11px] text-slate-500">
-                      Create a bot with @BotFather on Telegram and paste the token here to start receiving messages.
-                    </p>
-                  </div>
-                  
-                  {telegramError && (
-                    <div className="flex items-center gap-2 text-red-500 text-xs bg-red-50 px-3 py-2 rounded-md border border-red-100 italic w-full">
-                      <AlertCircle className="w-3.5 h-3.5" />
-                      {telegramError}
-                    </div>
+          </CardContent>
+        </Card>
+
+        {/* Instagram Card */}
+        <Card 
+          className="group cursor-pointer hover:shadow-md transition-all duration-300 border-slate-200 hover:border-pink-300 relative overflow-hidden flex flex-col"
+          onClick={() => setActiveIntegration('instagram')}
+        >
+          <div className="absolute top-0 right-0 w-32 h-32 bg-pink-500/5 rounded-bl-full -z-10 transition-transform group-hover:scale-110" />
+          <CardContent className="p-6 flex-1 flex flex-col">
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-500 flex items-center justify-center mb-4">
+              <Instagram className="w-6 h-6 text-white" />
+            </div>
+            <h3 className="text-lg font-bold text-slate-900 mb-1">Instagram DMs</h3>
+            <p className="text-sm text-slate-500 flex-1">
+              Manage Instagram Direct Messages directly alongside your other channels.
+            </p>
+            <div className="mt-6 flex items-center justify-between border-t border-slate-100 pt-4">
+               <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-slate-500">
+                Not connected
+              </span>
+              <Button variant="ghost" size="sm" className="text-slate-400 group-hover:text-pink-600 -mr-2">
+                Configure <ArrowRight className="w-4 h-4 ml-1" />
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+      </div>
+    </div>
+  );
+
+  const renderWhatsAppDetail = () => (
+    <div className="p-8 max-w-4xl mx-auto">
+      <Button 
+        variant="ghost" 
+        size="sm" 
+        className="mb-6 text-slate-500 hover:text-slate-900 -ml-2"
+        onClick={() => setActiveIntegration(null)}
+      >
+        <ArrowLeft className="w-4 h-4 mr-2" />
+        Back to Integrations
+      </Button>
+
+      <Card className="border-none shadow-sm rounded-2xl overflow-hidden">
+        <div className="bg-gradient-to-r from-green-600 to-green-400 p-8 text-white relative">
+          <MessageSquare className="w-32 h-32 absolute -right-6 -bottom-6 text-white/10" />
+          <h2 className="text-2xl font-bold mb-2 relative z-10">WhatsApp Business Integration</h2>
+          <p className="text-green-50 max-w-xl relative z-10">Connect your WhatsApp Business API accounts to start answering customer inquiries directly from the unified inbox.</p>
+        </div>
+        
+        <CardContent className="p-8 flex-1 flex flex-col">
+          <div className="flex-1 flex flex-col items-center justify-center py-6 text-center space-y-6">
+            {!allWhatsappSettings.some(s => s.phone_number_id) ? (
+              <>
+                <div className="max-w-xs space-y-2">
+                  <p className="text-base text-slate-800 font-semibold">
+                    One-click connection to Meta
+                  </p>
+                  <p className="text-sm text-slate-500">
+                    We will automatically fetch your Business ID and Phone Number IDs from your Facebook account.
+                  </p>
+                </div>
+                <Button
+                  onClick={handleConnectWhatsApp}
+                  disabled={loadingWhatsapp || !sdkLoaded}
+                  className="bg-[#1877F2] hover:bg-[#166fe5] text-white flex items-center gap-3 px-8 h-12 rounded-full shadow-lg shadow-blue-500/20 transition-all hover:scale-[1.02] text-sm"
+                >
+                  {loadingWhatsapp ? (
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <Facebook className="w-5 h-5 fill-current" />
                   )}
-
-                  <div className="w-full space-y-3">
-                    <div className="space-y-1">
-                      <label className="text-xs font-medium text-slate-600">Bot Token</label>
-                      <Input
-                        type="password"
-                        placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
-                        value={botTokenInput}
-                        onChange={(e) => setBotTokenInput(e.target.value)}
-                        className="h-9 text-sm"
-                      />
-                      <p className="text-[10px] text-slate-400">Get your bot token from @BotFather on Telegram</p>
+                  <span className="font-semibold">Connect with Meta</span>
+                </Button>
+                {!sdkLoaded && <p className="text-[10px] text-slate-400">Loading Meta SDK...</p>}
+              </>
+            ) : (
+              <div className="w-full space-y-6">
+                <div className="bg-green-50 border border-green-200 rounded-2xl p-6 flex flex-col items-stretch gap-4">
+                  <div className="flex items-start gap-4">
+                    <div className="mt-1 bg-green-100 p-1.5 rounded-full">
+                      <CheckCircle2 className="w-6 h-6 text-green-600" />
                     </div>
-
-                    <div className="space-y-1">
-                      <label className="text-xs font-medium text-slate-600">Display Name (Optional)</label>
-                      <Input
-                        placeholder="My Telegram Bot"
-                        value={botDisplayName}
-                        onChange={(e) => setBotDisplayName(e.target.value)}
-                        className="h-9 text-sm"
-                      />
+                    <div className="text-left flex-1">
+                      <h4 className="text-base font-bold text-slate-900">Accounts Connected</h4>
+                      <p className="text-sm text-slate-600 mt-1">
+                        You have {allWhatsappSettings.length} number(s) linked to this team.
+                      </p>
                     </div>
-
-                    <Button
-                      onClick={handleConnectTelegram}
-                      disabled={savingTelegram || !botTokenInput}
-                      className="w-full bg-blue-600 hover:bg-blue-700 text-white h-10 rounded-lg font-semibold"
-                    >
-                      {savingTelegram ? 'Connecting...' : 'Connect Telegram Bot'}
-                    </Button>
                   </div>
-                </>
-              ) : (
-                <div className="w-full space-y-4">
-                  <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-4 flex flex-col items-stretch gap-3">
-                    <div className="flex items-start gap-4">
-                      <div className="mt-1">
-                        <CheckCircle2 className="w-5 h-5 text-blue-500" />
-                      </div>
-                      <div className="text-left flex-1">
-                        <h4 className="text-sm font-bold text-slate-800">Bots Connected</h4>
-                        <p className="text-xs text-slate-600 mt-0.5">
-                          You have {telegramSettings.length} bot(s) linked to this team.
-                        </p>
-                      </div>
-                    </div>
 
-                    <div className="space-y-2 mt-2">
-                      {telegramSettings.map((bot) => (
-                        <div key={bot.id} className="flex items-center justify-between bg-white border border-blue-100 rounded-lg p-2 px-3 shadow-sm">
-                          <div className="text-left">
-                            <p className="text-xs font-bold text-slate-800">@{bot.bot_username}</p>
-                            <p className="text-[10px] text-slate-500">{bot.display_name}</p>
+                  <div className="space-y-3 mt-4">
+                    {allWhatsappSettings.map(s => (
+                      <div 
+                        key={s.phone_number_id} 
+                        className={cn(
+                          "flex items-center justify-between border rounded-xl p-4 shadow-sm cursor-pointer transition-all duration-200",
+                          whatsappSettings.phone_number_id === s.phone_number_id 
+                            ? "bg-white border-green-400 ring-4 ring-green-100/50 shadow-md" 
+                            : "bg-white/60 border-slate-200 hover:border-green-300 hover:bg-white"
+                        )}
+                        onClick={() => setWhatsappSettings(s)}
+                      >
+                        <div className="text-left">
+                          <div className="flex items-center gap-2 mb-1">
+                            <p className="text-sm font-bold text-slate-900">{s.display_phone_number || s.phone_number_id}</p>
+                            {s.is_active && <div className="h-2 w-2 rounded-full bg-green-500 shadow-sm shadow-green-200" />}
+                          </div>
+                          <p className="text-xs text-slate-500 font-mono">ID: {s.phone_number_id}</p>
+                        </div>
+                        
+                        <div className="flex items-center gap-4">
+                          <div className={cn(
+                            "text-xs px-3 py-1.5 rounded-full font-semibold uppercase tracking-wider",
+                            s.is_active ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-500"
+                          )}>
+                            {s.is_active ? 'Active' : 'Paused'}
                           </div>
                           <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => handleDisconnectTelegram(bot.bot_token)}
-                            disabled={savingTelegram}
-                            className="h-7 text-xs"
+                            variant="ghost"
+                            size="icon"
+                            className="h-10 w-10 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDisconnectWhatsApp(s.phone_number_id);
+                            }}
+                            title="Delete number"
                           >
-                            Disconnect
+                            <Trash2 className="w-5 h-5" />
                           </Button>
                         </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="pt-2 flex flex-col gap-2">
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setBotTokenInput('');
-                        setBotDisplayName('');
-                        setTelegramError(null);
-                      }}
-                      className="text-slate-500 text-xs border-slate-200 h-8 px-4 w-full"
-                    >
-                      Connect another bot
-                    </Button>
+                      </div>
+                    ))}
                   </div>
                 </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
 
-
-      <Modal
-        isOpen={isHoursModalOpen}
-        onClose={() => setIsHoursModalOpen(false)}
-        title="Working Hours"
-      >
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <label className="text-xs font-medium text-slate-600">
-              Timezone
-            </label>
-            <Input
-              value={timezone}
-              onChange={(e) => setTimezone(e.target.value)}
-              className="h-9 text-sm"
-              placeholder="e.g. Asia/Kolkata"
-            />
-          </div>
-
-          <div className="border border-slate-200 rounded-md overflow-hidden">
-            <div className="grid grid-cols-4 text-[11px] font-medium text-slate-500 bg-slate-50 px-3 py-2">
-              <div>Day</div>
-              <div>Closed</div>
-              <div>Open</div>
-              <div>Close</div>
-            </div>
-            <div className="max-h-64 overflow-y-auto">
-              {Object.keys(dayLabels).map((key) => {
-                const cfg = workingHours[key] || {};
-                return (
-                  <div
-                    key={key}
-                    className="grid grid-cols-4 items-center text-xs px-3 py-2 border-t border-slate-100"
+                <div className="flex justify-center pt-2">
+                  <Button
+                    variant="outline"
+                    onClick={handleConnectWhatsApp}
+                    className="text-slate-600 font-medium border-slate-300 h-10 px-6 rounded-full hover:bg-slate-50"
                   >
-                    <div className="text-slate-700">{dayLabels[key]}</div>
-                    <div>
-                      <input
-                        type="checkbox"
-                        checked={Boolean(cfg.closed)}
-                        onChange={(e) =>
-                          handleHoursChange(key, 'closed', e.target.checked)
-                        }
-                      />
+                    + Connect another number
+                  </Button>
+                </div>
+              </div>
+            )}
+            
+            {whatsappError && (
+              <div className="flex items-center gap-2 text-red-600 text-sm mt-4 bg-red-50 p-4 rounded-xl border border-red-100 w-full text-left">
+                <AlertCircle className="w-5 h-5 flex-shrink-0" />
+                <span>{whatsappError}</span>
+              </div>
+            )}
+          </div>
+          
+          <div className="pt-6 border-t border-slate-100 flex items-center justify-between mt-auto">
+            <div>
+              <label className="flex items-center gap-3 cursor-pointer group">
+                <input
+                  type="checkbox"
+                  className="rounded border-slate-300 text-green-600 focus:ring-green-500 h-5 w-5"
+                  checked={whatsappSettings.is_active}
+                  onChange={(e) => setWhatsappSettings(prev => ({ ...prev, is_active: e.target.checked }))}
+                />
+                <span className="text-sm font-semibold text-slate-700 group-hover:text-slate-900 transition-colors">Route messages to inbox</span>
+              </label>
+            </div>
+            <Button
+              onClick={handleSaveWhatsApp}
+              disabled={savingWhatsapp || loadingWhatsapp || !whatsappSettings.phone_number_id}
+              className="bg-slate-900 hover:bg-black text-white h-11 px-8 text-sm font-semibold rounded-full shadow-md"
+            >
+              {savingWhatsapp ? 'Saving...' : 'Save Configuration'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+
+  const renderTelegramDetail = () => (
+    <div className="p-8 max-w-4xl mx-auto">
+      <Button 
+        variant="ghost" 
+        size="sm" 
+        className="mb-6 text-slate-500 hover:text-slate-900 -ml-2"
+        onClick={() => setActiveIntegration(null)}
+      >
+        <ArrowLeft className="w-4 h-4 mr-2" />
+        Back to Integrations
+      </Button>
+
+      <Card className="border-none shadow-sm rounded-2xl overflow-hidden">
+        <div className="bg-gradient-to-r from-blue-600 to-blue-400 p-8 text-white relative">
+          <Send className="w-32 h-32 absolute -right-6 -bottom-6 text-white/10" />
+          <h2 className="text-2xl font-bold mb-2 relative z-10">Telegram Bot Integration</h2>
+          <p className="text-blue-50 max-w-xl relative z-10">Link your Telegram bots to send and receive messages directly inside your shared dashboard.</p>
+        </div>
+        
+        <CardContent className="p-8 flex-1 flex flex-col">
+          <div className="flex-1 flex flex-col items-center justify-center py-6 space-y-8">
+            {telegramSettings.length === 0 ? (
+              <div className="w-full max-w-md space-y-6">
+                <div className="text-center space-y-2 mb-6">
+                  <p className="text-lg text-slate-800 font-bold">
+                    Connect your Telegram bot
+                  </p>
+                  <p className="text-sm text-slate-500">
+                    Create a bot with <a href="https://t.me/botfather" target="_blank" rel="noreferrer" className="text-blue-500 hover:underline">@BotFather</a> on Telegram and paste the token here to start receiving messages.
+                  </p>
+                </div>
+                
+                {telegramError && (
+                  <div className="flex items-center gap-2 text-red-600 text-sm bg-red-50 p-4 rounded-xl border border-red-100 w-full text-left">
+                    <AlertCircle className="w-5 h-5 shrink-0" />
+                    <span>{telegramError}</span>
+                  </div>
+                )}
+
+                <div className="w-full space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-semibold text-slate-700">Bot Token <span className="text-red-500">*</span></label>
+                    <Input
+                      type="password"
+                      placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
+                      value={botTokenInput}
+                      onChange={(e) => setBotTokenInput(e.target.value)}
+                      className="h-11 text-base bg-slate-50"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-semibold text-slate-700">Display Name (Optional)</label>
+                    <Input
+                      placeholder="My Telegram Bot"
+                      value={botDisplayName}
+                      onChange={(e) => setBotDisplayName(e.target.value)}
+                      className="h-11 text-base bg-slate-50"
+                    />
+                  </div>
+
+                  <Button
+                    onClick={handleConnectTelegram}
+                    disabled={savingTelegram || !botTokenInput}
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white h-12 rounded-full font-bold text-base mt-4 shadow-lg shadow-blue-500/20"
+                  >
+                    {savingTelegram ? 'Connecting...' : 'Connect Telegram Bot'}
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="w-full space-y-6">
+                <div className="bg-blue-50 border border-blue-200 rounded-2xl p-6 flex flex-col items-stretch gap-4">
+                  <div className="flex items-start gap-4">
+                    <div className="mt-1 bg-blue-100 p-1.5 rounded-full">
+                      <CheckCircle2 className="w-6 h-6 text-blue-600" />
                     </div>
-                    <div>
-                      <input
-                        type="time"
-                        className="w-full border border-slate-200 rounded-md px-2 py-1 text-xs"
-                        disabled={Boolean(cfg.closed)}
-                        value={cfg.open || ''}
-                        onChange={(e) =>
-                          handleHoursChange(key, 'open', e.target.value)
-                        }
-                      />
-                    </div>
-                    <div>
-                      <input
-                        type="time"
-                        className="w-full border border-slate-200 rounded-md px-2 py-1 text-xs"
-                        disabled={Boolean(cfg.closed)}
-                        value={cfg.close || ''}
-                        onChange={(e) =>
-                          handleHoursChange(key, 'close', e.target.value)
-                        }
-                      />
+                    <div className="text-left flex-1">
+                      <h4 className="text-base font-bold text-slate-900">Bots Connected</h4>
+                      <p className="text-sm text-slate-600 mt-1">
+                        You have {telegramSettings.length} bot(s) linked to this team.
+                      </p>
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          </div>
 
-          <div className="flex justify-end gap-3">
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => setIsHoursModalOpen(false)}
-            >
-              Close
-            </Button>
-            <Button
-              type="button"
-              onClick={async () => {
-                await handleSaveHours();
-                setIsHoursModalOpen(false);
-              }}
-              disabled={savingHours || loadingHours}
-            >
-              {savingHours ? 'Saving...' : 'Save Working Hours'}
-            </Button>
-          </div>
-        </div>
-      </Modal>
+                  <div className="space-y-3 mt-4">
+                    {telegramSettings.map((bot) => (
+                      <div key={bot.id} className="flex items-center justify-between bg-white border border-blue-100 rounded-xl p-4 shadow-sm hover:border-blue-300 transition-colors">
+                        <div className="text-left">
+                          <p className="text-base font-bold text-slate-900">@{bot.bot_username}</p>
+                          <p className="text-xs text-slate-500 mt-0.5">{bot.display_name}</p>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          onClick={() => handleDisconnectTelegram(bot.bot_token)}
+                          disabled={savingTelegram}
+                          className="text-red-600 hover:bg-red-50 hover:text-red-700 h-9 font-medium rounded-lg"
+                        >
+                          Disconnect
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
 
-      <Modal
-        isOpen={isAddStageModalOpen}
-        onClose={() => setIsAddStageModalOpen(false)}
-        title="Add Lead Stage"
+                <div className="flex justify-center pt-2 gap-4">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setBotTokenInput('');
+                      setBotDisplayName('');
+                      setTelegramError(null);
+                      setTelegramSettings([]); // Temporary clear to show form, backend will fix on reload
+                    }}
+                    className="text-slate-600 font-medium border-slate-300 h-10 px-6 rounded-full hover:bg-slate-50"
+                  >
+                    + Connect another bot
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+
+  const renderInstagramDetail = () => (
+    <div className="p-8 max-w-4xl mx-auto">
+      <Button 
+        variant="ghost" 
+        size="sm" 
+        className="mb-6 text-slate-500 hover:text-slate-900 -ml-2"
+        onClick={() => setActiveIntegration(null)}
       >
-        <div className="space-y-4">
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-slate-600">Stage Name</label>
-            <Input
-              value={newStageName}
-              onChange={(e) => setNewStageName(e.target.value)}
-              className="h-9 text-sm"
-              placeholder="e.g. New, Contacted, Enrolled"
-            />
-          </div>
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-slate-600">Color</label>
-            <input
-              type="color"
-              className="h-8 w-14 p-0 border border-slate-200 rounded"
-              value={newStageColor}
-              onChange={(e) => setNewStageColor(e.target.value)}
-            />
-          </div>
-          <label className="flex items-center gap-2 text-xs text-slate-600">
-            <input
-              type="checkbox"
-              checked={newStageClosed}
-              onChange={(e) => setNewStageClosed(e.target.checked)}
-            />
-            Closed stage
-          </label>
+        <ArrowLeft className="w-4 h-4 mr-2" />
+        Back to Integrations
+      </Button>
 
-          <div className="flex justify-end gap-3 pt-2">
-            <Button type="button" variant="ghost" onClick={() => setIsAddStageModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              onClick={handleCreateStage}
-              disabled={addingStage || !newStageName.trim()}
-            >
-              {addingStage ? 'Adding...' : 'Add Stage'}
-            </Button>
+      <Card className="border-none shadow-sm rounded-2xl overflow-hidden">
+        <div className="bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-500 p-8 text-white relative">
+          <Instagram className="w-32 h-32 absolute -right-6 -bottom-6 text-white/10" />
+          <h2 className="text-2xl font-bold mb-2 relative z-10">Instagram Integration</h2>
+          <p className="text-white/90 max-w-xl relative z-10">Configure your Instagram API access to start managing DMs natively here.</p>
+        </div>
+        
+        <CardContent className="p-16 flex-1 flex flex-col items-center justify-center text-center">
+            <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mb-6">
+              <Puzzle className="w-10 h-10 text-slate-400" />
+            </div>
+            <h3 className="text-xl font-bold text-slate-800 mb-2">Coming Soon</h3>
+            <p className="text-slate-500 max-w-sm">We are finalizing the Meta API approvals for automatic Instagram connection. Sit tight!</p>
+            <Button disabled className="mt-8 rounded-full h-11 px-8">Connect Instagram</Button>
+        </CardContent>
+      </Card>
+    </div>
+  );
+
+
+  // Add a small arrow right icon
+  const ArrowRight = ({ className }) => (
+    <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M5 12h14"></path>
+      <path d="m12 5 7 7-7 7"></path>
+    </svg>
+  );
+
+  return (
+    <div className="flex-1 overflow-y-auto bg-slate-50/50">
+      <div className="border-b border-slate-200 bg-white sticky top-0 z-10">
+        <div className="px-8 py-6 flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-bold text-slate-900">Integrations</h1>
+            <p className="text-sm text-slate-500 mt-1">
+              Connect external channels and bots to your shared workspace.
+            </p>
           </div>
         </div>
-      </Modal>
+      </div>
 
+      {activeIntegration === null && renderOverview()}
+      {activeIntegration === 'whatsapp' && renderWhatsAppDetail()}
+      {activeIntegration === 'telegram' && renderTelegramDetail()}
+      {activeIntegration === 'instagram' && renderInstagramDetail()}
 
+      {/* Re-using the identical Phone Select Modal for WhatsApp */}
       <Modal
         isOpen={isPhoneSelectModalOpen}
         onClose={() => setIsPhoneSelectModalOpen(false)}
         title="Select WhatsApp Numbers"
       >
         <div className="space-y-4">
-          <p className="text-xs text-slate-500">
-            Multiple phone numbers found in your Business Account. Select the ones you want to link to this team.
+          <p className="text-sm text-slate-600">
+            Multiple phone numbers found in your Business Account. Select the ones you want to link.
           </p>
-          <div className="space-y-2 max-h-60 overflow-y-auto border border-slate-100 rounded-lg p-2">
+          <div className="space-y-3 max-h-80 overflow-y-auto">
             {discoveredPhones.map(phone => {
               const alreadyLinked = allWhatsappSettings.some(s => s.phone_number_id === phone.id);
               return (
-                <div key={phone.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100 hover:border-blue-200 transition-colors">
+                <div key={phone.id} className="flex items-center justify-between p-4 bg-white rounded-xl border border-slate-200 hover:border-green-300 hover:shadow-sm transition-all">
                   <div className="text-left">
                     <p className="text-sm font-bold text-slate-800">{phone.displayPhoneNumber || phone.id}</p>
-                    {phone.verifiedName && <p className="text-[10px] text-slate-500">{phone.verifiedName}</p>}
-                    <p className="text-[9px] text-slate-400">ID: {phone.id}</p>
+                    {phone.verifiedName && <p className="text-xs text-slate-500 mt-0.5">{phone.verifiedName}</p>}
                   </div>
                   <Button
                     size="sm"
-                    variant={alreadyLinked ? "ghost" : "primary"}
+                    variant={alreadyLinked ? "secondary" : "default"}
                     disabled={alreadyLinked || loadingWhatsapp}
                     onClick={() => handleSelectPhone(phone)}
+                    className="rounded-full"
                   >
                     {alreadyLinked ? 'Linked' : 'Link Number'}
                   </Button>
@@ -1056,8 +734,8 @@ export default function SettingsPage({ currentUser }) {
               );
             })}
           </div>
-          <div className="flex justify-end pt-2">
-            <Button onClick={() => setIsPhoneSelectModalOpen(false)}>Done</Button>
+          <div className="flex justify-end pt-4 border-t border-slate-100">
+            <Button onClick={() => setIsPhoneSelectModalOpen(false)} variant="outline" className="rounded-full">Close</Button>
           </div>
         </div>
       </Modal>
