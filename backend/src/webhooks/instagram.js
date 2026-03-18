@@ -58,29 +58,42 @@ router.post('/', (req, res) => {
   console.log('[Instagram Webhook] Received event:', JSON.stringify(body, null, 2));
 
   // Webhook signature verification
-  const sigSecret = process.env.INSTAGRAM_APP_SECRET || process.env.META_APP_SECRET || '';
-  if (sigSecret) {
+  const secretsToTry = [
+    process.env.INSTAGRAM_APP_SECRET,
+    process.env.META_APP_SECRET,
+    process.env.INSTAGRAM_CLIENT_SECRET
+  ].filter(Boolean);
+
+  if (secretsToTry.length > 0) {
     try {
       const header = req.headers['x-hub-signature-256'] || '';
-      const hmac = crypto.createHmac('sha256', sigSecret);
-      const expected = 'sha256=' + hmac.update(req.rawBody || '').digest('hex');
+      let verified = false;
+      let matchedSecretSource = '';
+
+      for (const secret of secretsToTry) {
+        const hmac = crypto.createHmac('sha256', secret);
+        const expected = 'sha256=' + hmac.update(req.rawBody || '').digest('hex');
+        if (header === expected) {
+          verified = true;
+          matchedSecretSource = (secret === process.env.INSTAGRAM_APP_SECRET) ? 'INSTAGRAM_APP_SECRET' :
+                               (secret === process.env.META_APP_SECRET) ? 'META_APP_SECRET' : 'INSTAGRAM_CLIENT_SECRET';
+          break;
+        }
+      }
       
-      if (header !== expected) {
-        console.warn('[Instagram Webhook] Signature verification FAILED.', { 
+      if (!verified) {
+        console.warn('[Instagram Webhook] Signature verification FAILED with all available secrets.', { 
           received: header, 
-          calculated: expected,
-          usingSecretFrom: process.env.INSTAGRAM_APP_SECRET ? 'INSTAGRAM_APP_SECRET' : 'META_APP_SECRET'
+          triedFrom: ['INSTAGRAM_APP_SECRET', 'META_APP_SECRET', 'INSTAGRAM_CLIENT_SECRET'].filter(k => !!process.env[k])
         });
-        // We log but continue for now to avoid blocking development if secret is slightly off, 
-        // though in production this should be a strict check.
       } else {
-        console.log('[Instagram Webhook] Signature verified successfully.');
+        console.log(`[Instagram Webhook] Signature verified successfully using ${matchedSecretSource}.`);
       }
     } catch (err) {
       console.error('[Instagram Webhook] Signature verification error:', err);
     }
   } else {
-    console.warn('[Instagram Webhook] No signature secret (INSTAGRAM_APP_SECRET or META_APP_SECRET) found. Skipping verification.');
+    console.warn('[Instagram Webhook] No signature secret found in .env. Skipping verification.');
   }
 
   if (body.object === 'instagram' || body.object === 'page') {
