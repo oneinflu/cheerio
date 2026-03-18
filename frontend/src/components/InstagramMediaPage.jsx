@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { getInstagramMedia, getInstagramStatus } from '../api';
 import { Button } from './ui/Button';
-import { ArrowLeft, ExternalLink, MessageCircle, Calendar, RefreshCw, Video, Star, Send } from 'lucide-react';
+import { ArrowLeft, ExternalLink, MessageCircle, Calendar, RefreshCw, Video, Star, Send, Instagram } from 'lucide-react';
 import { cn } from '../lib/utils';
 import CommentToDMModal from './CommentToDMModal';
 
