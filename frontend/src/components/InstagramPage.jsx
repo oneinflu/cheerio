@@ -8,6 +8,7 @@ import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
 import Chat from './Chat';
+import InstagramMediaPage from './InstagramMediaPage';
 
 export default function InstagramPage({ currentUser, socket }) {
   const teamId = useMemo(() => {
@@ -24,6 +25,8 @@ export default function InstagramPage({ currentUser, socket }) {
   const [messages, setMessages] = useState([]);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [channelExternalId, setChannelExternalId] = useState('');
+  const [showMedia, setShowMedia] = useState(false);
+  const [activeChannelId, setActiveChannelId] = useState(null);
 
   // Load Instagram conversations only
   useEffect(() => {
@@ -106,6 +109,15 @@ export default function InstagramPage({ currentUser, socket }) {
     console.log('Delete conversation:', id);
   };
 
+  if (showMedia) {
+    return (
+      <InstagramMediaPage 
+        activeChannelId={activeChannelId} 
+        onBack={() => setShowMedia(false)} 
+      />
+    );
+  }
+
   return (
     <div className="flex flex-1 h-full w-full bg-white overflow-hidden">
       {/* Instagram Inbox - Left Sidebar */}
@@ -120,6 +132,22 @@ export default function InstagramPage({ currentUser, socket }) {
               <p className="text-xs text-slate-500">Direct messages</p>
             </div>
           </div>
+          <Button 
+            onClick={() => {
+              if (conversations.length > 0) {
+                setActiveChannelId(conversations[0].channelId);
+                setShowMedia(true);
+              } else {
+                alert('No Instagram channels connected.');
+              }
+            }}
+            variant="outline" 
+            size="sm" 
+            className="w-full mt-2 gap-2 border-pink-200 text-pink-600 hover:bg-pink-50 font-bold rounded-xl h-9"
+          >
+            <ImageIcon className="w-4 h-4" />
+            View Posts Grid
+          </Button>
         </div>
 
         {/* Filter Chips */}

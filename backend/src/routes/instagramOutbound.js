@@ -10,11 +10,12 @@
 const express = require('express');
 const router = express.Router();
 const service = require('../services/outboundInstagram');
+const mediaService = require('../services/instagramMedia');
 const auth = require('../middlewares/auth');
 
 /**
  * POST /api/instagram/text
- * Body: { conversationId: UUID, text: string }
+ * ...
  */
 router.post('/text', auth.requireRole('admin', 'agent', 'supervisor'), async (req, res, next) => {
   try {
@@ -33,8 +34,26 @@ router.post('/text', auth.requireRole('admin', 'agent', 'supervisor'), async (re
 });
 
 /**
+ * GET /api/instagram/media-list
+ * Query: ?channelId=UUID
+ * Result: Array of media objects (id, caption, media_url, etc)
+ */
+router.get('/media-list', auth.requireRole('admin', 'supervisor'), async (req, res, next) => {
+  try {
+    const { channelId } = req.query;
+    if (!channelId) {
+      return res.status(400).json({ error: 'channelId is required' });
+    }
+    const media = await mediaService.fetchChannelMedia(channelId);
+    res.json({ success: true, media });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
  * POST /api/instagram/media
- * Body: { conversationId: UUID, kind: 'image'|'audio'|'document', url: string, caption?: string }
+ * ...
  */
 router.post('/media', auth.requireRole('admin', 'agent', 'supervisor'), async (req, res, next) => {
   try {

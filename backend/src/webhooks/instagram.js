@@ -190,18 +190,22 @@ async function handleIncomingMessage(event, entryId) {
     console.log(`[Instagram Webhook] Processing message from ${senderId} to ${recipientId} (Entry ID: ${entryId})`);
 
     try {
-        // 1. Ensure Channel Exists
-        let channelRes = await db.query('SELECT id, config FROM channels WHERE type = $1 AND external_id = $2', ['instagram', recipientId]);
+        // 1. Ensure Channel Exists - Search by Page ID (entryId) or Account IDs in config
+        let channelRes = await db.query(
+          `SELECT id, config FROM channels 
+           WHERE type = 'instagram' AND (
+             external_id = $1 OR 
+             config->>'pageId' = $1 OR 
+             config->>'igAccountId' = $1 OR 
+             external_id = $2
+           )`,
+          [entryId, recipientId]
+        );
         
         if (channelRes.rows.length === 0) {
-             console.log(`[Instagram Webhook] Channel not found for recipient ${recipientId}. Checking entry ID ${entryId}...`);
-             channelRes = await db.query('SELECT id, config FROM channels WHERE type = $1 AND external_id = $2', ['instagram', entryId]);
-        }
-
-        if (channelRes.rows.length === 0) {
-            console.warn(`[Instagram Webhook] Channel for recipient ${recipientId} OR entry ${entryId} not found. Message ignored.`);
-            const allCh = await db.query('SELECT external_id, name FROM channels WHERE type = $1', ['instagram']);
-            console.log('[Instagram Webhook] Available Instagram Channels:', allCh.rows);
+            console.warn(`[Instagram Webhook] Channel for Entry ID ${entryId} OR recipient ${recipientId} not found. Message ignored.`);
+            const allCh = await db.query('SELECT external_id, name, config->>\'pageId\' as page_id FROM channels WHERE type = $1', ['instagram']);
+            console.log('[Instagram Webhook] Available Channels in DB:', allCh.rows);
             return;
         }
         const channelId = channelRes.rows[0].id;

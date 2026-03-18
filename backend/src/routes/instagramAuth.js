@@ -108,16 +108,14 @@ router.post('/instagram/connect', async (req, res) => {
         igAccountId,
       };
 
-      // Use the Page ID as external_id since webhook events are routed via Page
-      // But also check if there's an existing channel using the IG Account ID
-      console.log(`[Instagram Auth] Checking for existing channel with ID ${igAccountId} or ${page.id}`);
-      let existingChannel = await db.query(
-        `SELECT id FROM channels WHERE type = 'instagram' AND (external_id = $1 OR external_id = $2)`,
-        [igAccountId, page.id]
-      );
+      // Use the Page ID as external_id since webhook events are consistently routed via Page ID (entry.id)
+      const externalId = page.id;
 
-      // Use the ID that matches webhook events (typically the IG Business Account ID)
-      const externalId = igAccountId;
+      console.log(`[Instagram Auth] Checking for existing channel with Page ID ${page.id} or IG ID ${igAccountId}`);
+      let existingChannel = await db.query(
+        `SELECT id FROM channels WHERE type = 'instagram' AND (external_id = $1 OR external_id = $2 OR config->>'igAccountId' = $1)`,
+        [externalId, igAccountId]
+      );
 
       if (existingChannel.rows.length > 0) {
         // Update existing
@@ -134,7 +132,7 @@ router.post('/instagram/connect', async (req, res) => {
            VALUES ('instagram', $1, $2, $3::jsonb, true)`,
           [channelName, externalId, config]
         );
-        console.log(`[Instagram Auth] Created new Instagram channel.`);
+        console.log(`[Instagram Auth] Created new Instagram channel with Page ID ${externalId}.`);
       }
 
       connectedAccounts.push({
