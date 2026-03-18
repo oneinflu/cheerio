@@ -1049,9 +1049,20 @@ export default function SettingsPage({ currentUser }) {
                       )}
                     </div>
                     <div>
-                      <p className="font-bold text-slate-900">{ch.username || ch.name}</p>
-                      <p className="text-[10px] text-slate-400 mt-0.5">
-                        {ch.followersCount ? `${ch.followersCount.toLocaleString()} followers` : ''}
+                      <div className="flex items-center gap-2">
+                        <p className="font-bold text-slate-900 leading-none">{ch.username || ch.name}</p>
+                        <a 
+                          href={`https://instagram.com/${(ch.username || ch.name)?.replace('@', '')}`} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-[10px] text-pink-600 hover:text-pink-700 bg-pink-50 px-1.5 py-0.5 rounded font-medium border border-pink-100 transition-colors"
+                        >
+                          View Profile
+                        </a>
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-1">
+                        ID: <span className="font-mono text-slate-500">{ch.externalId}</span>
+                        {ch.followersCount ? ` • ${ch.followersCount.toLocaleString()} followers` : ''}
                         {ch.pageName ? ` • Page: ${ch.pageName}` : ''}
                       </p>
                     </div>
