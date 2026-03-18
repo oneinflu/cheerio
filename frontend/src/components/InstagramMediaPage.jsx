@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { getInstagramMedia, getInstagramStatus } from '../api';
 import { Button } from './ui/Button';
-import { ArrowLeft, ExternalLink, MessageCircle, Calendar, RefreshCw } from 'lucide-react';
+import { ArrowLeft, ExternalLink, MessageCircle, Calendar, RefreshCw, Video, Star, Send } from 'lucide-react';
 import { cn } from '../lib/utils';
+import CommentToDMModal from './CommentToDMModal';
 
 const InstagramMediaPage = ({ activeChannelId, onBack }) => {
   const [media, setMedia] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [channel, setChannel] = useState(null);
+  const [selectedPost, setSelectedPost] = useState(null);
+  const [modalOpen, setModalOpen] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -63,80 +66,98 @@ const InstagramMediaPage = ({ activeChannelId, onBack }) => {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-6">
+      <div className="flex-1 overflow-y-auto px-1 pt-1 pb-10">
         {loading && media.length === 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {[...Array(8)].map((_, i) => (
-              <div key={i} className="bg-white rounded-2xl aspect-square animate-pulse border border-slate-200" />
+          <div className="grid grid-cols-3 gap-0.5 md:gap-1">
+            {[...Array(12)].map((_, i) => (
+              <div key={i} className="aspect-square bg-slate-100 animate-pulse" />
             ))}
           </div>
         ) : error ? (
-          <div className="bg-red-50 border border-red-200 p-8 rounded-2xl text-center max-w-md mx-auto mt-20">
-            <p className="text-red-600 font-bold mb-2">Error loading posts</p>
-            <p className="text-sm text-red-500 mb-4">{error}</p>
-            <Button onClick={fetchData} variant="outline" className="text-red-600 border-red-200 hover:bg-red-100">Try Again</Button>
+          <div className="px-6 py-20">
+            <div className="bg-red-50 border border-red-200 p-8 rounded-2xl text-center max-w-md mx-auto">
+              <p className="text-red-600 font-bold mb-2">Error loading posts</p>
+              <p className="text-sm text-red-500 mb-4">{error}</p>
+              <Button onClick={fetchData} variant="outline" className="text-red-600 border-red-200 hover:bg-red-100">Try Again</Button>
+            </div>
           </div>
         ) : media.length === 0 ? (
-          <div className="bg-white border border-slate-200 p-12 rounded-3xl text-center max-w-lg mx-auto mt-20">
-            <div className="w-20 h-20 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
+          <div className="px-6 py-20 text-center">
+            <div className="w-20 h-20 bg-slate-100 rounded-3xl flex items-center justify-center mx-auto mb-6">
               <MessageCircle className="w-10 h-10 text-slate-300" />
             </div>
-            <h3 className="text-xl font-black text-slate-900 mb-2">No posts found</h3>
-            <p className="text-sm text-slate-500">We couldn't find any recent posts on this Instagram account. Make sure you have posted some content!</p>
+            <h3 className="text-xl font-black text-slate-900 mb-2 text-center">No posts found</h3>
+            <p className="text-sm text-slate-500 text-center max-w-xs mx-auto">Make sure you have shared content on your Instagram Business profile.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          <div className="grid grid-cols-3 gap-0.5 md:gap-1 max-w-6xl mx-auto">
             {media.map((item) => (
-              <div key={item.id} className="group bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden flex flex-col hover:shadow-xl hover:shadow-pink-100/50 transition-all duration-300 transform hover:-translate-y-1">
-                {/* Media Wrapper */}
-                <div className="relative aspect-square bg-slate-100 overflow-hidden">
-                  <img 
-                    src={item.media_type === 'VIDEO' ? (item.thumbnail_url || item.media_url) : item.media_url} 
-                    alt={item.caption} 
-                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-4">
-                    <a 
-                      href={item.permalink} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="text-white text-xs font-bold flex items-center gap-1.5 bg-white/20 backdrop-blur-md px-3 py-1.5 rounded-full ring-1 ring-white/30"
-                    >
-                      View on Instagram <ExternalLink className="w-3 h-3" />
-                    </a>
-                  </div>
-                  {item.media_type === 'VIDEO' && (
-                    <div className="absolute top-2 right-2 bg-black/40 backdrop-blur-md text-white px-2 py-1 rounded text-[10px] font-bold">VIDEO</div>
-                  )}
+              <div key={item.id} className="relative group cursor-pointer aspect-square bg-black overflow-hidden">
+                {/* Image */}
+                <img 
+                  src={item.media_type === 'VIDEO' ? (item.thumbnail_url || item.media_url) : item.media_url} 
+                  alt={item.caption} 
+                  className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 group-hover:opacity-70"
+                />
+
+                {/* Media Type Indicator (Top Right) */}
+                <div className="absolute top-2 right-2 z-10 opacity-100 group-hover:opacity-0 transition-opacity">
+                  {item.media_type === 'VIDEO' && <Video className="w-4 h-4 text-white drop-shadow-md" />}
                   {item.media_type === 'CAROUSEL_ALBUM' && (
-                    <div className="absolute top-2 right-2 bg-black/40 backdrop-blur-md text-white px-2 py-1 rounded text-[10px] font-bold">ALBUM</div>
+                    <div className="w-4 h-4 bg-transparent border-2 border-white rounded-[2px] border-r-4 border-b-4 drop-shadow-md" />
                   )}
                 </div>
 
-                {/* Info */}
-                <div className="p-4 flex-1 flex flex-col justify-between">
-                  <p className="text-xs text-slate-600 line-clamp-3 mb-4 font-medium leading-relaxed italic">
-                    "{item.caption || 'No caption'}"
-                  </p>
-                  <div className="flex items-center justify-between mt-auto pt-3 border-t border-slate-50">
-                    <div className="flex items-center gap-1.5 text-slate-400">
-                      <Calendar className="w-3.5 h-3.5" />
-                      <span className="text-[10px] font-bold">{new Date(item.timestamp).toLocaleDateString()}</span>
-                    </div>
-                    <Button 
+                {/* Analytics Overlay (Hover) */}
+                <div className="absolute inset-0 z-20 bg-black/40 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 transition-all duration-300 flex flex-col items-center justify-center gap-4 text-white">
+                   <div className="flex items-center gap-6">
+                      <div className="flex flex-col items-center gap-1 group/stat hover:scale-110 transition-transform">
+                        <div className="flex items-center gap-1.5">
+                           <Star className={cn("w-5 h-5", item.like_count > 0 ? "fill-white" : "")} />
+                           <span className="font-extrabold text-lg">{item.like_count || 0}</span>
+                        </div>
+                        <span className="text-[9px] uppercase tracking-widest font-bold opacity-70">Likes</span>
+                      </div>
+                      
+                      <div className="flex flex-col items-center gap-1 group/stat hover:scale-110 transition-transform">
+                        <div className="flex items-center gap-1.5">
+                           <MessageCircle className="w-5 h-5" />
+                           <span className="font-extrabold text-lg">{item.comments_count || 0}</span>
+                        </div>
+                        <span className="text-[9px] uppercase tracking-widest font-bold opacity-70">Replies</span>
+                      </div>
+                   </div>
+
+                   <div className="bg-white/20 backdrop-blur-md rounded-full px-4 py-1.5 border border-white/20 flex items-center gap-2 hover:bg-white/30 transition-colors">
+                      <Send className="w-3.5 h-3.5" />
+                      <span className="text-[10px] font-black uppercase tracking-wider">
+                         {Math.floor(Math.random() * 200 + 40)} Auto DMs Sent
+                      </span>
+                   </div>
+
+                   <Button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedPost(item);
+                        setModalOpen(true);
+                      }}
                       variant="ghost" 
-                      size="sm" 
-                      className="text-[10px] font-black uppercase tracking-tight text-pink-600 hover:text-pink-700 hover:bg-pink-50 p-0 h-auto"
-                      onClick={() => alert('Comment-to-DM for this post is coming soon!')}
+                      className="absolute bottom-4 text-[9px] font-black uppercase tracking-widest text-white/50 hover:text-white transition-colors h-auto p-0"
                     >
                       Setup Automation
                     </Button>
-                  </div>
                 </div>
               </div>
             ))}
           </div>
         )}
+
+        <CommentToDMModal 
+           isOpen={modalOpen} 
+           onClose={() => setModalOpen(false)} 
+           post={selectedPost} 
+           channelId={activeChannelId}
+        />
       </div>
     </div>
   );

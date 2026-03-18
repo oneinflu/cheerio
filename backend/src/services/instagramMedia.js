@@ -38,9 +38,9 @@ async function fetchChannelMedia(channelId) {
   try {
     const response = await axios.get(`${GRAPH_BASE}/${targetId}/media`, {
       params: {
-        fields: 'id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,shortcode',
+        fields: 'id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,shortcode,like_count,comments_count',
         access_token: accessToken,
-        limit: 20
+        limit: 24
       }
     });
 
