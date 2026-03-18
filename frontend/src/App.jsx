@@ -506,6 +506,13 @@ export default function App() {
       return true;
     });
   }, [conversations, inboxFilter]);
+  
+  const instagramUnread = useMemo(() => {
+    if (!conversations) return 0;
+    return conversations
+      .filter(c => c.channelType === 'instagram')
+      .reduce((sum, c) => sum + (Number(c.unreadCount) || 0), 0);
+  }, [conversations]);
 
   const loadMessages = async (silent = false) => {
     if (!selectedId) return;
@@ -974,8 +981,20 @@ export default function App() {
                 <span className="ml-2 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100 text-sm font-medium">Rules</span>
               </button>
               <button style={navBtn('instagram')} onClick={() => setActivePage('instagram')} title="Instagram">
-                <div style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Instagram size={18} /></div>
-                <span className="ml-2 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100 text-sm font-medium">Instagram</span>
+                <div style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, position: 'relative' }}>
+                  <Instagram size={18} />
+                  {instagramUnread > 0 && (
+                    <span style={{ position: 'absolute', top: 4, right: 4, background: '#ec4899', color: '#fff', fontSize: 9, fontWeight: 700, height: 14, minWidth: 14, padding: '0 3px', borderRadius: 99, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #08080f' }}>
+                      {instagramUnread > 99 ? '99+' : instagramUnread}
+                    </span>
+                  )}
+                </div>
+                <span className="ml-2 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100 text-sm font-medium flex-1 flex items-center justify-between pr-3">
+                  <span>Instagram</span>
+                  {instagramUnread > 0 && (
+                    <span style={{ background: '#ec4899', color: '#fff', padding: '1px 7px', borderRadius: 99, fontSize: 10, fontWeight: 700 }}>{instagramUnread}</span>
+                  )}
+                </span>
               </button>
               <button style={navBtn('telegram')} onClick={() => setActivePage('telegram')} title="Telegram">
                 <div style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><MessageSquare size={18} /></div>
