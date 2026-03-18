@@ -71,7 +71,7 @@ async function init(server) {
 
       // Send typing indicator to the source channel
       try {
-        const db = require('../db');
+        const db = require('../../db');
         const convRes = await db.query(
           `SELECT ch.type FROM conversations c JOIN channels ch ON ch.id = c.channel_id WHERE c.id = $1`,
           [conversationId]
@@ -87,8 +87,8 @@ async function init(server) {
             await sendTypingIndicator(conversationId, isTyping ? 'typing_on' : 'typing_off');
           }
         }
-      } catch (e) {
-        console.error('[io] Failed to trigger channel typing indicator:', e.message);
+      } catch (err) {
+        console.error('[io] Failed to trigger channel typing indicator:', err.message);
       }
     });
 
