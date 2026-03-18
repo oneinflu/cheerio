@@ -36,15 +36,19 @@ async function fetchChannelMedia(channelId) {
 
   // 2. Fetch media from Graph API
   try {
-    const response = await axios.get(`${GRAPH_BASE}/${targetId}/media`, {
-      params: {
-        fields: 'id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,shortcode,like_count,comments_count',
-        access_token: accessToken,
-        limit: 24
-      }
-    });
+    const params = {
+      fields: 'id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,shortcode,like_count,comments_count',
+      access_token: accessToken,
+      limit: 24
+    };
+    if (cursor) params.after = cursor;
 
-    return response.data.data || [];
+    const response = await axios.get(`${GRAPH_BASE}/${targetId}/media`, { params });
+
+    return {
+      media: response.data.data || [],
+      paging: response.data.paging || null
+    };
   } catch (err) {
     console.error('[Instagram Media Service] Fetch failed:', err.response?.data || err.message);
     throw new Error(err.response?.data?.error?.message || 'Failed to fetch Instagram media');

@@ -40,12 +40,12 @@ router.post('/text', auth.requireRole('admin', 'agent', 'supervisor'), async (re
  */
 router.get('/media-list', auth.requireRole('admin', 'supervisor', 'agent'), async (req, res, next) => {
   try {
-    const { channelId } = req.query;
+    const { channelId, after } = req.query;
     if (!channelId) {
       return res.status(400).json({ error: 'channelId is required' });
     }
-    const media = await mediaService.fetchChannelMedia(channelId);
-    res.json({ success: true, media });
+    const result = await mediaService.fetchChannelMedia(channelId, after);
+    res.json({ success: true, ...result });
   } catch (err) {
     next(err);
   }

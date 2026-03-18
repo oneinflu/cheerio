@@ -1142,8 +1142,10 @@ export async function toggleInstagramAutomation(id) {
   return res.json();
 }
 
-export async function getInstagramMedia(channelId) {
+export async function getInstagramMedia(channelId, after = null) {
   const headers = getAuthHeaders();
-  const res = await fetch(`/api/instagram/media-list?channelId=${channelId}`, { headers });
+  let url = `/api/instagram/media-list?channelId=${channelId}`;
+  if (after) url += `&after=${after}`;
+  const res = await fetch(url, { headers });
   return res.json();
 }
