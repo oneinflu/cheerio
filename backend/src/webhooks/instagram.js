@@ -197,9 +197,11 @@ async function handleIncomingMessage(event, entryId) {
              external_id = $1 OR 
              config->>'pageId' = $1 OR 
              config->>'igAccountId' = $1 OR 
+             (config->'aliasIds')::jsonb ? $1 OR
              external_id = $2 OR
              config->>'pageId' = $2 OR
-             config->>'igAccountId' = $2
+             config->>'igAccountId' = $2 OR
+             (config->'aliasIds')::jsonb ? $2
            )`,
           [entryId, recipientId]
         );

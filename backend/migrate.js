@@ -51,12 +51,18 @@ async function run() {
     `);
     console.log('Index exists or created.');
 
-    // 2. Clear existing Instagram channels as requested
-    console.log('Clearing existing Instagram channels for a fresh start...');
-    const deleteRes = await client.query(`
-      DELETE FROM channels WHERE type = 'instagram'
+    // 2. Patch specific account IDs as a safety fallback
+    console.log('Patching NorthStar Academy channel with shadow alias ID...');
+    const patchRes = await client.query(`
+      UPDATE channels 
+      SET config = config || '{"aliasIds": ["17841444656386264"]}'::jsonb 
+      WHERE (name = '@northstaracad' OR external_id = '1398694730214399') 
+      AND type = 'instagram';
     `);
-    console.log(`Deleted ${deleteRes.rowCount} existing Instagram channel(s).`);
+    console.log(`Patched ${patchRes.rowCount} channel(s) with alias IDs.`);
+
+    // NOTE: We disabled the 'DELETE FROM channels' for safety now that live accounts are connected.
+    // To clear channels, run the DELETE command manually if ever needed.
 
     console.log('--- Migration Completed Successfully ---');
   } catch (err) {
