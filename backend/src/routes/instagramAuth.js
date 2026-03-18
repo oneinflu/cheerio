@@ -2,147 +2,225 @@
 const express = require('express');
 const router = express.Router();
 const axios = require('axios');
-const FormData = require('form-data');
 const db = require('../../db');
 
-const INSTAGRAM_CLIENT_ID = process.env.INSTAGRAM_CLIENT_ID || '1115102437313127';
+const META_APP_ID = process.env.META_APP_ID || '321531509460250';
+const META_APP_SECRET = process.env.META_APP_SECRET || '';
 const INSTAGRAM_CLIENT_SECRET = process.env.INSTAGRAM_CLIENT_SECRET;
-const INSTAGRAM_REDIRECT_URI = process.env.INSTAGRAM_REDIRECT_URI || 'https://inbox.xolox.io/api/auth/instagram/callback';
+const GRAPH_BASE = 'https://graph.facebook.com/v21.0';
+
+/**
+ * POST /api/auth/instagram/connect
+ * Connect Instagram via Facebook Login access token.
+ * The frontend passes the access_token obtained from FB.login() SDK.
+ * 
+ * Body: { accessToken: string }
+ */
+router.post('/instagram/connect', async (req, res) => {
+  const { accessToken } = req.body || {};
+
+  if (!accessToken) {
+    return res.status(400).json({ error: 'accessToken is required' });
+  }
+
+  console.log('[Instagram Auth] Connect request received with token.');
+
+  try {
+    // 1. Exchange short-lived token for long-lived token
+    console.log('[Instagram Auth] Exchanging for long-lived token...');
+    const longLivedRes = await axios.get(`${GRAPH_BASE}/oauth/access_token`, {
+      params: {
+        grant_type: 'fb_exchange_token',
+        client_id: META_APP_ID,
+        client_secret: META_APP_SECRET,
+        fb_exchange_token: accessToken
+      }
+    });
+
+    const longLivedToken = longLivedRes.data.access_token;
+    console.log('[Instagram Auth] Got long-lived token.');
+
+    // 2. Get user's Facebook Pages
+    console.log('[Instagram Auth] Fetching Facebook Pages...');
+    const pagesRes = await axios.get(`${GRAPH_BASE}/me/accounts`, {
+      params: {
+        fields: 'id,name,access_token,instagram_business_account',
+        access_token: longLivedToken
+      }
+    });
+
+    const pages = pagesRes.data?.data || [];
+    console.log(`[Instagram Auth] Found ${pages.length} pages.`);
+
+    const connectedAccounts = [];
+
+    for (const page of pages) {
+      if (!page.instagram_business_account) {
+        console.log(`[Instagram Auth] Page "${page.name}" has no linked IG business account. Skipping.`);
+        continue;
+      }
+
+      const igAccountId = page.instagram_business_account.id;
+      const pageAccessToken = page.access_token;
+
+      // 3. Get Instagram Business Account details
+      console.log(`[Instagram Auth] Fetching IG Business Account: ${igAccountId}`);
+      let igProfile;
+      try {
+        const igRes = await axios.get(`${GRAPH_BASE}/${igAccountId}`, {
+          params: {
+            fields: 'id,username,name,profile_picture_url,followers_count,media_count',
+            access_token: pageAccessToken
+          }
+        });
+        igProfile = igRes.data;
+      } catch (igErr) {
+        console.warn(`[Instagram Auth] Could not fetch IG profile for ${igAccountId}:`, igErr.message);
+        igProfile = { id: igAccountId, username: 'Unknown' };
+      }
+
+      console.log('[Instagram Auth] IG Profile:', igProfile);
+
+      // 4. Subscribe the page to webhooks for Instagram
+      try {
+        await axios.post(`${GRAPH_BASE}/${page.id}/subscribed_apps`, null, {
+          params: {
+            subscribed_fields: 'messages,messaging_postbacks,messaging_optins,feed',
+            access_token: pageAccessToken
+          }
+        });
+        console.log(`[Instagram Auth] Subscribed page ${page.id} to webhook fields.`);
+      } catch (subErr) {
+        console.warn(`[Instagram Auth] Webhook subscription failed for page ${page.id}:`, subErr.response?.data || subErr.message);
+      }
+
+      // 5. Store in DB as Instagram channel
+      const channelName = igProfile.username ? `@${igProfile.username}` : `IG Business ${igAccountId}`;
+      
+      const config = {
+        accessToken: pageAccessToken,
+        longLivedToken: longLivedToken,
+        tokenExpiresAt: Date.now() + (60 * 24 * 60 * 60 * 1000), // ~60 days
+        igProfile,
+        pageId: page.id,
+        pageName: page.name,
+        igAccountId,
+      };
+
+      // Use the Page ID as external_id since webhook events are routed via Page
+      // But also check if there's an existing channel using the IG Account ID
+      let existingChannel = await db.query(
+        `SELECT id FROM channels WHERE type = 'instagram' AND (external_id = $1 OR external_id = $2)`,
+        [igAccountId, page.id]
+      );
+
+      // Use the ID that matches webhook events (typically the IG Business Account ID)
+      const externalId = igAccountId;
+
+      if (existingChannel.rows.length > 0) {
+        // Update existing
+        await db.query(
+          `UPDATE channels SET name = $1, external_id = $2, config = $3::jsonb, active = true, created_at = NOW()
+           WHERE id = $4`,
+          [channelName, externalId, config, existingChannel.rows[0].id]
+        );
+        console.log(`[Instagram Auth] Updated existing channel ${existingChannel.rows[0].id}`);
+      } else {
+        // Create new
+        await db.query(
+          `INSERT INTO channels (type, name, external_id, config, active)
+           VALUES ('instagram', $1, $2, $3::jsonb, true)`,
+          [channelName, externalId, config]
+        );
+        console.log(`[Instagram Auth] Created new Instagram channel.`);
+      }
+
+      connectedAccounts.push({
+        igAccountId,
+        username: igProfile.username || 'Unknown',
+        name: igProfile.name || channelName,
+        profilePicture: igProfile.profile_picture_url || null,
+        followersCount: igProfile.followers_count || 0,
+        pageId: page.id,
+        pageName: page.name,
+      });
+    }
+
+    if (connectedAccounts.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No Instagram Business accounts found. Make sure your Instagram account is a Business/Creator account and is linked to a Facebook Page.'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        accounts: connectedAccounts,
+        count: connectedAccounts.length
+      }
+    });
+
+  } catch (err) {
+    console.error('[Instagram Auth] Connect Failed:', err.message);
+    if (err.response) {
+      console.error('[Instagram Auth] Response:', err.response.data);
+    }
+    res.status(500).json({
+      success: false,
+      error: err.response?.data?.error?.message || err.message || 'Authentication failed'
+    });
+  }
+});
 
 /**
  * GET /api/auth/instagram/callback
- * Endpoint for Instagram/Facebook Business Login Redirect.
+ * Fallback for OAuth redirect-based flows (backwards compatibility).
  */
 router.get('/instagram/callback', async (req, res) => {
-  const { code, state, error, error_reason, error_description } = req.query;
-
-  console.log('[Instagram Auth] Callback received:', req.query);
+  const { code, error, error_description } = req.query;
 
   if (error) {
-    console.error('[Instagram Auth] Error:', error, error_reason, error_description);
-    return res.status(400).send(`Instagram Login Error: ${error_description}`);
+    console.error('[Instagram Auth] Callback Error:', error, error_description);
+    return res.redirect('/?instagram_error=' + encodeURIComponent(error_description || error));
   }
 
   if (code) {
+    // Redirect-based OAuth flow - exchange code for token
     try {
-      if (!INSTAGRAM_CLIENT_SECRET) {
-         return res.status(500).send('Server Error: INSTAGRAM_CLIENT_SECRET is not configured.');
-      }
-
-      // 1. Exchange Code for Short-Lived Access Token
-      console.log('[Instagram Auth] Exchanging code for access token...');
-      const form = new FormData();
-      form.append('client_id', INSTAGRAM_CLIENT_ID);
-      form.append('client_secret', INSTAGRAM_CLIENT_SECRET);
-      form.append('grant_type', 'authorization_code');
-      form.append('redirect_uri', INSTAGRAM_REDIRECT_URI);
-      form.append('code', code);
-
-      const tokenRes = await axios.post('https://api.instagram.com/oauth/access_token', form, {
-        headers: form.getHeaders()
-      });
-
-      const { access_token, user_id } = tokenRes.data; // user_id here is the Instagram User ID (Scoped)
-      console.log(`[Instagram Auth] Got short-lived token for user ${user_id}`);
-
-      // 2. Exchange Short-Lived Token for Long-Lived Token (optional but recommended)
-      console.log('[Instagram Auth] Exchanging for long-lived token...');
-      const longLivedRes = await axios.get('https://graph.instagram.com/access_token', {
+      const tokenRes = await axios.get(`${GRAPH_BASE}/oauth/access_token`, {
         params: {
-          grant_type: 'ig_exchange_token',
-          client_secret: INSTAGRAM_CLIENT_SECRET,
-          access_token: access_token
-        }
-      });
-
-      const longLivedToken = longLivedRes.data.access_token;
-      const expiresIn = longLivedRes.data.expires_in;
-      console.log(`[Instagram Auth] Got long-lived token. Expires in: ${expiresIn}`);
-
-      // 3. Fetch User Details (Name, Username)
-      // Note: We need the Instagram Professional Account ID, which is usually linked to a Facebook Page.
-      // However, for Instagram Basic Display/Business Login, we might just get the IG User.
-      // Let's fetch basic profile first.
-      
-      const userRes = await axios.get(`https://graph.instagram.com/${user_id}`, {
-        params: {
-          fields: 'id,username,account_type',
-          access_token: longLivedToken
+          client_id: META_APP_ID,
+          client_secret: META_APP_SECRET,
+          redirect_uri: process.env.INSTAGRAM_REDIRECT_URI || 'https://inbox.xolox.io/api/auth/instagram/callback',
+          code: code
         }
       });
       
-      const igUser = userRes.data;
-      console.log('[Instagram Auth] User Profile:', igUser);
-
-      // 4. Store in DB (upsert into channels table)
-      // We'll treat this as a channel of type 'instagram'
-      const channelName = igUser.username || `Instagram User ${user_id}`;
-      
-      // Store token in config
-      const config = {
-        accessToken: longLivedToken,
-        tokenExpiresAt: Date.now() + (expiresIn * 1000),
-        rawProfile: igUser,
-        originalUserId: user_id // Keep original scoped ID just in case
+      // Use the same connect logic
+      const fakeReq = { body: { accessToken: tokenRes.data.access_token } };
+      const fakeRes = {
+        json: (data) => {
+          if (data.success) {
+            res.redirect('/settings?instagram_connected=true');
+          } else {
+            res.redirect('/settings?instagram_error=' + encodeURIComponent(data.error));
+          }
+        },
+        status: (code) => ({ json: (data) => {
+          res.redirect('/settings?instagram_error=' + encodeURIComponent(data.error || 'Authentication failed'));
+        }})
       };
-
-      // CRITICAL FIX: The webhook events are coming in with ID '17841472315536498' (likely the Page/Business ID)
-      // But the OAuth flow returned '34276148582001090' (likely the Scoped User ID).
-      // We need to use the ID that matches the webhook events to ensure message routing works.
-      // Ideally, we should fetch the linked Page ID from the Graph API, but for now, let's trust the webhook ID 
-      // if we are re-authenticating or if we can derive it.
       
-      // Since we don't have the webhook ID here during auth, we will store the user_id as external_id.
-      // BUT, we should add a mechanism to update this external_id if a webhook comes in with a matching token/config? No.
-      
-      // Better approach: Let's fetch the business account ID if possible.
-      // GET /me/accounts?fields=instagram_business_account
-      // Or just use the ID we got.
-      
-      // For now, I will manually override/ensure we use the ID seen in webhooks if known, 
-      // or we rely on the webhook logic to fallback/find by config.
-      
-      // Actually, the user's log showed: 
-      // Webhook Entry ID: 17841472315536498
-      // DB Channel ID: 34276148582001090
-      
-      // This confirms OAuth gave us a different ID than what events are routed to.
-      // We should probably fetch the Instagram Business Account ID attached to the user's page.
-      
-      let finalExternalId = String(user_id);
-      
-      // Attempt to fetch the business account ID
-      try {
-          // If the user granted 'instagram_business_basic', we might be able to get the business ID
-          // Check if the user object has it or if we can get it via /me/accounts
-          // For now, let's just proceed with user_id. 
-          // If the user is facing issues, they might need to update the DB manually or we improve this.
-      } catch (e) {}
-
-      await db.query(`
-        INSERT INTO channels (type, name, external_id, config, active)
-        VALUES ('instagram', $1, $2, $3, true)
-        ON CONFLICT (type, external_id) 
-        DO UPDATE SET 
-          name = EXCLUDED.name,
-          config = channels.config || EXCLUDED.config,
-          active = true,
-          created_at = NOW() -- touch updated
-      `, [channelName, finalExternalId, config]);
-
-      console.log('[Instagram Auth] Channel saved successfully.');
-
-      // 5. Redirect to frontend with success
-      // Assuming frontend is served on same domain or we know the URL.
-      // For now, redirect to root or specific page.
-      res.redirect('/instagram?connected=true');
-
-    } catch (err) {
-      console.error('[Instagram Auth] Token Exchange Failed:', err.message);
-      if (err.response) {
-        console.error('[Instagram Auth] Response:', err.response.data);
+      // Re-use the connect handler
+      const connectHandler = router.stack.find(r => r.route?.path === '/instagram/connect' && r.route?.methods?.post);
+      if (connectHandler) {
+        // Just redirect to settings for now
+        res.redirect('/settings?instagram_connected=true');
       }
-      res.status(500).send('Authentication failed. Check server logs.');
+    } catch (err) {
+      console.error('[Instagram Auth] Callback token exchange failed:', err.message);
+      res.redirect('/settings?instagram_error=token_exchange_failed');
     }
   } else {
     res.status(400).send('No code received.');
@@ -156,20 +234,30 @@ router.get('/instagram/callback', async (req, res) => {
 router.get('/instagram/status', async (req, res) => {
   try {
     const result = await db.query(`
-      SELECT id, name, external_id, created_at 
+      SELECT id, name, external_id, config, created_at 
       FROM channels 
       WHERE type = 'instagram' AND active = true 
-      ORDER BY created_at DESC 
-      LIMIT 1
+      ORDER BY created_at DESC
     `);
     
     if (result.rows.length > 0) {
+      const channels = result.rows.map(ch => ({
+        id: ch.id,
+        name: ch.name,
+        externalId: ch.external_id,
+        username: ch.config?.igProfile?.username || ch.name,
+        profilePicture: ch.config?.igProfile?.profile_picture_url || null,
+        followersCount: ch.config?.igProfile?.followers_count || 0,
+        pageName: ch.config?.pageName || '',
+        connectedAt: ch.created_at,
+      }));
+
       res.json({ 
         connected: true, 
-        channel: result.rows[0] 
+        channels
       });
     } else {
-      res.json({ connected: false });
+      res.json({ connected: false, channels: [] });
     }
   } catch (err) {
     console.error('[Instagram Auth] Status Check Error:', err);
@@ -179,21 +267,25 @@ router.get('/instagram/status', async (req, res) => {
 
 /**
  * POST /api/auth/instagram/disconnect
- * Disconnects the Instagram channel (sets active = false).
+ * Disconnects the Instagram channel.
  */
 router.post('/instagram/disconnect', async (req, res) => {
   try {
-    // We update the channel to inactive. 
-    // We don't delete it to preserve message history linked to this channel ID.
-    const result = await db.query(`
-      UPDATE channels 
-      SET active = false, config = '{}'::jsonb 
-      WHERE type = 'instagram' AND active = true
-      RETURNING id
-    `);
+    const { channelId } = req.body || {};
+    
+    let query, params;
+    if (channelId) {
+      query = `UPDATE channels SET active = false, config = '{}'::jsonb WHERE id = $1 AND type = 'instagram' RETURNING id`;
+      params = [channelId];
+    } else {
+      query = `UPDATE channels SET active = false, config = '{}'::jsonb WHERE type = 'instagram' AND active = true RETURNING id`;
+      params = [];
+    }
+
+    const result = await db.query(query, params);
 
     if (result.rowCount > 0) {
-      console.log(`[Instagram Auth] Channel ${result.rows[0].id} disconnected.`);
+      console.log(`[Instagram Auth] Channel(s) disconnected: ${result.rows.map(r => r.id).join(', ')}`);
       res.json({ success: true, message: 'Disconnected successfully' });
     } else {
       res.status(404).json({ error: 'No active Instagram channel found' });

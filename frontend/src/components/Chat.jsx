@@ -1,6 +1,10 @@
 'use strict';
 import React, { useEffect, useState, useRef } from 'react';
-import { sendText, sendMedia, sendTemplate, uploadMedia, getTemplates, starTemplate, unstarTemplate, fetchMediaLibrary } from '../api';
+import {
+  sendText, sendMedia, sendTemplate, uploadMedia, getTemplates, 
+  starTemplate, unstarTemplate, fetchMediaLibrary,
+  sendInstagramText, sendInstagramMedia 
+} from '../api';
 import { cn } from '../lib/utils';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
@@ -10,7 +14,7 @@ import { Modal } from './ui/Modal';
 import { GallerySelectModal } from './GallerySelectModal';
 import { Send, Paperclip, Image as ImageIcon, File, Mic, FileText, BookOpen, BarChart, DollarSign, Loader2, MessageSquare, MapPin, User, Video, Star, MoreHorizontal } from 'lucide-react';
 
-export default function Chat({ socket, conversationId, channelExternalId, messages, onRefresh, isLoading }) {
+export default function Chat({ socket, conversationId, channelExternalId, channelType, messages, onRefresh, isLoading }) {
   const [text, setText] = useState('');
   const [showMediaInput, setShowMediaInput] = useState(false);
   const [showProposalModal, setShowProposalModal] = useState(false);
@@ -329,7 +333,13 @@ export default function Chat({ socket, conversationId, channelExternalId, messag
     setIsSending(true);
     setSendError('');
     try {
-      const resp = await sendText(conversationId, text.trim());
+      let resp;
+      if (channelType === 'instagram') {
+        resp = await sendInstagramText(conversationId, text.trim());
+      } else {
+        resp = await sendText(conversationId, text.trim());
+      }
+      
       if (resp && resp.error) {
         throw new Error(resp.message || 'Failed to send message');
       }
@@ -361,7 +371,9 @@ export default function Chat({ socket, conversationId, channelExternalId, messag
         linkToSend = uploadResp.id;
       }
 
-      const resp = await sendMedia(conversationId, mediaKind, linkToSend, caption || null);
+      const resp = channelType === 'instagram' 
+        ? await sendInstagramMedia(conversationId, mediaKind, linkToSend, caption || null)
+        : await sendMedia(conversationId, mediaKind, linkToSend, caption || null);
       if (resp && resp.error) {
         throw new Error(resp.message || 'Failed to send media');
       }
@@ -685,7 +697,10 @@ export default function Chat({ socket, conversationId, channelExternalId, messag
     <div className="flex flex-col h-full bg-slate-50/50">
       <div
         className="flex-1 overflow-y-auto p-4 space-y-4 bg-[#E5DDD5]"
-        style={{ backgroundImage: "url('/bg.png')" }}
+        style={{ 
+          backgroundImage: channelType === 'instagram' ? 'none' : "url('/bg.png')",
+          backgroundColor: channelType === 'instagram' ? '#faf5f5' : '#E5DDD5'
+        }}
       >
         {messages.map((m, index) => {
           const isOutbound = m.direction === 'outbound';
@@ -716,13 +731,14 @@ export default function Chat({ socket, conversationId, channelExternalId, messag
                 <div className={cn(
                   "max-w-[70%] rounded-2xl px-4 py-3 text-sm shadow-sm",
                   isOutbound
-                    ? "bg-[#d9fdd3] text-slate-900 rounded-tr-sm"
+                    ? (channelType === 'instagram' ? "bg-gradient-to-br from-purple-600 to-pink-500 text-white rounded-tr-sm" : "bg-[#d9fdd3] text-slate-900 rounded-tr-sm")
                     : "bg-white text-slate-900 rounded-tl-sm"
                 )}>
                   {/* Channel Identifier for Inbound */}
-                  {!isOutbound && channelExternalId && (
+                  {!isOutbound && (channelExternalId || channelType) && (
                     <div className="text-[9px] text-slate-400 mb-1 flex items-center gap-1">
-                      <span className="opacity-70">To:</span> <span className="font-semibold">{channelExternalId}</span>
+                      <span className="opacity-70">To:</span> <span className="font-semibold uppercase">{channelType || 'WhatsApp'}</span>
+                      {channelExternalId && <span className="text-slate-200">• {channelExternalId}</span>}
                     </div>
                   )}
                   {/* Reply Context - Hide for Interactive/Button replies to match WhatsApp UI */}
@@ -1051,7 +1067,10 @@ export default function Chat({ socket, conversationId, channelExternalId, messag
           </div>
           <Button
             id="tour-chat-send-btn"
-            className="h-11 w-11 rounded-lg bg-[#00a884] hover:bg-[#008f6f] text-white shadow-sm"
+            className={cn(
+              "h-11 w-11 rounded-lg text-white shadow-sm",
+              channelType === 'instagram' ? "bg-pink-600 hover:bg-pink-700" : "bg-[#00a884] hover:bg-[#008f6f]"
+            )}
             onClick={handleSendText}
             disabled={!text.trim() || isSending}
           >

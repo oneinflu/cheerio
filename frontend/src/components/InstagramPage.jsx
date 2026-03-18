@@ -219,6 +219,7 @@ export default function InstagramPage({ currentUser, socket }) {
             socket={socket}
             conversationId={selectedId}
             channelExternalId={channelExternalId}
+            channelType="instagram"
             messages={messages}
             onRefresh={handleRefresh}
             isLoading={messagesLoading}

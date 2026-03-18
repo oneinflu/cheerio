@@ -1049,3 +1049,95 @@ export async function disconnectTelegram(botToken, teamId) {
   });
   return res.json();
 }
+
+// ─── Instagram ────────────────────────────────────────────────────────────────
+
+export async function connectInstagram(accessToken) {
+  const headers = getAuthHeaders();
+  const res = await fetch('/api/auth/instagram/connect', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ accessToken }),
+  });
+  return res.json();
+}
+
+export async function getInstagramStatus() {
+  const headers = getAuthHeaders();
+  const res = await fetch('/api/auth/instagram/status', { headers });
+  return res.json();
+}
+
+export async function disconnectInstagram(channelId) {
+  const headers = getAuthHeaders();
+  const res = await fetch('/api/auth/instagram/disconnect', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ channelId }),
+  });
+  return res.json();
+}
+
+export async function sendInstagramText(conversationId, text) {
+  const headers = getAuthHeaders();
+  const res = await fetch('/api/instagram/text', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ conversationId, text }),
+  });
+  return res.json();
+}
+
+export async function sendInstagramMedia(conversationId, kind, url, caption) {
+  const headers = getAuthHeaders();
+  const res = await fetch('/api/instagram/media', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ conversationId, kind, url, caption }),
+  });
+  return res.json();
+}
+
+export async function getInstagramAutomations() {
+  const headers = getAuthHeaders();
+  const res = await fetch('/api/instagram/automations', { headers });
+  return res.json();
+}
+
+export async function createInstagramAutomation(data) {
+  const headers = getAuthHeaders();
+  const res = await fetch('/api/instagram/automations', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
+export async function updateInstagramAutomation(id, data) {
+  const headers = getAuthHeaders();
+  const res = await fetch(`/api/instagram/automations/${id}`, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
+export async function deleteInstagramAutomation(id) {
+  const headers = getAuthHeaders();
+  const res = await fetch(`/api/instagram/automations/${id}`, {
+    method: 'DELETE',
+    headers,
+  });
+  return res.json();
+}
+
+export async function toggleInstagramAutomation(id) {
+  const headers = getAuthHeaders();
+  const res = await fetch(`/api/instagram/automations/${id}/toggle`, {
+    method: 'POST',
+    headers,
+  });
+  return res.json();
+}

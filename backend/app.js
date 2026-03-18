@@ -21,6 +21,8 @@ const telegramWebhookRouter = require('./src/webhooks/telegram');
 const instagramWebhookRouter = require('./src/webhooks/instagram');
 const whatsappFlowEndpointRouter = require('./src/webhooks/flowEndpoint');
 const whatsappOutboundRouter = require('./src/routes/whatsappOutbound');
+const instagramOutboundRouter = require('./src/routes/instagramOutbound');
+const instagramAutomationRouter = require('./src/routes/instagramAutomation');
 const conversationsRouter = require('./src/routes/conversations');
 const staffNotesRouter = require('./src/routes/staffNotes');
 const inboxRouter = require('./src/routes/inbox');
@@ -132,6 +134,8 @@ function createApp() {
   app.use('/api/auth/telegram', telegramAuthRouter); // Telegram Onboarding
   app.use('/api/team-users', teamRouter); // Team Users
   app.use('/api/whatsapp', whatsappOutboundRouter);
+  app.use('/api/instagram', instagramOutboundRouter);
+  app.use('/api/instagram/automations', instagramAutomationRouter);
   app.use('/api/conversations', conversationsRouter);
   app.use('/api', staffNotesRouter);
   app.use('/api', inboxRouter);

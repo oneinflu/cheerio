@@ -5,7 +5,8 @@
  * Purpose:
  * - Implements Instagram Messaging API webhook verification (GET) and ingestion (POST).
  * - Handles verification challenge from Meta.
- * - Receives and logs incoming Instagram messages/events.
+ * - Receives and processes incoming Instagram messages/events.
+ * - Supports auto-reply, comment-to-DM, and auto-DM automations.
  */
 
 const express = require('express');
@@ -13,7 +14,6 @@ const router = express.Router();
 const crypto = require('crypto');
 
 // Verify token for GET challenge.
-// You should add INSTAGRAM_VERIFY_TOKEN and INSTAGRAM_APP_SECRET to your .env file
 const VERIFY_TOKEN = process.env.INSTAGRAM_VERIFY_TOKEN || process.env.WHATSAPP_VERIFY_TOKEN || '';
 const APP_SECRET = process.env.INSTAGRAM_APP_SECRET || process.env.META_APP_SECRET || '';
 
@@ -26,7 +26,6 @@ router.get('/', (req, res) => {
   const token = req.query['hub.verify_token'];
   const challenge = req.query['hub.challenge'];
 
-  // Debug logging to help troubleshoot verification failures
   console.log('[Instagram Webhook] Verification request received.');
   console.log(`[Instagram Webhook] Mode: ${mode}`);
   console.log(`[Instagram Webhook] Token received: ${token}`);
@@ -38,7 +37,6 @@ router.get('/', (req, res) => {
 
   if (mode === 'subscribe' && token === VERIFY_TOKEN) {
     console.log('[Instagram Webhook] Verification successful. Returning challenge.');
-    // Echo the challenge string exactly to confirm subscription.
     return res.status(200).send(challenge);
   }
   
@@ -57,14 +55,9 @@ router.get('/', (req, res) => {
 router.post('/', (req, res) => {
   const body = req.body || {};
 
-  // Log the raw body for debugging
   console.log('[Instagram Webhook] Received event:', JSON.stringify(body, null, 2));
 
-  /**
-   * Webhook signature verification:
-   * - Meta sends X-Hub-Signature-256: "sha256=HEX_DIGEST".
-   * - Compute HMAC of raw body using APP_SECRET and compare.
-   */
+  // Webhook signature verification
   if (APP_SECRET) {
     try {
       const header = req.headers['x-hub-signature-256'] || '';
@@ -72,29 +65,19 @@ router.post('/', (req, res) => {
       
       if (header !== expected) {
         console.warn('[Instagram Webhook] Signature mismatch.', { received: header, expected });
-        // We can optionally reject here, but for now let's just warn to avoid breaking if secrets are misconfigured
-        // return res.status(403).json({ error: 'Invalid signature' });
       }
     } catch (err) {
       console.error('[Instagram Webhook] Signature verification error:', err);
     }
   }
 
-  // Handle "page" or "instagram" objects
-  // Note: Instagram Graph API webhooks usually come with object='instagram' or 'page' depending on setup.
-  // For Instagram Messaging, it's typically 'instagram' if subscribed via App Dashboard > Instagram,
-  // or 'page' if subscribed via App Dashboard > Webhooks > Page (and linked IG account).
-  
   if (body.object === 'instagram' || body.object === 'page') {
     const entries = Array.isArray(body.entry) ? body.entry : [];
     
     entries.forEach(entry => {
-      // Instagram Messaging events are usually in 'messaging' array.
-      // Sometimes they might be in 'changes' if it's a field update.
       const messagingEvents = entry.messaging || [];
       const changes = entry.changes || [];
       
-      // Log entry ID (this is usually the IG User ID or Page ID)
       console.log(`[Instagram Webhook] Entry ID: ${entry.id}`);
 
       // Process Messaging Events (Direct Messages)
@@ -109,20 +92,42 @@ router.post('/', (req, res) => {
                handleIncomingMessage(event, entry.id);
            }
         }
+        
+        // Handle message reactions
+        if (event.reaction) {
+          console.log('[Instagram Webhook] Reaction event:', event.reaction);
+        }
+        
+        // Handle postbacks (button taps in quick replies, ice breakers, etc.)
+        if (event.postback) {
+          console.log('[Instagram Webhook] Postback event:', event.postback);
+          handleIncomingMessage({
+            ...event,
+            message: {
+              mid: `postback_${Date.now()}`,
+              text: event.postback.title || event.postback.payload || 'Button tap'
+            }
+          }, entry.id);
+        }
       });
 
-      // Process Changes (Comments, etc.)
+      // Process Changes (Comments, Mentions, etc.)
       changes.forEach(change => {
         console.log('[Instagram Webhook] Change Event:', JSON.stringify(change, null, 2));
-        // TODO: Implement comment handling if needed
+        
+        if (change.field === 'comments') {
+          handleComment(change.value, entry.id);
+        }
+        
+        if (change.field === 'mentions') {
+          console.log('[Instagram Webhook] Story mention from:', change.value);
+        }
       });
     });
 
-    // Return 200 OK to acknowledge receipt
     res.status(200).send('EVENT_RECEIVED');
   } else {
     console.warn(`[Instagram Webhook] Unknown object type: ${body.object}`);
-    // Return 404 if not an instagram/page event
     res.sendStatus(404);
   }
 });
@@ -138,7 +143,6 @@ async function handleIncomingMessage(event, entryId) {
     const recipientId = event.recipient.id;
     const messageId = event.message.mid;
     const textBody = event.message.text || '';
-    // Instagram attachments can be in 'attachments' array
     const attachments = event.message.attachments || [];
     const timestamp = event.timestamp;
 
@@ -146,13 +150,8 @@ async function handleIncomingMessage(event, entryId) {
 
     try {
         // 1. Ensure Channel Exists
-        // We look up by the recipientId (which should be our IG User ID).
-        // HOWEVER, sometimes recipientId in webhook != the ID we got during OAuth if it's a Page-scoped ID vs User-scoped ID.
-        // But usually for IG Business, recipient.id IS the IG Business Account ID.
-        
         let channelRes = await db.query('SELECT id, config FROM channels WHERE type = $1 AND external_id = $2', ['instagram', recipientId]);
         
-        // Fallback: Check if we have a channel with the Entry ID (sometimes events are routed via Page ID)
         if (channelRes.rows.length === 0) {
              console.log(`[Instagram Webhook] Channel not found for recipient ${recipientId}. Checking entry ID ${entryId}...`);
              channelRes = await db.query('SELECT id, config FROM channels WHERE type = $1 AND external_id = $2', ['instagram', entryId]);
@@ -160,25 +159,39 @@ async function handleIncomingMessage(event, entryId) {
 
         if (channelRes.rows.length === 0) {
             console.warn(`[Instagram Webhook] Channel for recipient ${recipientId} OR entry ${entryId} not found. Message ignored.`);
-            // Debug: List all instagram channels to see what we have
             const allCh = await db.query('SELECT external_id, name FROM channels WHERE type = $1', ['instagram']);
             console.log('[Instagram Webhook] Available Instagram Channels:', allCh.rows);
             return;
         }
         const channelId = channelRes.rows[0].id;
-        
-        // ... rest of logic ...
+        const channelConfig = channelRes.rows[0].config || {};
         
         // 2. Upsert Contact (The sender)
         let displayName = `Instagram User ${senderId}`;
         
-        // Try to get a better name if we haven't already
-        // In a real app, we'd use the Page Access Token to query GET /<sender-id>?fields=name,username
+        // Try to fetch username from Instagram Graph API
+        try {
+          const accessToken = channelConfig.accessToken || channelConfig.page_token || process.env.WHATSAPP_TOKEN;
+          if (accessToken) {
+            const axios = require('axios');
+            const profileRes = await axios.get(`https://graph.facebook.com/v21.0/${senderId}`, {
+              params: { fields: 'name,username', access_token: accessToken }
+            });
+            if (profileRes.data?.name) {
+              displayName = profileRes.data.name;
+            } else if (profileRes.data?.username) {
+              displayName = `@${profileRes.data.username}`;
+            }
+          }
+        } catch (profileErr) {
+          console.log('[Instagram Webhook] Could not fetch profile for sender:', profileErr.message);
+        }
         
         const contactRes = await db.query(`
             INSERT INTO contacts (channel_id, external_id, display_name, created_at, updated_at)
             VALUES ($1, $2, $3, NOW(), NOW())
             ON CONFLICT (channel_id, external_id) DO UPDATE SET
+              display_name = CASE WHEN contacts.display_name LIKE 'Instagram User%' THEN $3 ELSE contacts.display_name END,
               updated_at = NOW()
             RETURNING id
         `, [channelId, senderId, displayName]);
@@ -195,10 +208,8 @@ async function handleIncomingMessage(event, entryId) {
         let conversationId;
         if (convRes.rows.length > 0) {
             conversationId = convRes.rows[0].id;
-            // Update last message timestamp
             await db.query('UPDATE conversations SET last_message_at = NOW(), updated_at = NOW() WHERE id = $1', [conversationId]);
         } else {
-            // Create new conversation
             const newConv = await db.query(`
                 INSERT INTO conversations (channel_id, contact_id, status, last_message_at)
                 VALUES ($1, $2, 'open', NOW())
@@ -207,10 +218,20 @@ async function handleIncomingMessage(event, entryId) {
             conversationId = newConv.rows[0].id;
         }
 
-        // 4. Insert Message
-        // Instagram timestamp is in milliseconds (usually). Let's check. 
-        // Example: 1772451868000. If it's > 20000000000, it's likely ms.
-        // Postgres to_timestamp takes seconds.
+        // 4. Determine content type
+        let contentType = 'text';
+        let processedAttachments = [];
+        
+        if (attachments.length > 0) {
+          const att = attachments[0];
+          if (att.type === 'image') contentType = 'image';
+          else if (att.type === 'video') contentType = 'video';
+          else if (att.type === 'audio') contentType = 'audio';
+          else if (att.type === 'share' || att.type === 'story_mention') contentType = 'text';
+          else contentType = att.type || 'text';
+        }
+
+        // 5. Insert Message
         let tsSeconds = timestamp;
         if (timestamp > 9999999999) {
             tsSeconds = timestamp / 1000;
@@ -221,29 +242,48 @@ async function handleIncomingMessage(event, entryId) {
                 conversation_id, channel_id, direction, content_type, 
                 external_message_id, text_body, delivery_status, raw_payload, created_at
             )
-            VALUES ($1, $2, 'inbound', 'text', $3, $4, 'delivered', $5, to_timestamp($6))
+            VALUES ($1, $2, 'inbound', $3, $4, $5, 'delivered', $6, to_timestamp($7))
             ON CONFLICT (channel_id, external_message_id) DO NOTHING
             RETURNING id
-        `, [conversationId, channelId, messageId, textBody, event, tsSeconds]);
+        `, [conversationId, channelId, contentType, messageId, textBody, event, tsSeconds]);
 
         if (msgRes.rowCount > 0) {
+            const dbMessageId = msgRes.rows[0].id;
             console.log(`[Instagram Webhook] Message ${messageId} stored. Conversation: ${conversationId}`);
+            
+            // Insert attachments if any
+            for (const att of attachments) {
+              if (att.payload?.url) {
+                try {
+                  await db.query(`
+                    INSERT INTO attachments (id, message_id, kind, url, mime_type, created_at)
+                    VALUES (gen_random_uuid(), $1, $2, $3, NULL, NOW())
+                  `, [dbMessageId, att.type || 'image', att.payload.url]);
+                  processedAttachments.push({ kind: att.type, url: att.payload.url });
+                } catch (attErr) {
+                  console.warn('[Instagram Webhook] Failed to store attachment:', attErr.message);
+                }
+              }
+            }
             
             // Emit Realtime Event
             const io = getIO();
             if (io) {
                 const payload = {
                     conversationId,
-                    messageId: msgRes.rows[0].id,
-                    contentType: 'text',
+                    messageId: dbMessageId,
+                    contentType,
                     textBody,
                     direction: 'inbound',
-                    attachments: [],
+                    attachments: processedAttachments,
                     rawPayload: event
                 };
                 io.to(`conversation:${conversationId}`).emit('message:new', payload);
                 io.emit('message:new', payload);
             }
+            
+            // 6. Check Auto-Reply automations
+            await checkAutoReplyRules(channelId, senderId, textBody, conversationId, channelConfig);
         } else {
             console.log(`[Instagram Webhook] Duplicate message ${messageId} ignored.`);
         }
@@ -255,14 +295,11 @@ async function handleIncomingMessage(event, entryId) {
 
 /**
  * Handle Echo Message (Outbound sent from Instagram App/Business Suite)
- * We treat this as an outbound message to keep our conversation history in sync.
  */
 async function handleEchoMessage(event, entryId) {
     const db = require('../../db');
     const { getIO } = require('../realtime/io');
 
-    // In echo, sender is the page/business account, recipient is the customer.
-    // However, sometimes sender.id in echo matches the Page ID.
     const senderId = event.sender.id; 
     const recipientId = event.recipient.id;
     const messageId = event.message.mid;
@@ -272,12 +309,8 @@ async function handleEchoMessage(event, entryId) {
     console.log(`[Instagram Webhook] Processing ECHO from ${senderId} to ${recipientId} (Entry: ${entryId})`);
 
     try {
-        // 1. Identify Channel
-        // For echo, the SENDER is our channel (the business).
-        // Try looking up by senderId first
         let channelRes = await db.query('SELECT id, config FROM channels WHERE type = $1 AND external_id = $2', ['instagram', senderId]);
         
-        // Fallback to Entry ID if senderId doesn't match known channel
         if (channelRes.rows.length === 0) {
              console.log(`[Instagram Webhook] Channel not found for sender ${senderId}. Checking entry ID ${entryId}...`);
              channelRes = await db.query('SELECT id, config FROM channels WHERE type = $1 AND external_id = $2', ['instagram', entryId]);
@@ -289,7 +322,6 @@ async function handleEchoMessage(event, entryId) {
         }
         const channelId = channelRes.rows[0].id;
 
-        // 2. Identify Contact (The recipient)
         let displayName = `Instagram User ${recipientId}`;
         const contactRes = await db.query(`
             INSERT INTO contacts (channel_id, external_id, display_name, created_at, updated_at)
@@ -299,7 +331,6 @@ async function handleEchoMessage(event, entryId) {
         `, [channelId, recipientId, displayName]);
         const contactId = contactRes.rows[0].id;
 
-        // 3. Find/Create Conversation
         let convRes = await db.query(`
             SELECT id FROM conversations 
             WHERE channel_id = $1 AND contact_id = $2 AND status != 'closed'
@@ -319,7 +350,6 @@ async function handleEchoMessage(event, entryId) {
             conversationId = newConv.rows[0].id;
         }
 
-        // 4. Insert Outbound Message
         let tsSeconds = timestamp;
         if (timestamp > 9999999999) tsSeconds = timestamp / 1000;
 
@@ -353,6 +383,171 @@ async function handleEchoMessage(event, entryId) {
 
     } catch (err) {
         console.error('[Instagram Webhook] Error processing echo message:', err);
+    }
+}
+
+/**
+ * Handle Instagram Comment events (for Comment-to-DM automation)
+ */
+async function handleComment(commentValue, entryId) {
+    const db = require('../../db');
+    
+    if (!commentValue) return;
+    
+    const commentText = commentValue.text || '';
+    const commenterId = commentValue.from?.id;
+    const mediaId = commentValue.media?.id;
+    
+    console.log(`[Instagram Webhook] Comment from ${commenterId} on media ${mediaId}: "${commentText}"`);
+    
+    if (!commenterId) return;
+    
+    try {
+      // Find the Instagram channel for this entry
+      let channelRes = await db.query(
+        'SELECT id, config FROM channels WHERE type = $1 AND external_id = $2 AND active = true',
+        ['instagram', entryId]
+      );
+      
+      if (channelRes.rows.length === 0) {
+        // Try finding any active Instagram channel
+        channelRes = await db.query(
+          'SELECT id, config FROM channels WHERE type = $1 AND active = true LIMIT 1',
+          ['instagram']
+        );
+      }
+      
+      if (channelRes.rows.length === 0) {
+        console.log('[Instagram Webhook] No active Instagram channel found for comment handling.');
+        return;
+      }
+      
+      const channelId = channelRes.rows[0].id;
+      const channelConfig = channelRes.rows[0].config || {};
+      
+      // Check comment-to-DM automation rules
+      const automationRes = await db.query(
+        `SELECT * FROM instagram_automations 
+         WHERE channel_id = $1 AND type = 'comment_dm' AND is_active = true`,
+        [channelId]
+      );
+      
+      if (automationRes.rows.length === 0) {
+        console.log('[Instagram Webhook] No active comment-to-DM automations found.');
+        return;
+      }
+      
+      for (const rule of automationRes.rows) {
+        const trigger = rule.trigger_config || {};
+        const action = rule.action_config || {};
+        
+        // Check if comment matches the trigger keyword
+        let matches = false;
+        
+        if (trigger.comment_keyword) {
+          const keywords = trigger.comment_keyword.split(',').map(k => k.trim().toLowerCase());
+          matches = keywords.some(kw => commentText.toLowerCase().includes(kw));
+        } else {
+          // No keyword filter = match all comments
+          matches = true;
+        }
+        
+        // Check if targeting specific post
+        if (trigger.post_id && mediaId && trigger.post_id !== mediaId) {
+          matches = false;
+        }
+        
+        if (matches && action.message) {
+          console.log(`[Instagram Webhook] Comment-to-DM rule "${rule.name}" triggered!`);
+          
+          // Send auto DM
+          const accessToken = channelConfig.accessToken || channelConfig.page_token || process.env.WHATSAPP_TOKEN;
+          if (!accessToken) {
+            console.warn('[Instagram Webhook] No access token for auto DM.');
+            continue;
+          }
+          
+          try {
+            const { sendAutoDM } = require('../services/outboundInstagram');
+            
+            // Optionally delay
+            const delayMs = (action.delay_seconds || 0) * 1000;
+            if (delayMs > 0) {
+              setTimeout(async () => {
+                try {
+                  await sendAutoDM(channelId, commenterId, action.message);
+                  console.log(`[Instagram Webhook] Comment-to-DM sent to ${commenterId}`);
+                } catch (err) {
+                  console.error('[Instagram Webhook] Delayed Comment-to-DM failed:', err.message);
+                }
+              }, delayMs);
+            } else {
+              await sendAutoDM(channelId, commenterId, action.message);
+              console.log(`[Instagram Webhook] Comment-to-DM sent to ${commenterId}`);
+            }
+          } catch (dmErr) {
+            console.error('[Instagram Webhook] Comment-to-DM send failed:', dmErr.message);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[Instagram Webhook] Error handling comment:', err);
+    }
+}
+
+/**
+ * Check and execute auto-reply rules for incoming messages
+ */
+async function checkAutoReplyRules(channelId, senderId, textBody, conversationId, channelConfig) {
+    const db_module = require('../../db');
+    
+    try {
+      const automationRes = await db_module.query(
+        `SELECT * FROM instagram_automations 
+         WHERE channel_id = $1 AND type = 'auto_reply' AND is_active = true`,
+        [channelId]
+      );
+      
+      if (automationRes.rows.length === 0) return;
+      
+      for (const rule of automationRes.rows) {
+        const trigger = rule.trigger_config || {};
+        const action = rule.action_config || {};
+        
+        let matches = false;
+        
+        if (trigger.keyword) {
+          const keywords = trigger.keyword.split(',').map(k => k.trim().toLowerCase());
+          matches = keywords.some(kw => textBody.toLowerCase().includes(kw));
+        } else {
+          // No keyword = reply to all messages
+          matches = true;
+        }
+        
+        if (matches && action.message) {
+          console.log(`[Instagram Webhook] Auto-reply rule "${rule.name}" triggered!`);
+          
+          try {
+            const { sendAutoDM } = require('../services/outboundInstagram');
+            
+            const delayMs = (action.delay_seconds || 2) * 1000; // Default 2s delay for natural feel
+            setTimeout(async () => {
+              try {
+                await sendAutoDM(channelId, senderId, action.message);
+                console.log(`[Instagram Webhook] Auto-reply sent to ${senderId}`);
+              } catch (err) {
+                console.error('[Instagram Webhook] Auto-reply send failed:', err.message);
+              }
+            }, delayMs);
+          } catch (err) {
+            console.error('[Instagram Webhook] Auto-reply error:', err.message);
+          }
+          
+          break; // Only trigger first matching rule
+        }
+      }
+    } catch (err) {
+      console.error('[Instagram Webhook] Error checking auto-reply rules:', err);
     }
 }
 

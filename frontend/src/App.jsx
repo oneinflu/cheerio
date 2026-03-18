@@ -1235,6 +1235,7 @@ export default function App() {
                   socket={socket}
                   conversationId={selectedId}
                   channelExternalId={selectedConversation?.channelExternalId}
+                  channelType={selectedConversation?.channelType}
                   messages={messages}
                   isLoading={isLoadingMessages}
                   onRefresh={() => loadMessages(true)}

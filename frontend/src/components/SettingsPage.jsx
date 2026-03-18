@@ -12,7 +12,10 @@ import {
 import {
   getWhatsAppSettings, onboardWhatsApp,
   disconnectWhatsApp, getTelegramSettings, connectTelegram,
-  disconnectTelegram
+  disconnectTelegram,
+  connectInstagram, getInstagramStatus, disconnectInstagram,
+  getInstagramAutomations, createInstagramAutomation,
+  updateInstagramAutomation, deleteInstagramAutomation, toggleInstagramAutomation
 } from '../api';
 
 // ─── Brand icon URLs (SimpleIcons CDN + Wikimedia) ────────────────────────────
@@ -70,17 +73,11 @@ const INTEGRATIONS_LIST = [
   },
   {
     id: 'instagram', category: 'channels', name: 'Instagram DMs',
-    logo: ICONS.instagram, isUpcoming: true,
-    description: 'Manage Instagram Direct Messages and story mention replies through the Meta Graph API.',
+    logo: ICONS.instagram,
+    description: 'Manage Instagram Direct Messages, auto-replies, and comment-to-DM automations through the Meta Graph API.',
     accentColor: '#E4405F',
     docsUrl: 'https://developers.facebook.com/docs/instagram-api/overview',
-    fields: [
-      { label: 'Facebook App ID',    key: 'app_id',     placeholder: '1234567890',         hint: 'From Meta for Developers → Your App → Settings → Basic' },
-      { label: 'App Secret',         key: 'app_secret', placeholder: '••••••••••••••••',   hint: 'Keep this confidential — never expose client-side', type: 'password' },
-      { label: 'Page Access Token',  key: 'page_token', placeholder: 'EAAxxxxx...',         hint: 'Long-lived page token from Graph API Explorer', type: 'password' },
-      { label: 'Instagram Account ID', key: 'ig_account_id', placeholder: '17841400000000000', hint: 'Numeric ID of the connected Instagram Business account' },
-      { label: 'Webhook Verify Token', key: 'verify_token', placeholder: 'my_verify_secret', hint: 'A random string you define — used to validate webhook callbacks' },
-    ],
+    fields: [],  // handled by custom renderer
   },
   {
     id: 'email', category: 'channels', name: 'Business Email (IMAP/SMTP)',
@@ -460,6 +457,13 @@ export default function SettingsPage({ currentUser }) {
   const [botTokenInput, setBotTokenInput]       = useState('');
   const [botDisplayName, setBotDisplayName]     = useState('');
 
+  // Instagram
+  const [instagramStatus, setInstagramStatus] = useState({ connected: false, channels: [] });
+  const [loadingInstagram, setLoadingInstagram] = useState(false);
+  const [igAutomations, setIgAutomations] = useState([]);
+  const [showAddAutomation, setShowAddAutomation] = useState(false);
+  const [newAutomation, setNewAutomation] = useState({ type: 'auto_reply', name: '', keyword: '', message: '', delay_seconds: 2 });
+
   const [sdkLoaded, setSdkLoaded] = useState(false);
   useEffect(() => {
     if (window.FB) { setSdkLoaded(true); return; }
@@ -478,13 +482,29 @@ export default function SettingsPage({ currentUser }) {
     if (!teamId) return;
     (async () => {
       try {
-        const [wa, tg] = await Promise.all([getWhatsAppSettings(teamId), getTelegramSettings(teamId)]);
+        const [wa, tg, ig] = await Promise.all([
+          getWhatsAppSettings(teamId),
+          getTelegramSettings(teamId),
+          getInstagramStatus()
+        ]);
         if (wa?.settings)    setWhatsappSettings(wa.settings);
         if (wa?.allSettings) setAllWhatsappSettings(wa.allSettings);
         if (tg?.settings)    setTelegramSettings(tg.settings);
+        if (ig)              setInstagramStatus(ig);
       } catch (err) { console.error('Error loading integrations', err); }
     })();
   }, [teamId]);
+
+  // Load Instagram automations
+  useEffect(() => {
+    if (!instagramStatus.connected) return;
+    (async () => {
+      try {
+        const res = await getInstagramAutomations();
+        if (res?.automations) setIgAutomations(res.automations);
+      } catch (err) { console.error('Error loading IG automations', err); }
+    })();
+  }, [instagramStatus.connected]);
 
   const activeIntegration = useMemo(() =>
     INTEGRATIONS_LIST.find(i => i.id === activeIntegrationId), [activeIntegrationId]);
@@ -536,9 +556,87 @@ export default function SettingsPage({ currentUser }) {
   const setField = (key, value) => setFieldValues(prev => ({ ...prev, [activeIntegrationId]: { ...(prev[activeIntegrationId] || {}), [key]: value } }));
   const getField = (key) => fieldValues[activeIntegrationId]?.[key] || '';
 
+  // Instagram handlers
+  const handleConnectInstagram = () => {
+    if (!window.FB) return alert('Facebook SDK loading...');
+    setLoadingInstagram(true);
+    window.FB.login((response) => {
+      if (response.authResponse) {
+        connectInstagram(response.authResponse.accessToken).then(res => {
+          if (res.success) {
+            getInstagramStatus().then(s => setInstagramStatus(s));
+          } else {
+            alert(res.error || 'Failed to connect Instagram. Ensure your Instagram is a Business/Creator account linked to a Facebook Page.');
+          }
+        }).catch(err => {
+          console.error('Instagram connect error:', err);
+          alert('Failed to connect Instagram.');
+        }).finally(() => setLoadingInstagram(false));
+      } else {
+        setLoadingInstagram(false);
+      }
+    }, {
+      scope: 'instagram_basic,instagram_manage_messages,pages_messaging,pages_show_list,pages_manage_metadata,business_management,public_profile'
+    });
+  };
+
+  const handleDisconnectInstagram = async (channelId) => {
+    if (!confirm('Are you sure you want to disconnect this Instagram account?')) return;
+    try {
+      await disconnectInstagram(channelId);
+      const s = await getInstagramStatus();
+      setInstagramStatus(s);
+    } catch (err) {
+      console.error('Disconnect error:', err);
+    }
+  };
+
+  const handleCreateAutomation = async () => {
+    if (!newAutomation.name || !newAutomation.message) return alert('Name and message are required');
+    const channelId = instagramStatus.channels?.[0]?.id;
+    if (!channelId) return alert('No Instagram channel connected');
+    try {
+      await createInstagramAutomation({
+        channel_id: channelId,
+        type: newAutomation.type,
+        name: newAutomation.name,
+        trigger: { keyword: newAutomation.keyword, comment_keyword: newAutomation.keyword },
+        action: { message: newAutomation.message, delay_seconds: parseInt(newAutomation.delay_seconds) || 2 },
+        is_active: true
+      });
+      setShowAddAutomation(false);
+      setNewAutomation({ type: 'auto_reply', name: '', keyword: '', message: '', delay_seconds: 2 });
+      const res = await getInstagramAutomations();
+      if (res?.automations) setIgAutomations(res.automations);
+    } catch (err) {
+      console.error('Create automation error:', err);
+    }
+  };
+
+  const handleDeleteAutomation = async (id) => {
+    if (!confirm('Delete this automation?')) return;
+    try {
+      await deleteInstagramAutomation(id);
+      setIgAutomations(prev => prev.filter(a => a.id !== id));
+    } catch (err) {
+      console.error('Delete automation error:', err);
+    }
+  };
+
+  const handleToggleAutomation = async (id) => {
+    try {
+      const res = await toggleInstagramAutomation(id);
+      if (res) {
+        setIgAutomations(prev => prev.map(a => a.id === id ? { ...a, is_active: !a.is_active } : a));
+      }
+    } catch (err) {
+      console.error('Toggle automation error:', err);
+    }
+  };
+
   // ─── Card Grid ──────────────────────────────────────────────────────
   const renderIntegrationCard = (item) => {
-    const isConnected = (item.id === 'whatsapp' && allWhatsappSettings.length > 0) || (item.id === 'telegram' && telegramSettings.length > 0);
+    const isConnected = (item.id === 'whatsapp' && allWhatsappSettings.length > 0) || (item.id === 'telegram' && telegramSettings.length > 0) || (item.id === 'instagram' && instagramStatus.connected);
     return (
       <div
         key={item.id}
@@ -897,10 +995,237 @@ export default function SettingsPage({ currentUser }) {
     </div>
   );
 
+  // ─── Instagram Detail ────────────────────────────────────────────────
+  const renderInstagramDetail = () => (
+    <div className="p-6 max-w-3xl mx-auto space-y-5">
+      <Button variant="ghost" size="sm" className="text-slate-500 -ml-2" onClick={() => setActiveIntegrationId(null)}>
+        <ArrowLeft className="w-4 h-4 mr-1.5" /> All Integrations
+      </Button>
+      <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+        <div className="p-6 text-white flex items-center gap-4" style={{ background: 'linear-gradient(135deg, #833AB4, #E1306C, #F77737)' }}>
+          <div className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-xl p-2.5 flex items-center justify-center ring-1 ring-white/30">
+            <img src={ICONS.instagram} className="w-full h-full" alt="Instagram" />
+          </div>
+          <div>
+            <h2 className="text-2xl font-black">Instagram DMs</h2>
+            <p className="text-pink-100 text-sm">Meta Graph API</p>
+          </div>
+        </div>
+        <div className="p-6">
+          {!instagramStatus.connected ? (
+            <div className="flex flex-col items-center py-12 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+              <div className="w-16 h-16 bg-white rounded-2xl shadow border border-slate-100 flex items-center justify-center mb-5 p-3">
+                <img src={ICONS.instagram} className="w-full h-full object-contain" alt="Instagram" />
+              </div>
+              <h3 className="text-lg font-black text-slate-900 mb-1">Connect Instagram Business</h3>
+              <p className="text-sm text-slate-500 text-center max-w-sm mb-6">
+                Link your Instagram Business/Creator account through Facebook Login to manage DMs, set up auto-replies, and comment-to-DM automations.
+              </p>
+              <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-6 max-w-sm">
+                <p className="text-xs font-bold text-amber-700 mb-1">📋 Prerequisites</p>
+                <ul className="text-[11px] text-amber-600 space-y-1">
+                  <li>• Instagram account must be Business or Creator type</li>
+                  <li>• Must be linked to a Facebook Page</li>
+                  <li>• Webhook must be configured in Meta App Dashboard</li>
+                </ul>
+              </div>
+              <Button onClick={handleConnectInstagram} disabled={loadingInstagram || !sdkLoaded}
+                className="text-white px-10 h-12 rounded-full font-black text-sm shadow-lg shadow-pink-400/30"
+                style={{ background: 'linear-gradient(135deg, #833AB4, #E1306C)' }}>
+                {loadingInstagram ? 'Connecting...' : 'Connect with Facebook'}
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {instagramStatus.channels?.map(ch => (
+                <div key={ch.id}
+                  className="flex items-center justify-between border-2 p-4 rounded-xl transition-all border-pink-300 bg-pink-50/30">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-pink-100 flex items-center justify-center overflow-hidden">
+                      {ch.profilePicture ? (
+                        <img src={ch.profilePicture} className="w-full h-full object-cover" alt="" />
+                      ) : (
+                        <img src={ICONS.instagram} className="w-6 h-6" alt="IG" />
+                      )}
+                    </div>
+                    <div>
+                      <p className="font-bold text-slate-900">{ch.username || ch.name}</p>
+                      <p className="text-[10px] text-slate-400 mt-0.5">
+                        {ch.followersCount ? `${ch.followersCount.toLocaleString()} followers` : ''}
+                        {ch.pageName ? ` • Page: ${ch.pageName}` : ''}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="bg-green-100 text-green-600 text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" /> LIVE
+                    </span>
+                    <Button variant="ghost" size="icon" onClick={() => handleDisconnectInstagram(ch.id)}
+                      className="w-9 h-9 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50">
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+              <div className="pt-4 border-t border-slate-100 flex justify-end">
+                <Button onClick={handleConnectInstagram} variant="outline"
+                  className="h-10 px-6 rounded-full border-2 font-bold text-sm text-slate-600">
+                  + Add Another Account
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Automation Rules Section */}
+      {instagramStatus.connected && (
+        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+          <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-black text-slate-900">Automation Rules</h3>
+              <p className="text-[11px] text-slate-400 mt-0.5">Auto-reply, comment-to-DM, and auto-DM rules</p>
+            </div>
+            <Button onClick={() => setShowAddAutomation(true)}
+              className="h-9 px-4 rounded-full bg-slate-900 text-white font-bold text-xs">
+              + Add Rule
+            </Button>
+          </div>
+          <div className="p-5 space-y-3">
+            {igAutomations.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-sm text-slate-400">No automation rules yet.</p>
+                <p className="text-xs text-slate-300 mt-1">Create auto-reply, comment-to-DM, or auto-DM rules.</p>
+              </div>
+            ) : (
+              igAutomations.map(rule => (
+                <div key={rule.id} className="flex items-center justify-between p-4 bg-slate-50 border border-slate-100 rounded-xl">
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      "w-9 h-9 rounded-xl flex items-center justify-center text-white text-[10px] font-black",
+                      rule.type === 'auto_reply' ? "bg-blue-500" : rule.type === 'comment_dm' ? "bg-purple-500" : "bg-green-500"
+                    )}>
+                      {rule.type === 'auto_reply' ? '↩️' : rule.type === 'comment_dm' ? '💬' : '📩'}
+                    </div>
+                    <div>
+                      <p className="font-bold text-slate-900 text-sm">{rule.name}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className={cn(
+                          "text-[9px] font-bold px-2 py-0.5 rounded-full uppercase",
+                          rule.type === 'auto_reply' ? "bg-blue-50 text-blue-600" : rule.type === 'comment_dm' ? "bg-purple-50 text-purple-600" : "bg-green-50 text-green-600"
+                        )}>
+                          {rule.type.replace('_', ' ')}
+                        </span>
+                        {rule.trigger_config?.keyword && (
+                          <span className="text-[10px] text-slate-400">Keywords: {rule.trigger_config.keyword}</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleToggleAutomation(rule.id)}
+                      className={cn(
+                        "relative w-10 h-5 rounded-full transition-colors",
+                        rule.is_active ? "bg-green-500" : "bg-slate-300"
+                      )}
+                    >
+                      <span className={cn(
+                        "absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform",
+                        rule.is_active ? "translate-x-5" : "translate-x-0.5"
+                      )} />
+                    </button>
+                    <Button variant="ghost" size="icon" onClick={() => handleDeleteAutomation(rule.id)}
+                      className="w-8 h-8 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Quick Setup Guide */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-5">
+        <h3 className="text-sm font-black text-slate-900 mb-3">📋 Meta Developers Setup</h3>
+        <div className="space-y-3">
+          {[
+            { step: '1', title: 'Create Meta App', desc: 'Go to developers.facebook.com → My Apps → Create App' },
+            { step: '2', title: 'Add Instagram Product', desc: 'In your app, go to Add Products → Instagram → Set Up' },
+            { step: '3', title: 'Configure Webhooks', desc: 'Webhooks → Instagram → Callback URL: https://inbox.xolox.io/webhooks/instagram' },
+            { step: '4', title: 'Subscribe to Fields', desc: 'Enable: messages, messaging_postbacks, comments, mentions' },
+            { step: '5', title: 'Connect Account', desc: 'Click "Connect with Facebook" above and grant permissions' },
+          ].map(s => (
+            <div key={s.step} className="flex gap-3">
+              <span className="w-6 h-6 bg-slate-900 text-white text-[10px] font-black rounded-full flex items-center justify-center shrink-0">{s.step}</span>
+              <div>
+                <p className="text-xs font-bold text-slate-700">{s.title}</p>
+                <p className="text-[10px] text-slate-400">{s.desc}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Add Automation Modal */}
+      <Modal isOpen={showAddAutomation} onClose={() => setShowAddAutomation(false)} title="Create Automation Rule">
+        <div className="space-y-4 p-2">
+          <div className="space-y-1.5">
+            <label className="text-[11px] font-bold text-slate-600">Rule Type</label>
+            <select value={newAutomation.type}
+              onChange={(e) => setNewAutomation(p => ({ ...p, type: e.target.value }))}
+              className="w-full h-11 rounded-xl bg-white border border-slate-200 px-4 text-sm">
+              <option value="auto_reply">Auto Reply — Automatically reply to incoming DMs</option>
+              <option value="comment_dm">Comment to DM — Send DM when someone comments</option>
+              <option value="auto_dm">Auto DM — Send DM on follow / interaction</option>
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-[11px] font-bold text-slate-600">Rule Name</label>
+            <Input value={newAutomation.name}
+              onChange={(e) => setNewAutomation(p => ({ ...p, name: e.target.value }))}
+              placeholder="e.g. Welcome Message" className="h-11 rounded-xl bg-white border-slate-200 px-4 text-sm" />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-[11px] font-bold text-slate-600">Trigger Keywords (optional, comma-separated)</label>
+            <Input value={newAutomation.keyword}
+              onChange={(e) => setNewAutomation(p => ({ ...p, keyword: e.target.value }))}
+              placeholder="e.g. price, info, hello (leave empty to match all)"
+              className="h-11 rounded-xl bg-white border-slate-200 px-4 text-sm" />
+            <p className="text-[10px] text-slate-400">Leave empty to trigger on every incoming message or comment</p>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-[11px] font-bold text-slate-600">Auto-Reply Message</label>
+            <textarea value={newAutomation.message}
+              onChange={(e) => setNewAutomation(p => ({ ...p, message: e.target.value }))}
+              placeholder="Hi! 👋 Thanks for reaching out. We'll get back to you shortly."
+              rows={3}
+              className="w-full rounded-xl bg-white border border-slate-200 px-4 py-3 text-sm resize-none" />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-[11px] font-bold text-slate-600">Delay (seconds)</label>
+            <Input type="number" value={newAutomation.delay_seconds}
+              onChange={(e) => setNewAutomation(p => ({ ...p, delay_seconds: e.target.value }))}
+              placeholder="2" min="0" max="60"
+              className="h-11 rounded-xl bg-white border-slate-200 px-4 text-sm w-32" />
+            <p className="text-[10px] text-slate-400">Delay before sending (for a more natural feel)</p>
+          </div>
+          <Button onClick={handleCreateAutomation}
+            className="w-full bg-slate-900 hover:bg-black h-11 rounded-xl text-white font-bold text-sm shadow-lg">
+            Create Automation
+          </Button>
+        </div>
+      </Modal>
+    </div>
+  );
+
   const renderDetail = () => {
     if (!activeIntegration) return null;
     if (activeIntegration.id === 'whatsapp') return renderWhatsAppDetail();
     if (activeIntegration.id === 'telegram') return renderTelegramDetail();
+    if (activeIntegration.id === 'instagram') return renderInstagramDetail();
     return renderGenericDetail();
   };
 
