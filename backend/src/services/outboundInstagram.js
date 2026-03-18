@@ -15,7 +15,7 @@ const axios = require('axios');
 const db = require('../../db');
 const { getIO } = require('../realtime/io');
 
-const GRAPH_BASE = 'https://graph.facebook.com/v21.0';
+const GRAPH_BASE = 'https://graph.facebook.com/v22.0';
 
 /**
  * Get conversation details along with Instagram-specific info
@@ -60,7 +60,7 @@ async function getConversationDetails(clientConn, conversationId) {
 
   const recipientId = contactRes.rows[0].external_id;
   const config = row.channel_config || {};
-  const accessToken = config.accessToken || config.page_token || process.env.WHATSAPP_TOKEN;
+  const accessToken = config.accessToken || config.page_token;
 
   if (!accessToken) {
     const err = new Error('No access token found for Instagram channel. Please reconnect Instagram.');
@@ -384,8 +384,36 @@ async function sendAutoDM(channelId, recipientIGSID, text) {
   }
 }
 
+/**
+ * Send typing indicator (sender_action) via Instagram Graph API
+ */
+async function sendTypingIndicator(conversationId, action) {
+  const clientConn = await db.getClient();
+  try {
+    const details = await getConversationDetails(clientConn, conversationId);
+    // action is 'typing_on' or 'typing_off'
+    await axios.post(
+      `${GRAPH_BASE}/${details.igUserId}/messages`,
+      {
+        recipient: { id: details.recipientId },
+        sender_action: action
+      },
+      {
+        params: { access_token: details.accessToken },
+        headers: { 'Content-Type': 'application/json' }
+      }
+    );
+  } catch (err) {
+    // Silently log typing errors to avoid noise
+    console.warn('[Instagram typing] Failed:', err.response?.data || err.message);
+  } finally {
+    clientConn.release();
+  }
+}
+
 module.exports = {
   sendText,
   sendMedia,
   sendAutoDM,
+  sendTypingIndicator,
 };

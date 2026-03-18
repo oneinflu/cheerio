@@ -69,13 +69,26 @@ async function init(server) {
         isTyping
       });
 
-      // Send to WhatsApp (throttled logic could be added here, but for now direct call)
+      // Send typing indicator to the source channel
       try {
-        // Dynamic require to avoid potential circular dependency issues at top level
-        const { sendTypingIndicator } = require('../services/outboundWhatsApp');
-        await sendTypingIndicator(conversationId, isTyping ? 'typing_on' : 'typing_off');
+        const db = require('../db');
+        const convRes = await db.query(
+          `SELECT ch.type FROM conversations c JOIN channels ch ON ch.id = c.channel_id WHERE c.id = $1`,
+          [conversationId]
+        );
+        
+        if (convRes.rowCount > 0) {
+          const type = convRes.rows[0].type;
+          if (type === 'whatsapp') {
+            const { sendTypingIndicator } = require('../services/outboundWhatsApp');
+            await sendTypingIndicator(conversationId, isTyping ? 'typing_on' : 'typing_off');
+          } else if (type === 'instagram') {
+            const { sendTypingIndicator } = require('../services/outboundInstagram');
+            await sendTypingIndicator(conversationId, isTyping ? 'typing_on' : 'typing_off');
+          }
+        }
       } catch (e) {
-        console.error('Failed to trigger WhatsApp typing indicator:', e.message);
+        console.error('[io] Failed to trigger channel typing indicator:', e.message);
       }
     });
 
