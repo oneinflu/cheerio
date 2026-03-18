@@ -276,8 +276,8 @@ async function handleIncomingMessage(event, entryId) {
           if (att.type === 'image') contentType = 'image';
           else if (att.type === 'video') contentType = 'video';
           else if (att.type === 'audio') contentType = 'audio';
-          else if (att.type === 'share' || att.type === 'story_mention') contentType = 'text';
-          else contentType = att.type || 'text';
+          else if (att.type === 'share' || att.type === 'story_mention' || att.type === 'template') contentType = 'text';
+          else contentType = 'text'; // Default to text for compatibility with message_content_type enum
         }
 
         // 5. Insert Message
