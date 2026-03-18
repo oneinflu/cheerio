@@ -58,34 +58,50 @@ router.post('/', (req, res) => {
   console.log('[Instagram Webhook] Received event:', JSON.stringify(body, null, 2));
 
   // Webhook signature verification
-  const secretsToTry = [
-    process.env.INSTAGRAM_APP_SECRET,
-    process.env.META_APP_SECRET,
-    process.env.INSTAGRAM_CLIENT_SECRET
-  ].filter(Boolean);
+  const secretsDict = {
+    'META_APP_SECRET': process.env.META_APP_SECRET,
+    'INSTAGRAM_CLIENT_SECRET': process.env.INSTAGRAM_CLIENT_SECRET,
+    'INSTAGRAM_APP_SECRET': process.env.INSTAGRAM_APP_SECRET
+  };
 
+  const secretsToTry = Object.entries(secretsDict).filter(([k, v]) => !!v);
+
+  console.log('[Instagram Webhook] DEBUG - Signature Verification Start');
   if (secretsToTry.length > 0) {
     try {
       const header = req.headers['x-hub-signature-256'] || '';
+      const rawBody = req.rawBody || '';
+      console.log(`[Instagram Webhook] DEBUG - Header present: ${!!header}`);
+      console.log(`[Instagram Webhook] DEBUG - received: ${header}`);
+      console.log(`[Instagram Webhook] DEBUG - rawBody length: ${rawBody.length}`);
+      if (rawBody.length > 0) {
+        console.log(`[Instagram Webhook] DEBUG - rawBody snippet: "${rawBody.substring(0, 100)}..."`);
+      }
+      
       let verified = false;
       let matchedSecretSource = '';
 
-      for (const secret of secretsToTry) {
-        const hmac = crypto.createHmac('sha256', secret);
-        const expected = 'sha256=' + hmac.update(req.rawBody || '').digest('hex');
-        if (header === expected) {
+      for (const [keyName, secretValue] of secretsToTry) {
+        const hmac = crypto.createHmac('sha256', secretValue);
+        const expectedResult = 'sha256=' + hmac.update(rawBody).digest('hex');
+        
+        // Mask the secret for logs: show first 4 and last 4
+        const masked = secretValue.length > 8 
+          ? `${secretValue.substring(0, 4)}...${secretValue.substring(secretValue.length - 4)}` 
+          : '***';
+        
+        console.log(`[Instagram Webhook] DEBUG - Trying ${keyName} (${masked})`);
+        console.log(`[Instagram Webhook] DEBUG - calculated: ${expectedResult}`);
+
+        if (header === expectedResult) {
           verified = true;
-          matchedSecretSource = (secret === process.env.INSTAGRAM_APP_SECRET) ? 'INSTAGRAM_APP_SECRET' :
-                               (secret === process.env.META_APP_SECRET) ? 'META_APP_SECRET' : 'INSTAGRAM_CLIENT_SECRET';
+          matchedSecretSource = keyName;
           break;
         }
       }
       
       if (!verified) {
-        console.warn('[Instagram Webhook] Signature verification FAILED with all available secrets.', { 
-          received: header, 
-          triedFrom: ['INSTAGRAM_APP_SECRET', 'META_APP_SECRET', 'INSTAGRAM_CLIENT_SECRET'].filter(k => !!process.env[k])
-        });
+        console.warn(`[Instagram Webhook] Signature verification FAILED after trying ${secretsToTry.length} secrets.`);
       } else {
         console.log(`[Instagram Webhook] Signature verified successfully using ${matchedSecretSource}.`);
       }
@@ -93,7 +109,7 @@ router.post('/', (req, res) => {
       console.error('[Instagram Webhook] Signature verification error:', err);
     }
   } else {
-    console.warn('[Instagram Webhook] No signature secret found in .env. Skipping verification.');
+    console.warn('[Instagram Webhook] No signature secret found in .env (META_APP_SECRET, etc). Skipping verification.');
   }
 
   if (body.object === 'instagram' || body.object === 'page') {

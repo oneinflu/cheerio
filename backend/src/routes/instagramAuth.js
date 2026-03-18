@@ -7,7 +7,7 @@ const db = require('../../db');
 const META_APP_ID = process.env.META_APP_ID || '321531509460250';
 const META_APP_SECRET = process.env.META_APP_SECRET || '';
 const INSTAGRAM_CLIENT_SECRET = process.env.INSTAGRAM_CLIENT_SECRET;
-const GRAPH_BASE = 'https://graph.facebook.com/v21.0';
+const GRAPH_BASE = 'https://graph.facebook.com/v22.0';
 
 /**
  * POST /api/auth/instagram/connect
@@ -50,11 +50,12 @@ router.post('/instagram/connect', async (req, res) => {
     });
 
     const pages = pagesRes.data?.data || [];
-    console.log(`[Instagram Auth] Found ${pages.length} pages.`);
+    console.log(`[Instagram Auth] Found ${pages.length} pages. Data:`, JSON.stringify(pages, null, 2));
 
     const connectedAccounts = [];
 
     for (const page of pages) {
+      console.log(`[Instagram Auth] Processing Page: ${page.name} (ID: ${page.id})`);
       if (!page.instagram_business_account) {
         console.log(`[Instagram Auth] Page "${page.name}" has no linked IG business account. Skipping.`);
         continue;
@@ -109,6 +110,7 @@ router.post('/instagram/connect', async (req, res) => {
 
       // Use the Page ID as external_id since webhook events are routed via Page
       // But also check if there's an existing channel using the IG Account ID
+      console.log(`[Instagram Auth] Checking for existing channel with ID ${igAccountId} or ${page.id}`);
       let existingChannel = await db.query(
         `SELECT id FROM channels WHERE type = 'instagram' AND (external_id = $1 OR external_id = $2)`,
         [igAccountId, page.id]
