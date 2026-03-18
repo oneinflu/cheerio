@@ -564,4 +564,28 @@ router.delete('/:conversationId', auth.requireRole('admin', 'super_admin', 'qual
   }
 });
 
+router.put('/:conversationId/ai-status', auth.requireRole('admin', 'super_admin', 'quality_manager', 'agent', 'supervisor'), async (req, res, next) => {
+  try {
+    const { conversationId } = req.params;
+    const { is_active } = req.body;
+
+    if (typeof is_active !== 'boolean') {
+      return res.status(400).json({ error: 'is_active must be a boolean' });
+    }
+
+    const upd = await db.query(
+      `UPDATE conversations SET is_ai_active = $1 WHERE id = $2 RETURNING id, is_ai_active`,
+      [is_active, conversationId]
+    );
+
+    if (upd.rowCount === 0) {
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
+
+    res.json({ success: true, is_ai_active: upd.rows[0].is_ai_active });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;
