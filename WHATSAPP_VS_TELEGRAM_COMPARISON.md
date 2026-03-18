@@ -1,5 +1,5 @@
 # WhatsApp vs Telegram - Architecture Comparison
-
+EAAEkbmNnzRoBQth1hUZCJ2iCrXcZBwtUuPSNknRphZAHXWqIMnIwZAYYAG6s5oiDd7k5U9ZADaIpijgUPtXjHQTZCPMGO60cjhCHKBZCjZAaGkmHcZBxCCJrujEXcLBEloHofBTZBsIV7ZBZCyYtP8aUPGDyLs3itr9buNomu5lFaLDJBZCDw2pCmqVluZBDHxMGZAkrgZDZD
 ## Side-by-Side Comparison
 
 ### 1. SETUP & AUTHENTICATION

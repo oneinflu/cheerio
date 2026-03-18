@@ -33,7 +33,7 @@ async function getConfig(teamId) {
         return {
           phoneNumberId: row.phone_number_id,
           businessAccountId: row.business_account_id,
-          token: row.permanent_token || WHATSAPP_TOKEN,
+          token: WHATSAPP_TOKEN, // always use .env token — DB token can expire
           isCustom: true
         };
       }
@@ -64,7 +64,7 @@ async function getConfigByPhone(phoneNumberId) {
         return {
           phoneNumberId,
           businessAccountId: row.business_account_id,
-          token: row.permanent_token || WHATSAPP_TOKEN,
+          token: WHATSAPP_TOKEN, // always use .env token — DB token can expire
           isCustom: true
         };
       }
@@ -94,7 +94,7 @@ async function getAllConfigs(teamId) {
         return res.rows.map(row => ({
           phoneNumberId: row.phone_number_id,
           businessAccountId: row.business_account_id,
-          token: row.permanent_token || WHATSAPP_TOKEN,
+          token: WHATSAPP_TOKEN, // always use .env token — DB token can expire
           displayPhoneNumber: row.display_phone_number,
           isCustom: true
         }));
