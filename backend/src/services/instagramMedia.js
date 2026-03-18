@@ -23,8 +23,12 @@ async function fetchChannelMedia(channelId) {
     throw new Error('Active Instagram channel not found');
   }
 
-  const { external_id: igUserId, config } = res.rows[0];
+  const { external_id, config } = res.rows[0];
   const accessToken = config.accessToken || config.page_token;
+  
+  // Important: We must use the Instagram Business Account ID, NOT the Page ID
+  // to access the /media edge.
+  const targetId = config.igAccountId || external_id;
 
   if (!accessToken) {
     throw new Error('Access token missing for this channel. Please reconnect.');
@@ -32,7 +36,7 @@ async function fetchChannelMedia(channelId) {
 
   // 2. Fetch media from Graph API
   try {
-    const response = await axios.get(`${GRAPH_BASE}/${igUserId}/media`, {
+    const response = await axios.get(`${GRAPH_BASE}/${targetId}/media`, {
       params: {
         fields: 'id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,shortcode',
         access_token: accessToken,
