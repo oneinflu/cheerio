@@ -38,7 +38,7 @@ router.post('/text', auth.requireRole('admin', 'agent', 'supervisor'), async (re
  * Query: ?channelId=UUID
  * Result: Array of media objects (id, caption, media_url, etc)
  */
-router.get('/media-list', auth.requireRole('admin', 'supervisor'), async (req, res, next) => {
+router.get('/media-list', auth.requireRole('admin', 'supervisor', 'agent'), async (req, res, next) => {
   try {
     const { channelId } = req.query;
     if (!channelId) {

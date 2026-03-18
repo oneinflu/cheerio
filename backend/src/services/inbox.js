@@ -148,6 +148,7 @@ async function listConversations(teamId, userId, userRole, filter = 'open', phon
   const res = await db.query(
     `
     SELECT c.id,
+           c.channel_id,
            c.status,
            c.lead_id,
            c.lead_stage_id,
@@ -254,6 +255,7 @@ async function listConversations(teamId, userId, userRole, filter = 'open', phon
 
     return {
       id: r.id,
+      channelId: r.channel_id,
       status: derivedStatus,
       leadId: r.lead_id,
       is_ai_active: r.is_ai_active,

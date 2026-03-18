@@ -135,7 +135,12 @@ export default function InstagramPage({ currentUser, socket }) {
           <Button 
             onClick={() => {
               if (conversations.length > 0) {
-                setActiveChannelId(conversations[0].channelId);
+                const targetId = conversations[0].channelId || conversations[0].channel_id;
+                if (!targetId || targetId === 'undefined') {
+                  alert('Error identifying the Instagram channel. Please refresh.');
+                  return;
+                }
+                setActiveChannelId(targetId);
                 setShowMedia(true);
               } else {
                 alert('No Instagram channels connected.');
