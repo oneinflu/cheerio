@@ -333,6 +333,66 @@ async function handleIncomingMessage(event, entryId) {
             
             // 6. Check Auto-Reply automations
             await checkAutoReplyRules(channelId, senderId, textBody, conversationId, channelConfig);
+
+            // 7. Lead Webhook & Auto-Assignment Integration
+            try {
+                // For Instagram, we don't have a 'mobile' like WhatsApp.
+                // We'll send the IG Sender ID but maybe the username if we fetched it.
+                let mobile = senderId; 
+                let profileName = displayName.startsWith('Instagram User') ? 'Instagram User' : displayName;
+
+                console.log(`[Instagram Lead Webhook] Checking for first message: mobile=${mobile}, name=${profileName}`);
+
+                // Fire and forget - do not await strictly
+                const axios = require('axios');
+                axios.post('https://api.starforze.com/api/webhook/whatsapp-lead', {
+                    mobile: mobile, 
+                    name: profileName || 'Unknown Instagram User',
+                    course: '' // Instagram doesn't typically have course triggers yet
+                }).then(async response => {
+                    console.log(`[Instagram Lead Webhook] API Response Status: ${response.status}`);
+                    const leadData = response.data?.data;
+                    const assignedTo = leadData?.assignedTo;
+                    const leadId = leadData?.lead?._id;
+
+                    if (leadId) {
+                        await db.query('UPDATE conversations SET lead_id = $1 WHERE id = $2', [leadId, conversationId]);
+                        console.log(`[Instagram Lead Webhook] Linked lead ${leadId} to conversation ${conversationId}`);
+                    }
+
+                    if (assignedTo && (assignedTo._id || assignedTo.id)) {
+                        const targetUserId = assignedTo._id || assignedTo.id;
+                        const teamId = leadData.teamId || null;
+                        
+                        console.log(`[Instagram Lead Webhook] Attempting auto-assignment to counselor ${targetUserId}`);
+
+                        // Check if already assigned
+                        const checkRes = await db.query(
+                            'SELECT 1 FROM conversation_assignments WHERE conversation_id = $1 AND released_at IS NULL', 
+                            [conversationId]
+                        );
+                        
+                        if (checkRes.rowCount === 0) {
+                            await db.query(
+                                `INSERT INTO conversation_assignments (id, conversation_id, team_id, assignee_user_id, claimed_at)
+                                 VALUES (gen_random_uuid(), $1, $2, $3, NOW())`,
+                                [conversationId, teamId, targetUserId]
+                            );
+                            console.log(`[Instagram Lead Webhook] Auto-assigned Instagram conversation ${conversationId} to user ${targetUserId}`);
+                            
+                            const io = getIO();
+                            if (io) {
+                                io.to(`conversation:${conversationId}`).emit('assignment:claim', { conversationId, userId: targetUserId });
+                                io.emit('assignment:claim', { conversationId, userId: targetUserId });
+                            }
+                        }
+                    }
+                }).catch(err => {
+                    console.error('[Instagram Lead Webhook] API Error:', err.message);
+                });
+            } catch (leadErr) {
+                console.error('[Instagram Lead Webhook] Failed to process lead flow:', leadErr.message);
+            }
         } else {
             console.log(`[Instagram Webhook] Duplicate message ${messageId} ignored.`);
         }
