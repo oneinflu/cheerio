@@ -277,18 +277,18 @@ router.post('/instagram/disconnect', async (req, res) => {
     
     let query, params;
     if (channelId) {
-      query = `UPDATE channels SET active = false, config = '{}'::jsonb WHERE id = $1 AND type = 'instagram' RETURNING id`;
+      query = `DELETE FROM channels WHERE id = $1 AND type = 'instagram' RETURNING id`;
       params = [channelId];
     } else {
-      query = `UPDATE channels SET active = false, config = '{}'::jsonb WHERE type = 'instagram' AND active = true RETURNING id`;
+      query = `DELETE FROM channels WHERE type = 'instagram' RETURNING id`;
       params = [];
     }
 
     const result = await db.query(query, params);
 
     if (result.rowCount > 0) {
-      console.log(`[Instagram Auth] Channel(s) disconnected: ${result.rows.map(r => r.id).join(', ')}`);
-      res.json({ success: true, message: 'Disconnected successfully' });
+      console.log(`[Instagram Auth] Channel(s) DELETED: ${result.rows.map(r => r.id).join(', ')}`);
+      res.json({ success: true, message: 'Deleted and disconnected successfully' });
     } else {
       res.status(404).json({ error: 'No active Instagram channel found' });
     }
