@@ -12,7 +12,7 @@ const db = require('../../db');
 
 const GRAPH_BASE = 'https://graph.facebook.com/v22.0';
 
-async function fetchChannelMedia(channelId) {
+async function fetchChannelMedia(channelId, cursor = null) {
   // 1. Get channel config/token
   const res = await db.query(
     `SELECT external_id, config FROM channels WHERE id = $1 AND type = 'instagram' AND active = true`,
