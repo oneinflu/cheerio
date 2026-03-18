@@ -1,6 +1,6 @@
 'use strict';
 import React, { useState, useEffect, useMemo } from 'react';
-import { getInbox, getMessages } from '../api';
+import { getInbox, getMessages, getInstagramStatus } from '../api';
 import { cn } from '../lib/utils';
 import { Badge } from './ui/Badge';
 import { Pin, Instagram, Check, Trash2, Send, Paperclip, Image as ImageIcon, File, FileText, Loader2, MapPin, User, Video, Star, MoreHorizontal } from 'lucide-react';
@@ -19,6 +19,7 @@ export default function InstagramPage({ currentUser, socket }) {
   }, [currentUser]);
 
   const [conversations, setConversations] = useState([]);
+  const [channels, setChannels] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [filter, setFilter] = useState('all');
   const [loading, setLoading] = useState(false);
@@ -28,12 +29,19 @@ export default function InstagramPage({ currentUser, socket }) {
   const [showMedia, setShowMedia] = useState(false);
   const [activeChannelId, setActiveChannelId] = useState(null);
 
-  // Load Instagram conversations only
+  // Load Instagram specific data
   useEffect(() => {
     if (!teamId) return;
-    const load = async () => {
+    const loadData = async () => {
       try {
         setLoading(true);
+        // 1. Load connected channels
+        const statusRes = await getInstagramStatus();
+        if (statusRes && statusRes.connected) {
+          setChannels(statusRes.channels || []);
+        }
+
+        // 2. Load conversations
         const res = await getInbox(teamId, filter);
         if (res && res.conversations) {
           // Filter only Instagram conversations
@@ -41,12 +49,12 @@ export default function InstagramPage({ currentUser, socket }) {
           setConversations(instagramConvs);
         }
       } catch (err) {
-        console.error('Failed to load Instagram conversations:', err);
+        console.error('Failed to load Instagram data:', err);
       } finally {
         setLoading(false);
       }
     };
-    load();
+    loadData();
   }, [teamId, filter]);
 
   // Load messages for selected conversation
@@ -134,16 +142,20 @@ export default function InstagramPage({ currentUser, socket }) {
           </div>
           <Button 
             onClick={() => {
-              if (conversations.length > 0) {
-                const targetId = conversations[0].channelId || conversations[0].channel_id;
-                if (!targetId || targetId === 'undefined') {
-                  alert('Error identifying the Instagram channel. Please refresh.');
-                  return;
-                }
+              // Try to get channel ID from connected channels list first
+              // as conversations might be empty for new connections
+              let targetId = null;
+              if (channels.length > 0) {
+                targetId = channels[0].id;
+              } else if (conversations.length > 0) {
+                targetId = conversations[0].channelId || conversations[0].channel_id;
+              }
+
+              if (targetId && targetId !== 'undefined') {
                 setActiveChannelId(targetId);
                 setShowMedia(true);
               } else {
-                alert('No Instagram channels connected.');
+                alert('No Instagram channels connected. Please connect one in Settings.');
               }
             }}
             variant="outline" 
