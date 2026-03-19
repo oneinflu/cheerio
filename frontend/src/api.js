@@ -1301,3 +1301,93 @@ export async function getTwilioLogs(teamId, { type, limit = 25, offset = 0 } = {
   const res = await fetch(`/api/settings/twilio/logs?${params.toString()}`, { headers });
   return res.json();
 }
+
+// ─── Email ────────────────────────────────────────────────────────────────────
+
+export async function getEmailSettings(teamId) {
+  const params = new URLSearchParams();
+  if (teamId) params.set('teamId', teamId);
+  const headers = getAuthHeaders();
+  const res = await fetch(`/api/settings/email?${params.toString()}`, { headers });
+  return res.json();
+}
+
+export async function updateEmailSettings(data, teamId) {
+  const params = new URLSearchParams();
+  if (teamId) params.set('teamId', teamId);
+  const headers = getAuthHeaders();
+  const res = await fetch(`/api/settings/email?${params.toString()}`, {
+    method: 'PUT',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  });
+  return res.json();
+}
+
+export async function disconnectEmail(teamId) {
+  const params = new URLSearchParams();
+  if (teamId) params.set('teamId', teamId);
+  const headers = getAuthHeaders();
+  const res = await fetch(`/api/settings/email?${params.toString()}`, { method: 'DELETE', headers });
+  return res.json();
+}
+
+export async function testEmailConnection(teamId) {
+  const params = new URLSearchParams();
+  if (teamId) params.set('teamId', teamId);
+  const headers = getAuthHeaders();
+  const res = await fetch(`/api/settings/email/test?${params.toString()}`, { method: 'POST', headers });
+  return res.json();
+}
+
+export async function syncEmails(teamId, limit = 30) {
+  const params = new URLSearchParams();
+  if (teamId) params.set('teamId', teamId);
+  const headers = getAuthHeaders();
+  const res = await fetch(`/api/settings/email/sync?${params.toString()}`, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ limit })
+  });
+  return res.json();
+}
+
+export async function sendEmailMessage(data, teamId) {
+  const params = new URLSearchParams();
+  if (teamId) params.set('teamId', teamId);
+  const headers = getAuthHeaders();
+  const res = await fetch(`/api/settings/email/send?${params.toString()}`, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  });
+  return res.json();
+}
+
+export async function getEmailMessages(teamId, { direction, search, limit = 30, offset = 0 } = {}) {
+  const params = new URLSearchParams();
+  if (teamId) params.set('teamId', teamId);
+  if (direction) params.set('direction', direction);
+  if (search) params.set('search', search);
+  params.set('limit', limit);
+  params.set('offset', offset);
+  const headers = getAuthHeaders();
+  const res = await fetch(`/api/settings/email/messages?${params.toString()}`, { headers });
+  return res.json();
+}
+
+export async function markEmailRead(id, teamId) {
+  const params = new URLSearchParams();
+  if (teamId) params.set('teamId', teamId);
+  const headers = getAuthHeaders();
+  const res = await fetch(`/api/settings/email/messages/${id}/read?${params.toString()}`, { method: 'PATCH', headers });
+  return res.json();
+}
+
+export async function deleteEmailMessage(id, teamId) {
+  const params = new URLSearchParams();
+  if (teamId) params.set('teamId', teamId);
+  const headers = getAuthHeaders();
+  const res = await fetch(`/api/settings/email/messages/${id}?${params.toString()}`, { method: 'DELETE', headers });
+  return res.json();
+}

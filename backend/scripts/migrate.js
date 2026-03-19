@@ -539,6 +539,24 @@ async function runMigrations() {
           console.log('[migrate] twilio_settings table already exists.');
         }
 
+        // 0027 – email_settings and email_messages tables
+        const emailSettingsRes = await client.query(`
+          SELECT EXISTS (
+            SELECT FROM information_schema.tables
+            WHERE  table_schema = 'public'
+            AND    table_name   = 'email_settings'
+          );
+        `);
+        if (!emailSettingsRes.rows[0].exists) {
+          console.log('[migrate] Adding email_settings and email_messages tables...');
+          await client.query('BEGIN');
+          await runSQLFile(client, path.join(__dirname, '..', 'db', 'migrations', '0027_email_settings.sql'));
+          await client.query('COMMIT');
+          console.log('[migrate] Applied 0027_email_settings migration.');
+        } else {
+          console.log('[migrate] email_settings table already exists.');
+        }
+
         return;
 
 

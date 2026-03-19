@@ -154,6 +154,7 @@ function createApp() {
   app.use('/api/settings/razorpay', require('./src/routes/razorpaySettings'));
   app.use('/api/settings/exotel', require('./src/routes/exotelSettings'));
   app.use('/api/settings/twilio', require('./src/routes/twilioSettings'));
+  app.use('/api/settings/email', require('./src/routes/emailSettings'));
   app.use('/api/whatsappFlows', whatsappFlowsRouter);
   app.use('/api/contacts', contactsRouter);
   app.use('/api/labels', labelsRouter);

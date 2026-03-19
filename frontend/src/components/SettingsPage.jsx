@@ -20,7 +20,8 @@ import {
   getExotelSettings, updateExotelSettings, disconnectExotel,
   initiateExotelCall, getExotelCallLogs,
   getTwilioSettings, updateTwilioSettings, disconnectTwilio,
-  sendTwilioSms, initiateTwilioCall, getTwilioLogs
+  sendTwilioSms, initiateTwilioCall, getTwilioLogs,
+  getEmailSettings, updateEmailSettings, disconnectEmail, testEmailConnection
 } from '../api';
 
 // ─── Brand icon URLs (SimpleIcons CDN + Wikimedia) ────────────────────────────
@@ -86,18 +87,11 @@ const INTEGRATIONS_LIST = [
   },
   {
     id: 'email', category: 'channels', name: 'Business Email (IMAP/SMTP)',
-    logo: ICONS.gmail, isUpcoming: true,
+    logo: ICONS.gmail,
     description: 'Sync a shared GSuite or Outlook inbox so all team email lands directly in your conversation feed.',
     accentColor: '#EA4335',
     docsUrl: 'https://support.google.com/mail/answer/7126229',
-    fields: [
-      { label: 'Email Address',   key: 'email',     placeholder: 'support@company.com',  hint: 'The shared inbox address you want to monitor' },
-      { label: 'IMAP Host',       key: 'imap_host', placeholder: 'imap.gmail.com',        hint: 'Incoming mail server hostname' },
-      { label: 'IMAP Port',       key: 'imap_port', placeholder: '993',                   hint: '993 for SSL, 143 for STARTTLS' },
-      { label: 'SMTP Host',       key: 'smtp_host', placeholder: 'smtp.gmail.com',        hint: 'Outgoing mail server hostname' },
-      { label: 'SMTP Port',       key: 'smtp_port', placeholder: '465',                   hint: '465 for SSL, 587 for STARTTLS' },
-      { label: 'App Password',    key: 'password',  placeholder: 'xxxx xxxx xxxx xxxx',   hint: 'Use an App Password, not your main password (Gmail: myaccount.google.com/apppasswords)', type: 'password' },
-    ],
+    fields: [],
   },
   {
     id: 'slack', category: 'channels', name: 'Slack',
@@ -480,6 +474,17 @@ export default function SettingsPage({ currentUser }) {
   const [isDialingTwilio, setIsDialingTwilio]       = useState(false);
   const [twilioActionResult, setTwilioActionResult] = useState(null);
 
+  // Email
+  const [emailSettings, setEmailSettings]         = useState(null);
+  const [isSavingEmail, setIsSavingEmail]         = useState(false);
+  const [isTestingEmail, setIsTestingEmail]       = useState(false);
+  const [emailTestResult, setEmailTestResult]     = useState(null);
+  const [emailFields, setEmailFields]             = useState({
+    display_name: '', email_address: '',
+    smtp_host: '', smtp_port: '587', smtp_secure: false, smtp_user: '', smtp_pass: '',
+    imap_host: '', imap_port: '993', imap_secure: true,  imap_user: '', imap_pass: '',
+  });
+
   // Telegram
   const [telegramSettings, setTelegramSettings] = useState([]);
   const [savingTelegram, setSavingTelegram]     = useState(false);
@@ -511,13 +516,14 @@ export default function SettingsPage({ currentUser }) {
     if (!teamId) return;
     (async () => {
       try {
-        const [wa, tg, ig, rzp, ext, twl] = await Promise.all([
+        const [wa, tg, ig, rzp, ext, twl, eml] = await Promise.all([
           getWhatsAppSettings(teamId),
           getTelegramSettings(teamId),
           getInstagramStatus(),
           getRazorpaySettings(teamId),
           getExotelSettings(teamId),
-          getTwilioSettings(teamId)
+          getTwilioSettings(teamId),
+          getEmailSettings(teamId)
         ]);
         if (wa?.settings)    setWhatsappSettings(wa.settings);
         if (wa?.allSettings) setAllWhatsappSettings(wa.allSettings);
@@ -551,6 +557,23 @@ export default function SettingsPage({ currentUser }) {
             auth_token: twl.settings.auth_token || '',
             phone_number: twl.settings.phone_number || '',
             messaging_service_sid: twl.settings.messaging_service_sid || ''
+          });
+        }
+        if (eml?.settings) {
+          setEmailSettings(eml.settings);
+          setEmailFields({
+            display_name:  eml.settings.display_name  || '',
+            email_address: eml.settings.email_address || '',
+            smtp_host:     eml.settings.smtp_host     || '',
+            smtp_port:     String(eml.settings.smtp_port || '587'),
+            smtp_secure:   !!eml.settings.smtp_secure,
+            smtp_user:     eml.settings.smtp_user     || '',
+            smtp_pass:     eml.settings.smtp_pass     || '',
+            imap_host:     eml.settings.imap_host     || '',
+            imap_port:     String(eml.settings.imap_port || '993'),
+            imap_secure:   eml.settings.imap_secure !== false,
+            imap_user:     eml.settings.imap_user     || '',
+            imap_pass:     eml.settings.imap_pass     || '',
           });
         }
       } catch (err) { console.error('Error loading integrations', err); }
@@ -739,7 +762,8 @@ export default function SettingsPage({ currentUser }) {
       (item.id === 'instagram' && instagramStatus.connected) ||
       (item.id === 'razorpay' && !!razorpaySettings) ||
       (item.id === 'exotel' && !!exotelSettings) ||
-      (item.id === 'twilio' && !!twilioSettings);
+      (item.id === 'twilio' && !!twilioSettings) ||
+      (item.id === 'email'  && !!emailSettings);
     return (
       <div
         key={item.id}
@@ -823,7 +847,8 @@ export default function SettingsPage({ currentUser }) {
       (intg.id === 'telegram' && telegramSettings.length > 0) ||
       (intg.id === 'instagram' && instagramStatus.connected) ||
       (intg.id === 'exotel' && !!exotelSettings) ||
-      (intg.id === 'twilio' && !!twilioSettings);
+      (intg.id === 'twilio' && !!twilioSettings) ||
+      (intg.id === 'email'  && !!emailSettings);
     const webhookUrl = `${window.location.origin}/webhooks/${intg.id}`;
 
     return (
@@ -1943,6 +1968,228 @@ export default function SettingsPage({ currentUser }) {
     );
   };
 
+  // ─── Email handlers ───────────────────────────────────────────────
+  const handleSaveEmail = async () => {
+    if (!emailFields.email_address || !emailFields.smtp_host || !emailFields.smtp_user || !emailFields.smtp_pass || !emailFields.imap_host) {
+      alert('Email address, SMTP host/user/pass and IMAP host are required.');
+      return;
+    }
+    setIsSavingEmail(true);
+    try {
+      const res = await updateEmailSettings({
+        ...emailFields,
+        smtp_port: parseInt(emailFields.smtp_port) || 587,
+        imap_port: parseInt(emailFields.imap_port) || 993,
+      }, teamId);
+      if (res.error) throw new Error(res.error);
+      setEmailSettings(res.settings);
+      alert('Email connected successfully!');
+    } catch (err) {
+      alert('Failed to save email settings: ' + (err.message || 'Unknown error'));
+    } finally {
+      setIsSavingEmail(false);
+    }
+  };
+
+  const handleDisconnectEmail = async () => {
+    if (!window.confirm('Disconnect email? This will remove all stored credentials.')) return;
+    try {
+      await disconnectEmail(teamId);
+      setEmailSettings(null);
+      setEmailFields({ display_name: '', email_address: '', smtp_host: '', smtp_port: '587', smtp_secure: false, smtp_user: '', smtp_pass: '', imap_host: '', imap_port: '993', imap_secure: true, imap_user: '', imap_pass: '' });
+    } catch (err) {
+      alert('Failed to disconnect: ' + (err.message || 'Unknown error'));
+    }
+  };
+
+  const handleTestEmail = async () => {
+    setIsTestingEmail(true);
+    setEmailTestResult(null);
+    try {
+      const res = await testEmailConnection(teamId);
+      setEmailTestResult({ success: res.success, message: res.message || res.error || 'Unknown result' });
+    } catch (err) {
+      setEmailTestResult({ success: false, message: err.message || 'Connection failed' });
+    } finally {
+      setIsTestingEmail(false);
+    }
+  };
+
+  const renderEmailDetail = () => {
+    const isConnected = !!emailSettings;
+    return (
+      <div className="p-6 max-w-3xl mx-auto space-y-5">
+        <Button variant="ghost" size="sm" className="text-slate-500 hover:text-slate-900 -ml-2" onClick={() => setActiveIntegrationId(null)}>
+          <ArrowLeft className="w-4 h-4 mr-1.5" /> All Integrations
+        </Button>
+
+        {/* Header */}
+        <div className="flex items-start gap-4 pb-4 border-b border-slate-100">
+          <div className="w-14 h-14 bg-white rounded-2xl border border-slate-100 shadow-sm flex items-center justify-center p-3 shrink-0">
+            <img src={ICONS.gmail} alt="Email" className="w-full h-full object-contain" />
+          </div>
+          <div className="flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-xl font-black text-slate-900">Business Email</h2>
+              {isConnected
+                ? <span className="bg-green-50 text-green-700 border border-green-200 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-widest">Connected</span>
+                : <span className="bg-slate-100 text-slate-500 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-widest">Not Connected</span>}
+            </div>
+            <p className="text-sm text-slate-500 mt-1">Connect any IMAP/SMTP mailbox — Gmail, Outlook, Zoho, custom domains — to send and receive emails from your inbox.</p>
+            <a href="https://support.google.com/mail/answer/7126229" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 mt-2 text-[11px] text-blue-500 hover:text-blue-700 font-medium">
+              <ExternalLink className="w-3 h-3" /> Gmail App Password Guide
+            </a>
+          </div>
+        </div>
+
+        {/* Setup Guide */}
+        <div className="bg-blue-50 rounded-2xl p-5 border border-blue-100">
+          <h3 className="font-black text-slate-800 text-sm mb-3 flex items-center gap-2">
+            <span className="w-5 h-5 bg-blue-500 text-white text-[10px] font-black rounded-full flex items-center justify-center">?</span>
+            How to connect your email
+          </h3>
+          <ol className="space-y-3">
+            {[
+              { step: '1', title: 'Enable IMAP in your mailbox', desc: 'Gmail: Settings → See all settings → Forwarding and POP/IMAP → Enable IMAP. Outlook: Settings → Mail → Sync email → enable IMAP.' },
+              { step: '2', title: 'Create an App Password', desc: 'Gmail with 2FA: myaccount.google.com/apppasswords → generate a 16-char app password. Use this instead of your real password.' },
+              { step: '3', title: 'Find your server settings', desc: 'Gmail: IMAP imap.gmail.com:993 / SMTP smtp.gmail.com:587. Outlook: IMAP outlook.office365.com:993 / SMTP smtp.office365.com:587.' },
+              { step: '4', title: 'Fill in the form below and Save', desc: 'Enter your email address, app password, and server details, then click Save & Connect.' },
+              { step: '5', title: 'Test the connection', desc: 'Click "Test Connection" to verify both SMTP (outbound) and IMAP (inbound) are working correctly.' },
+            ].map(g => (
+              <li key={g.step} className="flex gap-3 text-sm">
+                <span className="w-6 h-6 rounded-full bg-blue-500 text-white text-[11px] font-black flex items-center justify-center shrink-0 mt-0.5">{g.step}</span>
+                <div><span className="font-bold text-slate-800">{g.title}</span> — <span className="text-slate-500">{g.desc}</span></div>
+              </li>
+            ))}
+          </ol>
+        </div>
+
+        {/* Credentials Form */}
+        <div className="bg-white rounded-2xl border border-slate-100 p-5 space-y-5">
+          <h3 className="font-black text-slate-800 text-sm">Account Details</h3>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs font-bold text-slate-700 block mb-1">Display Name</label>
+              <Input placeholder="Support Team" value={emailFields.display_name} onChange={e => setEmailFields(p => ({ ...p, display_name: e.target.value }))} className="h-10 rounded-xl bg-white border-slate-200 text-sm" />
+              <p className="text-[10px] text-slate-400 mt-1">Shown as the sender name in outgoing emails</p>
+            </div>
+            <div>
+              <label className="text-xs font-bold text-slate-700 block mb-1">Email Address <span className="text-red-500">*</span></label>
+              <Input placeholder="support@company.com" type="email" value={emailFields.email_address} onChange={e => setEmailFields(p => ({ ...p, email_address: e.target.value }))} className="h-10 rounded-xl bg-white border-slate-200 text-sm" />
+            </div>
+          </div>
+
+          <div className="border-t border-slate-50 pt-4">
+            <p className="text-[11px] font-black text-slate-500 uppercase tracking-wider mb-3">SMTP — Outbound (Sending)</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="col-span-2 sm:col-span-1">
+                <label className="text-xs font-bold text-slate-700 block mb-1">SMTP Host <span className="text-red-500">*</span></label>
+                <Input placeholder="smtp.gmail.com" value={emailFields.smtp_host} onChange={e => setEmailFields(p => ({ ...p, smtp_host: e.target.value }))} className="h-10 rounded-xl bg-white border-slate-200 text-sm" />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">SMTP Port</label>
+                <Input placeholder="587" value={emailFields.smtp_port} onChange={e => setEmailFields(p => ({ ...p, smtp_port: e.target.value }))} className="h-10 rounded-xl bg-white border-slate-200 text-sm" />
+                <p className="text-[10px] text-slate-400 mt-1">587 STARTTLS · 465 SSL</p>
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">SMTP Username <span className="text-red-500">*</span></label>
+                <Input placeholder="you@gmail.com" value={emailFields.smtp_user} onChange={e => setEmailFields(p => ({ ...p, smtp_user: e.target.value }))} className="h-10 rounded-xl bg-white border-slate-200 text-sm" />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">SMTP Password / App Password <span className="text-red-500">*</span></label>
+                <RevealInput placeholder="••••••••" value={emailFields.smtp_pass} onChange={e => setEmailFields(p => ({ ...p, smtp_pass: e.target.value }))} />
+                <p className="text-[10px] text-slate-400 mt-1">Use an App Password, not your account password</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t border-slate-50 pt-4">
+            <p className="text-[11px] font-black text-slate-500 uppercase tracking-wider mb-3">IMAP — Inbound (Receiving)</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="col-span-2 sm:col-span-1">
+                <label className="text-xs font-bold text-slate-700 block mb-1">IMAP Host <span className="text-red-500">*</span></label>
+                <Input placeholder="imap.gmail.com" value={emailFields.imap_host} onChange={e => setEmailFields(p => ({ ...p, imap_host: e.target.value }))} className="h-10 rounded-xl bg-white border-slate-200 text-sm" />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">IMAP Port</label>
+                <Input placeholder="993" value={emailFields.imap_port} onChange={e => setEmailFields(p => ({ ...p, imap_port: e.target.value }))} className="h-10 rounded-xl bg-white border-slate-200 text-sm" />
+                <p className="text-[10px] text-slate-400 mt-1">993 SSL · 143 STARTTLS</p>
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">IMAP Username <span className="text-[10px] text-slate-400">(defaults to SMTP user)</span></label>
+                <Input placeholder="Leave blank to use SMTP username" value={emailFields.imap_user} onChange={e => setEmailFields(p => ({ ...p, imap_user: e.target.value }))} className="h-10 rounded-xl bg-white border-slate-200 text-sm" />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">IMAP Password <span className="text-[10px] text-slate-400">(defaults to SMTP pass)</span></label>
+                <RevealInput placeholder="Leave blank to use SMTP password" value={emailFields.imap_pass} onChange={e => setEmailFields(p => ({ ...p, imap_pass: e.target.value }))} />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Test result */}
+        {emailTestResult && (
+          <div className={`p-3 rounded-xl flex items-center gap-2 text-sm font-medium ${emailTestResult.success ? 'bg-green-50 text-green-700 border border-green-100' : 'bg-red-50 text-red-700 border border-red-100'}`}>
+            {emailTestResult.message}
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="flex items-center justify-between pt-2 flex-wrap gap-3">
+          <div className="flex items-center gap-2">
+            {isConnected && (
+              <Button variant="ghost" className="h-10 px-4 text-red-500 hover:text-red-700 hover:bg-red-50 text-sm font-bold" onClick={handleDisconnectEmail}>
+                Disconnect
+              </Button>
+            )}
+            {isConnected && (
+              <Button variant="outline" disabled={isTestingEmail} className="h-10 px-4 text-sm font-bold" onClick={handleTestEmail}>
+                {isTestingEmail ? 'Testing…' : 'Test Connection'}
+              </Button>
+            )}
+          </div>
+          <Button disabled={isSavingEmail} className="h-10 px-6 rounded-full bg-slate-900 text-white text-sm font-bold shadow-lg disabled:opacity-40" onClick={handleSaveEmail}>
+            {isSavingEmail ? 'Saving…' : isConnected ? 'Update Credentials' : 'Save & Connect'}
+          </Button>
+        </div>
+
+        {/* Common settings reference */}
+        <div className="bg-slate-50 rounded-2xl border border-slate-100 p-5">
+          <h3 className="font-black text-slate-800 text-sm mb-3">Common Server Settings</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-[10px] font-black text-slate-400 uppercase tracking-wider border-b border-slate-200">
+                  <th className="text-left pb-2">Provider</th>
+                  <th className="text-left pb-2">IMAP Host</th>
+                  <th className="text-left pb-2">SMTP Host</th>
+                  <th className="text-left pb-2">Auth</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {[
+                  { p: 'Gmail',    imap: 'imap.gmail.com:993',              smtp: 'smtp.gmail.com:587',          auth: 'App Password' },
+                  { p: 'Outlook',  imap: 'outlook.office365.com:993',       smtp: 'smtp.office365.com:587',      auth: 'App Password' },
+                  { p: 'Yahoo',    imap: 'imap.mail.yahoo.com:993',         smtp: 'smtp.mail.yahoo.com:587',     auth: 'App Password' },
+                  { p: 'Zoho',     imap: 'imap.zoho.in:993',                smtp: 'smtp.zoho.in:587',            auth: 'Account Password' },
+                  { p: 'GoDaddy',  imap: 'imap.secureserver.net:993',       smtp: 'smtpout.secureserver.net:465', auth: 'Account Password' },
+                ].map(r => (
+                  <tr key={r.p} className="text-slate-700">
+                    <td className="py-2 font-bold">{r.p}</td>
+                    <td className="py-2 font-mono text-[10px]">{r.imap}</td>
+                    <td className="py-2 font-mono text-[10px]">{r.smtp}</td>
+                    <td className="py-2 text-slate-500">{r.auth}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderDetail = () => {
     if (!activeIntegration) return null;
     if (activeIntegration.id === 'whatsapp') return renderWhatsAppDetail();
@@ -1950,6 +2197,7 @@ export default function SettingsPage({ currentUser }) {
     if (activeIntegration.id === 'instagram') return renderInstagramDetail();
     if (activeIntegration.id === 'exotel') return renderExotelDetail();
     if (activeIntegration.id === 'twilio') return renderTwilioDetail();
+    if (activeIntegration.id === 'email') return renderEmailDetail();
     return renderGenericDetail();
   };
 
