@@ -16,7 +16,9 @@ import {
   connectInstagram, getInstagramStatus, disconnectInstagram,
   getInstagramAutomations, createInstagramAutomation,
   updateInstagramAutomation, deleteInstagramAutomation, toggleInstagramAutomation,
-  getRazorpaySettings, updateRazorpaySettings, disconnectRazorpay
+  getRazorpaySettings, updateRazorpaySettings, disconnectRazorpay,
+  getExotelSettings, updateExotelSettings, disconnectExotel,
+  initiateExotelCall, getExotelCallLogs
 } from '../api';
 
 // ─── Brand icon URLs (SimpleIcons CDN + Wikimedia) ────────────────────────────
@@ -341,7 +343,7 @@ const INTEGRATIONS_LIST = [
   },
   {
     id: 'exotel', category: 'voip', name: 'Exotel',
-    logo: ICONS.exotel, isUpcoming: true,
+    logo: ICONS.exotel,
     description: 'Cloud telephony for India — IVR, click-to-call and call recording synced to conversation history.',
     accentColor: '#E56000',
     docsUrl: 'https://developer.exotel.com/api/',
@@ -451,6 +453,18 @@ export default function SettingsPage({ currentUser }) {
   const [discoveredWabaId, setDiscoveredWabaId]       = useState('');
   const [razorpaySettings, setRazorpaySettings]       = useState(null);
   const [isSavingRazorpay, setIsSavingRazorpay]       = useState(false);
+
+  // Exotel
+  const [exotelSettings, setExotelSettings]           = useState(null);
+  const [isSavingExotel, setIsSavingExotel]           = useState(false);
+  const [exotelFields, setExotelFields]               = useState({ sid: '', api_key: '', api_token: '', subdomain: 'api.in.exotel.com', caller_id: '' });
+  const [exotelCallLogs, setExotelCallLogs]           = useState([]);
+  const [exotelLoadingLogs, setExotelLoadingLogs]     = useState(false);
+  const [dialerNumber, setDialerNumber]               = useState('');
+  const [dialerFrom, setDialerFrom]                   = useState('');
+  const [isDialing, setIsDialing]                     = useState(false);
+  const [dialerStatus, setDialerStatus]               = useState(null); // null | 'calling' | 'success' | 'error'
+  const [dialerMessage, setDialerMessage]             = useState('');
   const [discoveredToken, setDiscoveredToken]         = useState('');
   const [loadingWhatsapp, setLoadingWhatsapp]         = useState(false);
 
@@ -485,11 +499,12 @@ export default function SettingsPage({ currentUser }) {
     if (!teamId) return;
     (async () => {
       try {
-        const [wa, tg, ig, rzp] = await Promise.all([
+        const [wa, tg, ig, rzp, ext] = await Promise.all([
           getWhatsAppSettings(teamId),
           getTelegramSettings(teamId),
           getInstagramStatus(),
-          getRazorpaySettings(teamId)
+          getRazorpaySettings(teamId),
+          getExotelSettings(teamId)
         ]);
         if (wa?.settings)    setWhatsappSettings(wa.settings);
         if (wa?.allSettings) setAllWhatsappSettings(wa.allSettings);
@@ -505,6 +520,16 @@ export default function SettingsPage({ currentUser }) {
               webhook_secret: rzp.settings.webhook_secret
             }
           }));
+        }
+        if (ext?.settings) {
+          setExotelSettings(ext.settings);
+          setExotelFields({
+            sid: ext.settings.sid || '',
+            api_key: ext.settings.api_key || '',
+            api_token: ext.settings.api_token || '',
+            subdomain: ext.settings.subdomain || 'api.in.exotel.com',
+            caller_id: ext.settings.caller_id || ''
+          });
         }
       } catch (err) { console.error('Error loading integrations', err); }
     })();
@@ -686,11 +711,12 @@ export default function SettingsPage({ currentUser }) {
 
   // ─── Card Grid ──────────────────────────────────────────────────────
   const renderIntegrationCard = (item) => {
-    const isConnected = 
-      (item.id === 'whatsapp' && allWhatsappSettings.length > 0) || 
-      (item.id === 'telegram' && telegramSettings.length > 0) || 
+    const isConnected =
+      (item.id === 'whatsapp' && allWhatsappSettings.length > 0) ||
+      (item.id === 'telegram' && telegramSettings.length > 0) ||
       (item.id === 'instagram' && instagramStatus.connected) ||
-      (item.id === 'razorpay' && !!razorpaySettings);
+      (item.id === 'razorpay' && !!razorpaySettings) ||
+      (item.id === 'exotel' && !!exotelSettings);
     return (
       <div
         key={item.id}
@@ -768,11 +794,12 @@ export default function SettingsPage({ currentUser }) {
     const intg = activeIntegration;
     const isDisabled = intg.isUpcoming;
     const isMCP = intg.category === 'mcp';
-    const isConnected = 
+    const isConnected =
       (intg.id === 'razorpay' && !!razorpaySettings) ||
-      (intg.id === 'whatsapp' && allWhatsappSettings.length > 0) || 
-      (intg.id === 'telegram' && telegramSettings.length > 0) || 
-      (intg.id === 'instagram' && instagramStatus.connected);
+      (intg.id === 'whatsapp' && allWhatsappSettings.length > 0) ||
+      (intg.id === 'telegram' && telegramSettings.length > 0) ||
+      (intg.id === 'instagram' && instagramStatus.connected) ||
+      (intg.id === 'exotel' && !!exotelSettings);
     const webhookUrl = `${window.location.origin}/webhooks/${intg.id}`;
 
     return (
@@ -1303,11 +1330,315 @@ export default function SettingsPage({ currentUser }) {
     </div>
   );
 
+  // ─── Exotel Detail ──────────────────────────────────────────────────
+  const handleSaveExotel = async () => {
+    if (!exotelFields.sid || !exotelFields.api_key || !exotelFields.api_token || !exotelFields.subdomain) {
+      alert('SID, API Key, API Token and Subdomain are required.');
+      return;
+    }
+    setIsSavingExotel(true);
+    try {
+      const res = await updateExotelSettings(exotelFields, teamId);
+      if (res.error) throw new Error(res.error);
+      setExotelSettings(res.settings);
+      alert('Exotel connected successfully!');
+    } catch (err) {
+      alert('Failed to save Exotel settings: ' + (err.message || 'Unknown error'));
+    } finally {
+      setIsSavingExotel(false);
+    }
+  };
+
+  const handleDisconnectExotel = async () => {
+    if (!window.confirm('Disconnect Exotel? This will remove all stored credentials.')) return;
+    try {
+      await disconnectExotel(teamId);
+      setExotelSettings(null);
+      setExotelFields({ sid: '', api_key: '', api_token: '', subdomain: 'api.in.exotel.com', caller_id: '' });
+    } catch (err) {
+      alert('Failed to disconnect: ' + err.message);
+    }
+  };
+
+  const handleLoadCallLogs = async () => {
+    setExotelLoadingLogs(true);
+    try {
+      const res = await getExotelCallLogs(teamId);
+      setExotelCallLogs(res.calls || []);
+    } catch (err) {
+      console.error('Failed to load call logs:', err);
+    } finally {
+      setExotelLoadingLogs(false);
+    }
+  };
+
+  const handleInitiateCall = async () => {
+    if (!dialerNumber) { alert('Enter a phone number to call'); return; }
+    setIsDialing(true);
+    setDialerStatus('calling');
+    setDialerMessage('');
+    try {
+      const res = await initiateExotelCall({ to: dialerNumber, from: dialerFrom || undefined }, teamId);
+      if (res.error) throw new Error(res.error);
+      setDialerStatus('success');
+      setDialerMessage(`Call initiated! SID: ${res.call?.callSid || '—'}`);
+      // Refresh logs
+      handleLoadCallLogs();
+    } catch (err) {
+      setDialerStatus('error');
+      setDialerMessage(err.message || 'Call failed');
+    } finally {
+      setIsDialing(false);
+    }
+  };
+
+  const renderExotelDetail = () => {
+    const isConnected = !!exotelSettings;
+    const webhookUrl = `${window.location.origin}/webhooks/exotel/status`;
+
+    return (
+      <div className="p-6 max-w-3xl mx-auto space-y-5">
+        <Button variant="ghost" size="sm" className="text-slate-500 hover:text-slate-900 -ml-2" onClick={() => setActiveIntegrationId(null)}>
+          <ArrowLeft className="w-4 h-4 mr-1.5" /> All Integrations
+        </Button>
+
+        {/* Header */}
+        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+          <div className="p-6 flex items-center gap-5 border-b border-slate-100" style={{ background: 'linear-gradient(135deg, #E5600010 0%, #fff 60%)' }}>
+            <div className="w-14 h-14 bg-white rounded-2xl border border-slate-100 shadow-sm flex items-center justify-center p-3 shrink-0">
+              <img src={ICONS.exotel} alt="Exotel" className="w-full h-full object-contain" onError={e => { e.target.src = 'https://cdn.simpleicons.org/phone/E56000'; }} />
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-xl font-black text-slate-900">Exotel</h2>
+                {isConnected
+                  ? <span className="inline-flex items-center gap-1 bg-green-50 text-green-700 border border-green-200 text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider">● Connected</span>
+                  : <span className="inline-flex items-center gap-1 bg-slate-50 text-slate-500 border border-slate-200 text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider">Not Connected</span>
+                }
+              </div>
+              <p className="text-sm text-slate-500 mt-1">Cloud telephony for India — IVR, click-to-call and call recording synced to conversation history.</p>
+              <a href="https://developer.exotel.com/api/" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 mt-2 text-[11px] text-blue-500 hover:text-blue-700 font-medium">
+                <ExternalLink className="w-3 h-3" /> Official Documentation
+              </a>
+            </div>
+          </div>
+
+          {/* Setup Guide */}
+          <div className="p-5 border-b border-slate-100">
+            <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-4">Setup Guide</p>
+            <ol className="space-y-3">
+              {[
+                { step: '1', title: 'Log in to Exotel Dashboard', desc: 'Go to my.exotel.com → Settings → API Credentials. You will find your Account SID, API Key, and API Token here.' },
+                { step: '2', title: 'Copy your API Credentials', desc: 'Copy the SID, API Key, API Token and your account subdomain (e.g. api.in.exotel.com for India).' },
+                { step: '3', title: 'Note your ExoPhone (Caller ID)', desc: 'From the Exotel dashboard, go to Phone Numbers and copy the virtual number you want to use as caller ID.' },
+                { step: '4', title: 'Paste credentials below & Save', desc: 'Fill in the form below and click Save & Connect.' },
+                { step: '5', title: 'Configure the Status Callback URL', desc: 'In Exotel Dashboard → Apps → your app, set the Status Callback URL to the webhook URL shown below so call events are synced back.' },
+              ].map(g => (
+                <li key={g.step} className="flex gap-3">
+                  <span className="w-6 h-6 rounded-full bg-orange-100 text-orange-700 text-[11px] font-black flex items-center justify-center shrink-0 mt-0.5">{g.step}</span>
+                  <div>
+                    <p className="text-xs font-bold text-slate-800">{g.title}</p>
+                    <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">{g.desc}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </div>
+
+          {/* Credentials form */}
+          <div className="p-5 space-y-4 border-b border-slate-100">
+            <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Credentials</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {[
+                { label: 'Account SID', key: 'sid', placeholder: 'exotel_sid', hint: 'Exotel Dashboard → Settings → API Credentials' },
+                { label: 'API Key', key: 'api_key', placeholder: 'xxxxxxxx', hint: 'From the same API Credentials page' },
+                { label: 'API Token', key: 'api_token', placeholder: '••••••••', hint: 'Token paired with the API Key above', secret: true },
+                { label: 'Subdomain', key: 'subdomain', placeholder: 'api.in.exotel.com', hint: 'Your regional subdomain — India: api.in.exotel.com' },
+                { label: 'Default Caller ID (ExoPhone)', key: 'caller_id', placeholder: '+91XXXXXXXXXX', hint: 'Virtual number shown to customers when you call them' },
+              ].map(f => (
+                <div key={f.key} className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-slate-600 flex items-center gap-1">
+                    {f.label} {f.secret && <Lock className="w-2.5 h-2.5 text-slate-300" />}
+                  </label>
+                  {f.secret
+                    ? <RevealInput placeholder={f.placeholder} value={exotelFields[f.key]} onChange={e => setExotelFields(p => ({ ...p, [f.key]: e.target.value }))} />
+                    : <Input placeholder={f.placeholder} value={exotelFields[f.key]} onChange={e => setExotelFields(p => ({ ...p, [f.key]: e.target.value }))} className="h-11 rounded-xl bg-white border-slate-200 px-4 text-sm" />
+                  }
+                  {f.hint && <p className="text-[10px] text-slate-400 leading-snug">{f.hint}</p>}
+                </div>
+              ))}
+            </div>
+
+            {/* Webhook URL */}
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-bold text-slate-600">Status Callback / Webhook URL</label>
+              <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-4 h-11">
+                <code className="text-xs text-slate-600 font-mono flex-1 truncate">{webhookUrl}</code>
+                <CopyButton value={webhookUrl} />
+              </div>
+              <p className="text-[10px] text-slate-400">Set this as the StatusCallback in your Exotel app to receive real-time call status updates.</p>
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+              <div className="flex items-center gap-2 text-slate-400">
+                <ShieldCheck className="w-4 h-4" /><p className="text-[10px] font-medium">Credentials stored encrypted</p>
+              </div>
+              <div className="flex items-center gap-3">
+                {isConnected && (
+                  <Button variant="ghost" className="h-10 px-4 text-red-500 hover:text-red-700 hover:bg-red-50 text-sm font-bold" onClick={handleDisconnectExotel}>
+                    Disconnect
+                  </Button>
+                )}
+                <Button disabled={isSavingExotel} className="h-10 px-6 rounded-full bg-slate-900 text-white text-sm font-bold shadow-lg disabled:opacity-40" onClick={handleSaveExotel}>
+                  {isSavingExotel ? 'Saving…' : isConnected ? 'Update Credentials' : 'Save & Connect'}
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Dialer — only when connected */}
+          {isConnected && (
+            <div className="p-5 border-b border-slate-100">
+              <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-4">Click-to-Call Dialer</p>
+              <div className="bg-slate-900 rounded-2xl p-5 space-y-4">
+                <div className="flex items-center gap-2 mb-1">
+                  <Phone className="w-4 h-4 text-orange-400" />
+                  <span className="text-sm font-bold text-white">Initiate an Outbound Call</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Customer Number (To)</label>
+                    <input
+                      type="tel"
+                      placeholder="+91XXXXXXXXXX"
+                      value={dialerNumber}
+                      onChange={e => setDialerNumber(e.target.value)}
+                      className="w-full bg-slate-800 border border-slate-700 text-white placeholder-slate-500 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Agent / From Number (optional)</label>
+                    <input
+                      type="tel"
+                      placeholder={exotelFields.caller_id || '+91XXXXXXXXXX'}
+                      value={dialerFrom}
+                      onChange={e => setDialerFrom(e.target.value)}
+                      className="w-full bg-slate-800 border border-slate-700 text-white placeholder-slate-500 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={handleInitiateCall}
+                    disabled={isDialing}
+                    className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white font-bold px-6 py-2.5 rounded-xl text-sm transition-colors"
+                  >
+                    <Phone className="w-4 h-4" />
+                    {isDialing ? 'Initiating…' : 'Call Now'}
+                  </button>
+                  {dialerStatus === 'success' && <span className="text-xs text-green-400 font-medium">{dialerMessage}</span>}
+                  {dialerStatus === 'error' && <span className="text-xs text-red-400 font-medium">{dialerMessage}</span>}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Call Logs — only when connected */}
+          {isConnected && (
+            <div className="p-5">
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Recent Call Logs</p>
+                <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={handleLoadCallLogs} disabled={exotelLoadingLogs}>
+                  {exotelLoadingLogs ? 'Loading…' : 'Refresh'}
+                </Button>
+              </div>
+              {exotelCallLogs.length === 0
+                ? <p className="text-sm text-slate-400 text-center py-8">No call logs yet. Make a call to see history here.</p>
+                : (
+                  <div className="space-y-2">
+                    {exotelCallLogs.map(log => (
+                      <div key={log.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${log.direction === 'inbound' ? 'bg-blue-100' : 'bg-orange-100'}`}>
+                          <Phone className={`w-4 h-4 ${log.direction === 'inbound' ? 'text-blue-600' : 'text-orange-600'}`} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-slate-800 truncate">{log.to_number || log.from_number}</span>
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold uppercase ${
+                              log.status === 'completed' ? 'bg-green-100 text-green-700'
+                              : log.status === 'failed' || log.status === 'busy' ? 'bg-red-100 text-red-700'
+                              : 'bg-slate-200 text-slate-600'
+                            }`}>{log.status}</span>
+                            <span className="text-[10px] text-slate-400 uppercase">{log.direction}</span>
+                          </div>
+                          <div className="text-[10px] text-slate-400 mt-0.5">
+                            {log.duration > 0 && <span>{log.duration}s · </span>}
+                            {log.contact_name && <span>{log.contact_name} · </span>}
+                            {new Date(log.created_at).toLocaleString()}
+                          </div>
+                        </div>
+                        {log.recording_url && (
+                          <a href={log.recording_url} target="_blank" rel="noreferrer" className="text-[10px] text-blue-500 hover:underline shrink-0">Recording</a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )
+              }
+            </div>
+          )}
+        </div>
+
+        {/* Workflow events info */}
+        <div className="bg-white border border-slate-200 rounded-2xl p-5">
+          <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-4">Workflow Events & Actions</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {[
+              { label: 'call_answered', desc: 'Triggered when a call is picked up', color: 'bg-blue-50 text-blue-700 border-blue-100' },
+              { label: 'call_completed', desc: 'Triggered when a call ends successfully', color: 'bg-green-50 text-green-700 border-green-100' },
+              { label: 'call_failed', desc: 'Triggered on busy / no-answer / failed', color: 'bg-red-50 text-red-700 border-red-100' },
+              { label: 'Initiate Call (node)', desc: 'Workflow action to place an outbound call', color: 'bg-orange-50 text-orange-700 border-orange-100' },
+            ].map(e => (
+              <div key={e.label} className={`flex items-start gap-2 p-3 rounded-xl border ${e.color}`}>
+                <div>
+                  <p className="text-xs font-bold">{e.label}</p>
+                  <p className="text-[10px] mt-0.5 opacity-80">{e.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Quick links */}
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { icon: ExternalLink, title: 'Exotel Dashboard', desc: 'Login to my.exotel.com to manage numbers, apps and call logs.' },
+            { icon: Globe2, title: 'API Docs', desc: 'Full REST API reference at developer.exotel.com/api/.' },
+            { icon: Code2, title: 'Webhook Reference', desc: 'Callback parameters sent by Exotel on call status changes.' },
+          ].map(tile => {
+            const TIcon = tile.icon;
+            return (
+              <div key={tile.title} className="bg-white border border-slate-100 rounded-xl p-4">
+                <div className="w-7 h-7 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center mb-3">
+                  <TIcon className="w-3.5 h-3.5 text-slate-500" />
+                </div>
+                <p className="text-xs font-bold text-slate-900">{tile.title}</p>
+                <p className="text-[10px] text-slate-400 mt-1 leading-snug">{tile.desc}</p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
   const renderDetail = () => {
     if (!activeIntegration) return null;
     if (activeIntegration.id === 'whatsapp') return renderWhatsAppDetail();
     if (activeIntegration.id === 'telegram') return renderTelegramDetail();
     if (activeIntegration.id === 'instagram') return renderInstagramDetail();
+    if (activeIntegration.id === 'exotel') return renderExotelDetail();
     return renderGenericDetail();
   };
 

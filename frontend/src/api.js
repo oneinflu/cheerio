@@ -1179,3 +1179,58 @@ export async function disconnectRazorpay(teamId) {
   });
   return res.json();
 }
+
+// ─── Exotel ───────────────────────────────────────────────────────────────────
+
+export async function getExotelSettings(teamId) {
+  const params = new URLSearchParams();
+  if (teamId) params.append('teamId', teamId);
+  const headers = getAuthHeaders();
+  const res = await fetch(`/api/settings/exotel?${params.toString()}`, { headers });
+  return res.json();
+}
+
+export async function updateExotelSettings(data, teamId) {
+  const params = new URLSearchParams();
+  if (teamId) params.append('teamId', teamId);
+  const headers = getAuthHeaders();
+  const res = await fetch(`/api/settings/exotel?${params.toString()}`, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
+export async function disconnectExotel(teamId) {
+  const params = new URLSearchParams();
+  if (teamId) params.append('teamId', teamId);
+  const headers = getAuthHeaders();
+  const res = await fetch(`/api/settings/exotel?${params.toString()}`, {
+    method: 'DELETE',
+    headers,
+  });
+  return res.json();
+}
+
+export async function initiateExotelCall(data, teamId) {
+  const params = new URLSearchParams();
+  if (teamId) params.append('teamId', teamId);
+  const headers = getAuthHeaders();
+  const res = await fetch(`/api/settings/exotel/call?${params.toString()}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
+export async function getExotelCallLogs(teamId, { limit = 25, offset = 0 } = {}) {
+  const params = new URLSearchParams();
+  if (teamId) params.append('teamId', teamId);
+  params.append('limit', limit);
+  params.append('offset', offset);
+  const headers = getAuthHeaders();
+  const res = await fetch(`/api/settings/exotel/calls?${params.toString()}`, { headers });
+  return res.json();
+}

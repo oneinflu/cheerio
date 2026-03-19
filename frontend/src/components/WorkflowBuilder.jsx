@@ -15,7 +15,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { Button } from './ui/Button';
-import { Save, ArrowLeft, Plus, Clock, MessageSquare, GitBranch, Zap, StopCircle, Loader2, Play, MessageCircle, Code, UserCheck, Tag, Mic, Workflow as WorkflowIcon, Megaphone, Filter, Link, Copy, Check, RefreshCw, Trash2, Globe, Send, ChevronDown, ChevronUp, Image, Video, FileText as FileIcon, Upload, X, Star, CreditCard, BellRing, Bell, Mail, ListChecks } from 'lucide-react';
+import { Save, ArrowLeft, Plus, Clock, MessageSquare, GitBranch, Zap, StopCircle, Loader2, Play, MessageCircle, Code, UserCheck, Tag, Mic, Workflow as WorkflowIcon, Megaphone, Filter, Link, Copy, Check, RefreshCw, Trash2, Globe, Send, ChevronDown, ChevronUp, Image, Video, FileText as FileIcon, Upload, X, Star, CreditCard, BellRing, Bell, Mail, ListChecks, Phone } from 'lucide-react';
 import { getTemplates, runWorkflow, aiGenerateWorkflow, getWorkflows, getCampaigns, getWebhookEvents, clearWebhookEvents, fetchMediaLibrary, uploadFlowMedia, createPaymentLink, getLabels, getEmailTemplates, getLeadStages } from '../api';
 import { GallerySelectModal } from './GallerySelectModal';
 import { connectSocket } from '../socket';
@@ -736,7 +736,32 @@ const nodeTypes = {
   new_contact: NewContactCreatedNode,
   xolox_event: XoloxEventNode,
   notification: NotificationNode,
+  exotel_call: ExotelCallNode,
 };
+
+const ExotelCallNode = ({ data, selected }) => (
+  <NodeWrapper selected={selected} title="Initiate Call" icon={Phone} colorClass="bg-orange-500" status={data.nodeStatus}>
+    <div className="space-y-1.5">
+      <div className="text-[10px] text-slate-600 flex items-center gap-1">
+        <Phone size={10} className="text-orange-500" />
+        <span className="font-semibold">To:</span>
+        <span className="truncate font-mono">{data.toNumber || '{{contact.phone}}'}</span>
+      </div>
+      {data.callerId && (
+        <div className="text-[10px] text-slate-500 flex items-center gap-1">
+          <span className="font-semibold">From:</span>
+          <span className="font-mono">{data.callerId}</span>
+        </div>
+      )}
+      {data.record && (
+        <span className="inline-block text-[8px] font-bold bg-orange-50 text-orange-600 border border-orange-100 px-1.5 py-0.5 rounded">REC</span>
+      )}
+    </div>
+    <Handle type="target" position={Position.Top} />
+    <Handle type="source" position={Position.Bottom} id="answered" style={{ left: '25%' }} />
+    <Handle type="source" position={Position.Bottom} id="failed" style={{ left: '75%' }} />
+  </NodeWrapper>
+);
 
 const COURSE_PAPERS = {
   'CPA US': [
@@ -1483,6 +1508,14 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
           unit: 'hours'
         };
       }
+      if (type === 'exotel_call') {
+        newNode.data = {
+          label: 'Initiate Call',
+          toNumber: '{{contact.phone}}',
+          callerId: '',
+          record: false,
+        };
+      }
       if (type === 'delay') {
         newNode.data.label = 'Time Delay';
         newNode.data.delayMode = 'relative';
@@ -2032,6 +2065,23 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
     setSelectedNode(node);
   }, [setNodes]);
 
+  const handleAddExotelCallAction = useCallback(() => {
+    const nodeId = getId();
+    const node = {
+      id: nodeId,
+      type: 'exotel_call',
+      position: { x: 0, y: 400 },
+      data: {
+        label: 'Initiate Call',
+        toNumber: '{{contact.phone}}',
+        callerId: '',
+        record: false,
+      },
+    };
+    setNodes(nds => [...nds, node]);
+    setSelectedNode(node);
+  }, [setNodes]);
+
   const handleAddPaymentReminderAction = useCallback(() => {
     const nodeId = getId();
     const node = {
@@ -2149,6 +2199,12 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
         const failEdge = edges.find(e => e.source === node.id && e.sourceHandle === 'fail');
         if (successEdge) nodeDef.onSuccess = successEdge.target;
         if (failEdge) nodeDef.onFail = failEdge.target;
+      } else if (node.type === 'exotel_call') {
+        const answeredEdge = edges.find(e => e.source === node.id && e.sourceHandle === 'answered');
+        const failedEdge = edges.find(e => e.source === node.id && e.sourceHandle === 'failed');
+        nodeDef.routes = {};
+        if (answeredEdge) nodeDef.routes.answered = answeredEdge.target;
+        if (failedEdge) nodeDef.routes.failed = failedEdge.target;
       } else if (node.type === 'payment_reminder') {
         const paidEdge = edges.find(e => e.source === node.id && e.sourceHandle === 'paid');
         const unpaidEdge = edges.find(e => e.source === node.id && e.sourceHandle === 'unpaid');
@@ -3181,6 +3237,28 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 <div className="min-w-0">
                   <div className="text-sm font-semibold text-orange-800">Payment Reminder</div>
                   <div className="text-xs text-orange-600">Follow up on unpaid</div>
+                </div>
+              </div>
+            )}
+
+            {/* Exotel Call action */}
+            {viewMode === 'canvas' && (
+              <div
+                className="flex items-center gap-3 p-3 rounded-md bg-orange-50 border border-orange-200 cursor-pointer hover:bg-orange-100 transition-colors"
+                draggable
+                onDragStart={(e) => {
+                    e.dataTransfer.setData('application/reactflow', 'exotel_call');
+                    e.dataTransfer.effectAllowed = 'move';
+                }}
+                onClick={handleAddExotelCallAction}
+                title="Initiate an outbound VoIP call via Exotel"
+              >
+                <div className="w-9 h-9 rounded-md bg-orange-500 flex items-center justify-center shrink-0">
+                  <Phone size={16} className="text-white" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-orange-800">Exotel Call</div>
+                  <div className="text-xs text-orange-600">Initiate VoIP call</div>
                 </div>
               </div>
             )}
@@ -5186,6 +5264,82 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                             <span className="text-xs font-bold text-red-800">UNPAID</span>
                           </div>
                           <span className="text-[9px] text-red-600 font-medium">Exit ID: unpaid</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {selectedNode.type === 'exotel_call' && (
+                <div className="space-y-6">
+                  <div className="p-4 bg-orange-50 rounded-lg border border-orange-100 flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-orange-500 flex items-center justify-center text-white shadow-sm">
+                      <Phone size={20} />
+                    </div>
+                    <div>
+                      <span className="text-xs font-semibold text-orange-800 uppercase tracking-tight">Exotel VoIP</span>
+                      <h3 className="text-sm font-bold text-slate-800">Initiate Outbound Call</h3>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4 px-1 pb-10">
+                    <div className="p-3 bg-blue-50 rounded-xl border border-blue-100">
+                      <p className="text-[10px] text-blue-700 font-medium leading-normal">
+                        This node places an outbound call via Exotel. Use <code className="bg-blue-100 px-1 rounded">{'{{contact.phone}}'}</code> to call the current contact. Exotel must be connected in Settings → Integrations.
+                      </p>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-500 uppercase">To Number (Customer)</label>
+                      <input
+                        className="w-full text-sm p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500/20 focus:outline-none"
+                        value={selectedNode.data.toNumber || '{{contact.phone}}'}
+                        onChange={e => updateNodeData('toNumber', e.target.value)}
+                        placeholder="{{contact.phone}} or +91XXXXXXXXXX"
+                      />
+                      <p className="text-[10px] text-slate-400">Supports variables like {'{{contact.phone}}'}.</p>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-500 uppercase">Caller ID (ExoPhone)</label>
+                      <input
+                        className="w-full text-sm p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500/20 focus:outline-none"
+                        value={selectedNode.data.callerId || ''}
+                        onChange={e => updateNodeData('callerId', e.target.value)}
+                        placeholder="Leave blank to use default from Settings"
+                      />
+                      <p className="text-[10px] text-slate-400">The ExoPhone virtual number shown to the customer. Leave blank to use the default configured in Integrations.</p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        id="exotel_record"
+                        checked={!!selectedNode.data.record}
+                        onChange={e => updateNodeData('record', e.target.checked)}
+                        className="w-4 h-4 accent-orange-500"
+                      />
+                      <label htmlFor="exotel_record" className="text-sm text-slate-700 font-medium">Record this call</label>
+                    </div>
+
+                    {/* Branch info */}
+                    <div className="space-y-2 mt-2">
+                      <label className="text-[10px] font-bold text-slate-500 uppercase">Branches</label>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="p-3 bg-green-50 border border-green-100 rounded-xl">
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <div className="w-2 h-2 rounded-full bg-green-500" />
+                            <span className="text-xs font-bold text-green-800">ANSWERED</span>
+                          </div>
+                          <span className="text-[9px] text-green-600 font-medium">Handle: answered</span>
+                        </div>
+                        <div className="p-3 bg-red-50 border border-red-100 rounded-xl">
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <div className="w-2 h-2 rounded-full bg-red-500" />
+                            <span className="text-xs font-bold text-red-800">FAILED / BUSY</span>
+                          </div>
+                          <span className="text-[9px] text-red-600 font-medium">Handle: failed</span>
                         </div>
                       </div>
                     </div>

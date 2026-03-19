@@ -46,6 +46,7 @@ const campaignsRouter = require('./src/routes/campaigns');
 const emailTemplatesRouter = require('./src/routes/emailTemplates');
 const aiAgentRouter = require('./src/routes/aiAgent');
 const { publicRouter: webhookTriggerPublic, privateRouter: webhookTriggerPrivate } = require('./src/routes/webhookTriggers');
+const exotelWebhookRouter = require('./src/webhooks/exotel');
 const auth = require('./src/middlewares/auth');
 
 // Read environment-based config for HTTP concerns. Defaults are safe for dev.
@@ -128,6 +129,7 @@ function createApp() {
   app.use('/webhooks/incoming', require('./src/webhooks/generic/incoming'));
   app.use('/webhooks/kylas', require('./src/webhooks/generic/kylas'));
   app.use('/webhooks/razorpay', require('./src/webhooks/razorpay'));
+  app.use('/webhooks/exotel', exotelWebhookRouter);
   app.use('/api/auth', authRouter); // Login
   app.use('/api/auth', instagramAuthRouter); // Instagram Callback
   app.use('/api/auth/whatsapp', whatsappAuthRouter); // WhatsApp Callback/Onboarding
@@ -148,6 +150,7 @@ function createApp() {
   app.use('/api', rulesRouter);
   app.use('/api/settings', settingsRouter);
   app.use('/api/settings/razorpay', require('./src/routes/razorpaySettings'));
+  app.use('/api/settings/exotel', require('./src/routes/exotelSettings'));
   app.use('/api/whatsappFlows', whatsappFlowsRouter);
   app.use('/api/contacts', contactsRouter);
   app.use('/api/labels', labelsRouter);

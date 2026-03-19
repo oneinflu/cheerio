@@ -503,6 +503,24 @@ async function runMigrations() {
           console.log('[migrate] razorpay_settings table already exists.');
         }
 
+        // 0025 – exotel_settings and exotel_call_logs tables
+        const exotelSettingsRes = await client.query(`
+          SELECT EXISTS (
+            SELECT FROM information_schema.tables
+            WHERE  table_schema = 'public'
+            AND    table_name   = 'exotel_settings'
+          );
+        `);
+        if (!exotelSettingsRes.rows[0].exists) {
+          console.log('[migrate] Adding exotel_settings and exotel_call_logs tables...');
+          await client.query('BEGIN');
+          await runSQLFile(client, path.join(__dirname, '..', 'db', 'migrations', '0025_exotel_settings.sql'));
+          await client.query('COMMIT');
+          console.log('[migrate] Applied 0025_exotel_settings migration.');
+        } else {
+          console.log('[migrate] exotel_settings table already exists.');
+        }
+
         return;
 
 
