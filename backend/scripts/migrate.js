@@ -485,6 +485,24 @@ async function runMigrations() {
           console.log('[migrate] whatsapp_settings already supports multiple numbers.');
         }
 
+        // 0024 – razorpay_settings table
+        const rzpTableRes = await client.query(`
+          SELECT EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE  table_schema = 'public'
+            AND    table_name   = 'razorpay_settings'
+          );
+        `);
+        if (!rzpTableRes.rows[0].exists) {
+          console.log('[migrate] Adding razorpay_settings table...');
+          await client.query('BEGIN');
+          await runSQLFile(client, path.join(__dirname, '..', 'db', 'migrations', '0024_razorpay_settings.sql'));
+          await client.query('COMMIT');
+          console.log('[migrate] Applied 0024_razorpay_settings migration.');
+        } else {
+          console.log('[migrate] razorpay_settings table already exists.');
+        }
+
         return;
 
 

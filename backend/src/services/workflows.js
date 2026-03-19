@@ -771,18 +771,30 @@ async function runWorkflow(id, phoneNumber, context = {}) {
 
         try {
           const conversationId = await ensureConversation(phoneNumber);
-          const contactRes = await db.query('SELECT id, external_id, profile FROM contacts WHERE external_id = $1', [phoneNumber]);
+          // Fetch contact and associated teamId (via channel -> whatsapp_settings)
+          const contactRes = await db.query(`
+            SELECT c.id, c.external_id, c.profile, ws.team_id
+            FROM contacts c
+            JOIN channels ch ON ch.id = c.channel_id
+            LEFT JOIN whatsapp_settings ws ON ws.phone_number_id = ch.external_id
+            WHERE c.external_id = $1
+            LIMIT 1
+          `, [phoneNumber]);
+          
           const contact = contactRes.rows[0] || {};
           const contactId = contact.id;
+          const teamId = contact.team_id || 'default';
 
           // Generate Razorpay Link
-          console.log(`[WorkflowRunner] Creating Razorpay link for ₹${amount}...`);
+          console.log(`[WorkflowRunner] Creating Razorpay link for ₹${amount} (Team: ${teamId})...`);
           const payLink = await razorpay.createPaymentLink({
             amount,
             description: displayTitle,
             contact: phoneNumber.replace(/\+/g, ''),
             email: contact.profile?.email || '',
+            teamId, // Pass teamId for multi-tenant keys
             notes: {
+              teamId, // Include in notes for webhook return
               workflow_id: id,
               contact_id: contactId,
               conversation_id: conversationId,

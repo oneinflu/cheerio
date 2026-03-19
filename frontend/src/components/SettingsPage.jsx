@@ -15,7 +15,8 @@ import {
   disconnectTelegram,
   connectInstagram, getInstagramStatus, disconnectInstagram,
   getInstagramAutomations, createInstagramAutomation,
-  updateInstagramAutomation, deleteInstagramAutomation, toggleInstagramAutomation
+  updateInstagramAutomation, deleteInstagramAutomation, toggleInstagramAutomation,
+  getRazorpaySettings, updateRazorpaySettings, disconnectRazorpay
 } from '../api';
 
 // ─── Brand icon URLs (SimpleIcons CDN + Wikimedia) ────────────────────────────
@@ -290,7 +291,7 @@ const INTEGRATIONS_LIST = [
   // ─── Payments ─────────────────────────────────────────────────────
   {
     id: 'razorpay', category: 'payments', name: 'Razorpay',
-    logo: ICONS.razorpay, isUpcoming: true,
+    logo: ICONS.razorpay,
     description: 'Accept payments, send payment links via WhatsApp, and auto-sync order status to conversations.',
     accentColor: '#02042B',
     docsUrl: 'https://razorpay.com/docs/api/',
@@ -448,6 +449,8 @@ export default function SettingsPage({ currentUser }) {
   const [discoveredPhones, setDiscoveredPhones]       = useState([]);
   const [isPhoneSelectModalOpen, setIsPhoneSelectModalOpen] = useState(false);
   const [discoveredWabaId, setDiscoveredWabaId]       = useState('');
+  const [razorpaySettings, setRazorpaySettings]       = useState(null);
+  const [isSavingRazorpay, setIsSavingRazorpay]       = useState(false);
   const [discoveredToken, setDiscoveredToken]         = useState('');
   const [loadingWhatsapp, setLoadingWhatsapp]         = useState(false);
 
@@ -482,15 +485,27 @@ export default function SettingsPage({ currentUser }) {
     if (!teamId) return;
     (async () => {
       try {
-        const [wa, tg, ig] = await Promise.all([
+        const [wa, tg, ig, rzp] = await Promise.all([
           getWhatsAppSettings(teamId),
           getTelegramSettings(teamId),
-          getInstagramStatus()
+          getInstagramStatus(),
+          getRazorpaySettings(teamId)
         ]);
         if (wa?.settings)    setWhatsappSettings(wa.settings);
         if (wa?.allSettings) setAllWhatsappSettings(wa.allSettings);
         if (tg?.settings)    setTelegramSettings(tg.settings);
         if (ig)              setInstagramStatus(ig);
+        if (rzp?.settings) {
+          setRazorpaySettings(rzp.settings);
+          setFieldValues(prev => ({
+            ...prev,
+            razorpay: {
+              key_id: rzp.settings.key_id,
+              key_secret: rzp.settings.key_secret,
+              webhook_secret: rzp.settings.webhook_secret
+            }
+          }));
+        }
       } catch (err) { console.error('Error loading integrations', err); }
     })();
   }, [teamId]);
@@ -634,9 +649,48 @@ export default function SettingsPage({ currentUser }) {
     }
   };
 
+  const handleSaveGenericIntegration = async () => {
+    const intg = activeIntegration;
+    if (!intg) return;
+
+    if (intg.id === 'razorpay') {
+      try {
+        setIsSavingRazorpay(true);
+        const values = fieldValues['razorpay'] || {};
+        const res = await updateRazorpaySettings(values, teamId);
+        setRazorpaySettings(res);
+        alert('Razorpay settings saved and connected!');
+      } catch (err) {
+        alert('Failed to save Razorpay settings: ' + (err.message || 'Unknown error'));
+      } finally {
+        setIsSavingRazorpay(false);
+      }
+    }
+  };
+
+  const handleDisconnectGeneric = async () => {
+    const intg = activeIntegration;
+    if (!intg) return;
+    if (!confirm(`Are you sure you want to disconnect ${intg.name}?`)) return;
+
+    if (intg.id === 'razorpay') {
+      try {
+        await disconnectRazorpay(teamId);
+        setRazorpaySettings(null);
+        setFieldValues(prev => ({ ...prev, razorpay: {} }));
+      } catch (err) {
+        alert('Failed to disconnect: ' + err.message);
+      }
+    }
+  };
+
   // ─── Card Grid ──────────────────────────────────────────────────────
   const renderIntegrationCard = (item) => {
-    const isConnected = (item.id === 'whatsapp' && allWhatsappSettings.length > 0) || (item.id === 'telegram' && telegramSettings.length > 0) || (item.id === 'instagram' && instagramStatus.connected);
+    const isConnected = 
+      (item.id === 'whatsapp' && allWhatsappSettings.length > 0) || 
+      (item.id === 'telegram' && telegramSettings.length > 0) || 
+      (item.id === 'instagram' && instagramStatus.connected) ||
+      (item.id === 'razorpay' && !!razorpaySettings);
     return (
       <div
         key={item.id}
@@ -714,6 +768,11 @@ export default function SettingsPage({ currentUser }) {
     const intg = activeIntegration;
     const isDisabled = intg.isUpcoming;
     const isMCP = intg.category === 'mcp';
+    const isConnected = 
+      (intg.id === 'razorpay' && !!razorpaySettings) ||
+      (intg.id === 'whatsapp' && allWhatsappSettings.length > 0) || 
+      (intg.id === 'telegram' && telegramSettings.length > 0) || 
+      (intg.id === 'instagram' && instagramStatus.connected);
     const webhookUrl = `https://api.greeto.io/webhooks/${intg.id}`;
 
     return (
@@ -825,12 +884,24 @@ export default function SettingsPage({ currentUser }) {
                   <ShieldCheck className="w-4 h-4" />
                   <p className="text-[10px] font-medium">Credentials encrypted with AES-256-GCM</p>
                 </div>
-                <Button
-                  disabled={isDisabled}
-                  className="h-10 px-6 rounded-full bg-slate-900 text-white text-sm font-bold shadow-lg disabled:opacity-40"
-                >
-                  Save & Connect
-                </Button>
+                <div className="flex items-center gap-3">
+                  {isConnected && (
+                    <Button
+                      variant="ghost"
+                      className="h-10 px-4 text-red-500 hover:text-red-700 hover:bg-red-50 text-sm font-bold"
+                      onClick={handleDisconnectGeneric}
+                    >
+                      Disconnect
+                    </Button>
+                  )}
+                  <Button
+                    disabled={isDisabled || isSavingRazorpay}
+                    className="h-10 px-6 rounded-full bg-slate-900 text-white text-sm font-bold shadow-lg disabled:opacity-40"
+                    onClick={handleSaveGenericIntegration}
+                  >
+                    {isSavingRazorpay ? 'Saving...' : 'Save & Connect'}
+                  </Button>
+                </div>
               </div>
             </div>
           )}

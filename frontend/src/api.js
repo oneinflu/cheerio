@@ -1149,3 +1149,33 @@ export async function getInstagramMedia(channelId, after = null) {
   const res = await fetch(url, { headers });
   return res.json();
 }
+export async function getRazorpaySettings(teamId) {
+  const params = new URLSearchParams();
+  if (teamId) params.append('teamId', teamId);
+  const headers = getAuthHeaders();
+  const res = await fetch(`/api/settings/razorpay?${params.toString()}`, { headers });
+  return res.json();
+}
+
+export async function updateRazorpaySettings(data, teamId) {
+  const params = new URLSearchParams();
+  if (teamId) params.append('teamId', teamId);
+  const headers = getAuthHeaders();
+  const res = await fetch(`/api/settings/razorpay?${params.toString()}`, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
+export async function disconnectRazorpay(teamId) {
+  const params = new URLSearchParams();
+  if (teamId) params.append('teamId', teamId);
+  const headers = getAuthHeaders();
+  const res = await fetch(`/api/settings/razorpay?${params.toString()}`, {
+    method: 'DELETE',
+    headers,
+  });
+  return res.json();
+}

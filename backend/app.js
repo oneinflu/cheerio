@@ -147,6 +147,7 @@ function createApp() {
   app.use('/api', dashboardRouter);
   app.use('/api', rulesRouter);
   app.use('/api/settings', settingsRouter);
+  app.use('/api/settings/razorpay', require('./src/routes/razorpaySettings'));
   app.use('/api/whatsappFlows', whatsappFlowsRouter);
   app.use('/api/contacts', contactsRouter);
   app.use('/api/labels', labelsRouter);

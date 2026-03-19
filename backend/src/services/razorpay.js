@@ -1,24 +1,59 @@
 'use strict';
 const axios = require('axios');
 
-const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID;
-const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET;
+const db = require('../../db');
+
+/**
+ * Get Razorpay credentials for a team
+ */
+async function getCredentials(teamId) {
+    if (!teamId) {
+        return {
+            keyId: process.env.RAZORPAY_KEY_ID,
+            keySecret: process.env.RAZORPAY_KEY_SECRET,
+            webhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET
+        };
+    }
+
+    try {
+        const result = await db.query(
+            'SELECT key_id, key_secret, webhook_secret FROM razorpay_settings WHERE team_id = $1 AND is_active = TRUE',
+            [teamId]
+        );
+
+        if (result.rowCount > 0) {
+            return {
+                keyId: result.rows[0].key_id,
+                keySecret: result.rows[0].key_secret,
+                webhookSecret: result.rows[0].webhook_secret
+            };
+        }
+    } catch (err) {
+        console.error('[Razorpay] Error fetching credentials from DB:', err.message);
+    }
+
+    // Fallback to env vars
+    return {
+        keyId: process.env.RAZORPAY_KEY_ID,
+        keySecret: process.env.RAZORPAY_KEY_SECRET,
+        webhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET
+    };
+}
 
 /**
  * Create a Razorpay Payment Link
- * @param {Object} options 
- * @param {number} options.amount - In paise (e.g. 1000 for ₹10)
- * @param {string} options.description - Link title
- * @param {string} options.contact - Phone number
- * @param {string} options.email - Email address
- * @param {Object} options.notes - Extra metadata
  */
-async function createPaymentLink({ amount, description, contact, email, notes }) {
-    if (!RAZORPAY_KEY_ID || !RAZORPAY_KEY_SECRET) {
-        throw new Error('Razorpay keys not configured in environment variables');
+async function createPaymentLink({ teamId, amount, description, contact, email, notes = {} }) {
+    const creds = await getCredentials(teamId);
+
+    if (!creds.keyId || !creds.keySecret) {
+        throw new Error('Razorpay keys not configured for this team');
     }
 
-    const auth = Buffer.from(`${RAZORPAY_KEY_ID}:${RAZORPAY_KEY_SECRET}`).toString('base64');
+    // Ensure teamId is in notes for webhook identification
+    if (teamId) {
+        notes.teamId = teamId;
+    }
 
     const payload = {
         amount: Math.round(amount * 100), // Convert ₹ to paise
@@ -41,8 +76,8 @@ async function createPaymentLink({ amount, description, contact, email, notes })
     try {
         const response = await axios.post('https://api.razorpay.com/v1/payment_links', payload, {
             auth: {
-                username: RAZORPAY_KEY_ID,
-                password: RAZORPAY_KEY_SECRET
+                username: creds.keyId,
+                password: creds.keySecret
             },
             headers: {
                 'Content-Type': 'application/json'
@@ -59,7 +94,6 @@ async function createPaymentLink({ amount, description, contact, email, notes })
         const statusCode = err.response?.status;
         console.error(`[Razorpay] API Error (${statusCode}):`, JSON.stringify(errorData, null, 2));
 
-        // If it's a 401, return a clear authentication error
         if (statusCode === 401) {
             throw new Error('Razorpay Authentication failed: Invalid Key ID or Secret');
         }
@@ -69,5 +103,6 @@ async function createPaymentLink({ amount, description, contact, email, notes })
 }
 
 module.exports = {
+    getCredentials,
     createPaymentLink
 };

@@ -12,7 +12,10 @@ router.post('/create-link', async (req, res, next) => {
             return res.status(400).json({ error: 'Amount is required' });
         }
 
+        const teamId = req.query.teamId || (req.user && req.user.teamIds && req.user.teamIds[0]);
+
         const payLink = await razorpay.createPaymentLink({
+            teamId,
             amount: parseFloat(amount),
             description: description || 'Payment Request',
             contact: contact || '',
