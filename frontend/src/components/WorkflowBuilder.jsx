@@ -714,6 +714,30 @@ function WebhookNodeConfig({ node, workflowId, updateNodeFields }) {
   );
 }
 
+const ExotelCallNode = ({ data, selected }) => (
+  <NodeWrapper selected={selected} title="Initiate Call" icon={Phone} colorClass="bg-orange-500" status={data.nodeStatus}>
+    <div className="space-y-1.5">
+      <div className="text-[10px] text-slate-600 flex items-center gap-1">
+        <Phone size={10} className="text-orange-500" />
+        <span className="font-semibold">To:</span>
+        <span className="truncate font-mono">{data.toNumber || '{{contact.phone}}'}</span>
+      </div>
+      {data.callerId && (
+        <div className="text-[10px] text-slate-500 flex items-center gap-1">
+          <span className="font-semibold">From:</span>
+          <span className="font-mono">{data.callerId}</span>
+        </div>
+      )}
+      {data.record && (
+        <span className="inline-block text-[8px] font-bold bg-orange-50 text-orange-600 border border-orange-100 px-1.5 py-0.5 rounded">REC</span>
+      )}
+    </div>
+    <Handle type="target" position={Position.Top} />
+    <Handle type="source" position={Position.Bottom} id="answered" style={{ left: '25%' }} />
+    <Handle type="source" position={Position.Bottom} id="failed" style={{ left: '75%' }} />
+  </NodeWrapper>
+);
+
 const nodeTypes = {
   trigger: TriggerNode,
   send_template: TemplateNode,
@@ -738,30 +762,6 @@ const nodeTypes = {
   notification: NotificationNode,
   exotel_call: ExotelCallNode,
 };
-
-const ExotelCallNode = ({ data, selected }) => (
-  <NodeWrapper selected={selected} title="Initiate Call" icon={Phone} colorClass="bg-orange-500" status={data.nodeStatus}>
-    <div className="space-y-1.5">
-      <div className="text-[10px] text-slate-600 flex items-center gap-1">
-        <Phone size={10} className="text-orange-500" />
-        <span className="font-semibold">To:</span>
-        <span className="truncate font-mono">{data.toNumber || '{{contact.phone}}'}</span>
-      </div>
-      {data.callerId && (
-        <div className="text-[10px] text-slate-500 flex items-center gap-1">
-          <span className="font-semibold">From:</span>
-          <span className="font-mono">{data.callerId}</span>
-        </div>
-      )}
-      {data.record && (
-        <span className="inline-block text-[8px] font-bold bg-orange-50 text-orange-600 border border-orange-100 px-1.5 py-0.5 rounded">REC</span>
-      )}
-    </div>
-    <Handle type="target" position={Position.Top} />
-    <Handle type="source" position={Position.Bottom} id="answered" style={{ left: '25%' }} />
-    <Handle type="source" position={Position.Bottom} id="failed" style={{ left: '75%' }} />
-  </NodeWrapper>
-);
 
 const COURSE_PAPERS = {
   'CPA US': [
