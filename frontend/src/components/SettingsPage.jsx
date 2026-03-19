@@ -773,7 +773,7 @@ export default function SettingsPage({ currentUser }) {
       (intg.id === 'whatsapp' && allWhatsappSettings.length > 0) || 
       (intg.id === 'telegram' && telegramSettings.length > 0) || 
       (intg.id === 'instagram' && instagramStatus.connected);
-    const webhookUrl = `https://api.greeto.io/webhooks/${intg.id}`;
+    const webhookUrl = `${window.location.origin}/webhooks/${intg.id}`;
 
     return (
       <div className="p-6 max-w-3xl mx-auto space-y-5">
