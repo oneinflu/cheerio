@@ -7,7 +7,7 @@ async function test() {
     const link = await razorpay.createPaymentLink({
       amount: 499, // ₹499
       description: 'Test Course Payment',
-      contact: '9999999999',
+      contact: '9182151640',
       email: 'test@example.com',
       notes: {
         test_mode: 'true',
