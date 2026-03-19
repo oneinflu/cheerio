@@ -18,7 +18,9 @@ import {
   updateInstagramAutomation, deleteInstagramAutomation, toggleInstagramAutomation,
   getRazorpaySettings, updateRazorpaySettings, disconnectRazorpay,
   getExotelSettings, updateExotelSettings, disconnectExotel,
-  initiateExotelCall, getExotelCallLogs
+  initiateExotelCall, getExotelCallLogs,
+  getTwilioSettings, updateTwilioSettings, disconnectTwilio,
+  sendTwilioSms, initiateTwilioCall, getTwilioLogs
 } from '../api';
 
 // ─── Brand icon URLs (SimpleIcons CDN + Wikimedia) ────────────────────────────
@@ -331,15 +333,11 @@ const INTEGRATIONS_LIST = [
   // ─── VoIP & Calling ───────────────────────────────────────────────
   {
     id: 'twilio', category: 'voip', name: 'Twilio',
-    logo: ICONS.twilio, isUpcoming: true,
-    description: 'SMS, Voice and WhatsApp communication powered by Twilio — click-to-call from any conversation.',
+    logo: ICONS.twilio,
+    description: 'SMS, Voice and WhatsApp communication — click-to-call, bulk SMS and call recording synced to conversations.',
     accentColor: '#F22F46',
-    docsUrl: 'https://www.twilio.com/docs/usage/api',
-    fields: [
-      { label: 'Account SID',  key: 'account_sid',  placeholder: 'ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',  hint: 'Twilio Console → Account info panel → Account SID' },
-      { label: 'Auth Token',   key: 'auth_token',   placeholder: '••••••••••••••••••••••••••••••••',    hint: 'Same panel — click eye icon to reveal', type: 'password' },
-      { label: 'Twilio Phone', key: 'phone_number', placeholder: '+14155552671',                         hint: 'E.164 format — the Twilio number you purchased' },
-    ],
+    docsUrl: 'https://www.twilio.com/docs',
+    fields: [],
   },
   {
     id: 'exotel', category: 'voip', name: 'Exotel',
@@ -468,6 +466,20 @@ export default function SettingsPage({ currentUser }) {
   const [discoveredToken, setDiscoveredToken]         = useState('');
   const [loadingWhatsapp, setLoadingWhatsapp]         = useState(false);
 
+  // Twilio
+  const [twilioSettings, setTwilioSettings]         = useState(null);
+  const [isSavingTwilio, setIsSavingTwilio]         = useState(false);
+  const [twilioFields, setTwilioFields]             = useState({ account_sid: '', auth_token: '', phone_number: '', messaging_service_sid: '' });
+  const [twilioLogs, setTwilioLogs]                 = useState([]);
+  const [twilioLoadingLogs, setTwilioLoadingLogs]   = useState(false);
+  const [twilioTabType, setTwilioTabType]           = useState('all');
+  const [twilioSmsTo, setTwilioSmsTo]               = useState('');
+  const [twilioSmsBody, setTwilioSmsBody]           = useState('');
+  const [isSendingSms, setIsSendingSms]             = useState(false);
+  const [twilioCallTo, setTwilioCallTo]             = useState('');
+  const [isDialingTwilio, setIsDialingTwilio]       = useState(false);
+  const [twilioActionResult, setTwilioActionResult] = useState(null);
+
   // Telegram
   const [telegramSettings, setTelegramSettings] = useState([]);
   const [savingTelegram, setSavingTelegram]     = useState(false);
@@ -499,12 +511,13 @@ export default function SettingsPage({ currentUser }) {
     if (!teamId) return;
     (async () => {
       try {
-        const [wa, tg, ig, rzp, ext] = await Promise.all([
+        const [wa, tg, ig, rzp, ext, twl] = await Promise.all([
           getWhatsAppSettings(teamId),
           getTelegramSettings(teamId),
           getInstagramStatus(),
           getRazorpaySettings(teamId),
-          getExotelSettings(teamId)
+          getExotelSettings(teamId),
+          getTwilioSettings(teamId)
         ]);
         if (wa?.settings)    setWhatsappSettings(wa.settings);
         if (wa?.allSettings) setAllWhatsappSettings(wa.allSettings);
@@ -529,6 +542,15 @@ export default function SettingsPage({ currentUser }) {
             api_token: ext.settings.api_token || '',
             subdomain: ext.settings.subdomain || 'api.in.exotel.com',
             caller_id: ext.settings.caller_id || ''
+          });
+        }
+        if (twl?.settings) {
+          setTwilioSettings(twl.settings);
+          setTwilioFields({
+            account_sid: twl.settings.account_sid || '',
+            auth_token: twl.settings.auth_token || '',
+            phone_number: twl.settings.phone_number || '',
+            messaging_service_sid: twl.settings.messaging_service_sid || ''
           });
         }
       } catch (err) { console.error('Error loading integrations', err); }
@@ -716,7 +738,8 @@ export default function SettingsPage({ currentUser }) {
       (item.id === 'telegram' && telegramSettings.length > 0) ||
       (item.id === 'instagram' && instagramStatus.connected) ||
       (item.id === 'razorpay' && !!razorpaySettings) ||
-      (item.id === 'exotel' && !!exotelSettings);
+      (item.id === 'exotel' && !!exotelSettings) ||
+      (item.id === 'twilio' && !!twilioSettings);
     return (
       <div
         key={item.id}
@@ -799,7 +822,8 @@ export default function SettingsPage({ currentUser }) {
       (intg.id === 'whatsapp' && allWhatsappSettings.length > 0) ||
       (intg.id === 'telegram' && telegramSettings.length > 0) ||
       (intg.id === 'instagram' && instagramStatus.connected) ||
-      (intg.id === 'exotel' && !!exotelSettings);
+      (intg.id === 'exotel' && !!exotelSettings) ||
+      (intg.id === 'twilio' && !!twilioSettings);
     const webhookUrl = `${window.location.origin}/webhooks/${intg.id}`;
 
     return (
@@ -1633,12 +1657,295 @@ export default function SettingsPage({ currentUser }) {
     );
   };
 
+  // ─── Twilio handlers ──────────────────────────────────────────────
+  const handleSaveTwilio = async () => {
+    if (!twilioFields.account_sid || !twilioFields.auth_token || !twilioFields.phone_number) {
+      alert('Account SID, Auth Token and Phone Number are required.');
+      return;
+    }
+    setIsSavingTwilio(true);
+    try {
+      const res = await updateTwilioSettings(twilioFields, teamId);
+      if (res.error) throw new Error(res.error);
+      setTwilioSettings(res.settings);
+      alert('Twilio connected successfully!');
+    } catch (err) {
+      alert('Failed to save Twilio settings: ' + (err.message || 'Unknown error'));
+    } finally {
+      setIsSavingTwilio(false);
+    }
+  };
+
+  const handleDisconnectTwilio = async () => {
+    if (!window.confirm('Disconnect Twilio? This will remove all stored credentials.')) return;
+    try {
+      await disconnectTwilio(teamId);
+      setTwilioSettings(null);
+      setTwilioFields({ account_sid: '', auth_token: '', phone_number: '', messaging_service_sid: '' });
+    } catch (err) {
+      alert('Failed to disconnect: ' + (err.message || 'Unknown error'));
+    }
+  };
+
+  const handleLoadTwilioLogs = async () => {
+    setTwilioLoadingLogs(true);
+    try {
+      const res = await getTwilioLogs(teamId, { type: twilioTabType === 'all' ? undefined : twilioTabType });
+      setTwilioLogs(res.logs || []);
+    } catch (err) {
+      console.error('Failed to load Twilio logs', err);
+    } finally {
+      setTwilioLoadingLogs(false);
+    }
+  };
+
+  const handleSendTwilioSms = async () => {
+    if (!twilioSmsTo || !twilioSmsBody) return;
+    setIsSendingSms(true);
+    setTwilioActionResult(null);
+    try {
+      const res = await sendTwilioSms({ to: twilioSmsTo, body: twilioSmsBody }, teamId);
+      if (res.error) throw new Error(res.error);
+      setTwilioActionResult({ success: true, message: `SMS sent! SID: ${res.message?.sid || '—'}` });
+      setTwilioSmsTo('');
+      setTwilioSmsBody('');
+      setTimeout(() => { handleLoadTwilioLogs(); setTwilioActionResult(null); }, 2000);
+    } catch (err) {
+      setTwilioActionResult({ success: false, message: err.message || 'Failed to send SMS' });
+    } finally {
+      setIsSendingSms(false);
+    }
+  };
+
+  const handleTwilioCall = async () => {
+    if (!twilioCallTo) return;
+    setIsDialingTwilio(true);
+    setTwilioActionResult(null);
+    try {
+      const res = await initiateTwilioCall({ to: twilioCallTo }, teamId);
+      if (res.error) throw new Error(res.error);
+      setTwilioActionResult({ success: true, message: `Call initiated! SID: ${res.call?.sid || '—'}` });
+      setTwilioCallTo('');
+      setTimeout(() => { handleLoadTwilioLogs(); setTwilioActionResult(null); }, 3000);
+    } catch (err) {
+      setTwilioActionResult({ success: false, message: err.message || 'Failed to initiate call' });
+    } finally {
+      setIsDialingTwilio(false);
+    }
+  };
+
+  const renderTwilioDetail = () => {
+    const isConnected = !!twilioSettings;
+    const smsCbUrl = `${window.location.origin}/webhooks/twilio/sms`;
+    const callCbUrl = `${window.location.origin}/webhooks/twilio/call`;
+
+    return (
+      <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        {/* Header */}
+        <div className="flex items-start gap-4 pb-4 border-b border-slate-100">
+          <div className="w-14 h-14 bg-white rounded-2xl border border-slate-100 shadow-sm flex items-center justify-center p-3 shrink-0">
+            <img src={ICONS.twilio} alt="Twilio" className="w-full h-full object-contain" onError={e => { e.target.src = 'https://cdn.simpleicons.org/twilio/F22F46'; }} />
+          </div>
+          <div className="flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-xl font-black text-slate-900">Twilio</h2>
+              {isConnected
+                ? <span className="bg-green-50 text-green-700 border border-green-200 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-widest">Connected</span>
+                : <span className="bg-slate-100 text-slate-500 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-widest">Not Connected</span>
+              }
+            </div>
+            <p className="text-sm text-slate-500 mt-1">SMS, Voice and WhatsApp communication — click-to-call, bulk SMS and call recording synced to conversations.</p>
+            <a href="https://www.twilio.com/docs" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 mt-2 text-[11px] text-blue-500 hover:text-blue-700 font-medium">
+              <ExternalLink className="w-3 h-3" /> Official Documentation
+            </a>
+          </div>
+        </div>
+
+        {/* Setup Guide */}
+        <div className="bg-blue-50 rounded-2xl p-5 border border-blue-100">
+          <h3 className="font-black text-slate-800 text-sm mb-3 flex items-center gap-2">
+            <span className="w-5 h-5 bg-blue-500 text-white text-[10px] font-black rounded-full flex items-center justify-center">?</span>
+            How to connect Twilio
+          </h3>
+          <ol className="space-y-3">
+            {[
+              { step: '1', title: 'Create a Twilio Account', desc: 'Sign up at twilio.com. After verification you will land on the Console Dashboard.' },
+              { step: '2', title: 'Copy your Account SID & Auth Token', desc: 'Go to Console → Dashboard. Your Account SID and Auth Token are shown at the top.' },
+              { step: '3', title: 'Buy or verify a phone number', desc: 'In Console → Phone Numbers → Manage → Buy a Number. Copy the number (e.g. +1 415 XXXXXXX).' },
+              { step: '4', title: 'Paste credentials below & Save', desc: 'Fill in Account SID, Auth Token, and Phone Number, then click Save & Connect.' },
+              { step: '5', title: 'Set Webhook URLs in Twilio Console', desc: 'In Phone Numbers → Active Numbers → click your number. Set the SMS Webhook and Voice Webhook URLs shown below (A Call Comes In / A Message Comes In).' },
+            ].map(g => (
+              <li key={g.step} className="flex gap-3 text-sm">
+                <span className="w-6 h-6 rounded-full bg-blue-500 text-white text-[11px] font-black flex items-center justify-center shrink-0 mt-0.5">{g.step}</span>
+                <div><span className="font-bold text-slate-800">{g.title}</span> — <span className="text-slate-500">{g.desc}</span></div>
+              </li>
+            ))}
+          </ol>
+        </div>
+
+        {/* Credentials Form */}
+        <div className="bg-white rounded-2xl border border-slate-100 p-5 space-y-4">
+          <h3 className="font-black text-slate-800 text-sm">API Credentials</h3>
+          {[
+            { label: 'Account SID', key: 'account_sid', placeholder: 'ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', hint: 'Console Dashboard → top of page' },
+            { label: 'Auth Token', key: 'auth_token', placeholder: '••••••••', hint: 'Console Dashboard → click eye icon to reveal', secret: true },
+            { label: 'Default Phone Number', key: 'phone_number', placeholder: '+14155552671', hint: 'E.164 format — the number used to send SMS and make calls' },
+            { label: 'Messaging Service SID (optional)', key: 'messaging_service_sid', placeholder: 'MGxxxxxxxx', hint: 'Use a Messaging Service for number pools and advanced routing' },
+          ].map(f => (
+            <div key={f.key}>
+              <label className="text-xs font-bold text-slate-700 block mb-1">{f.label}</label>
+              {f.secret
+                ? <RevealInput placeholder={f.placeholder} value={twilioFields[f.key]} onChange={e => setTwilioFields(p => ({ ...p, [f.key]: e.target.value }))} />
+                : <Input placeholder={f.placeholder} value={twilioFields[f.key]} onChange={e => setTwilioFields(p => ({ ...p, [f.key]: e.target.value }))} className="h-11 rounded-xl bg-white border-slate-200 px-4 text-sm" />
+              }
+              {f.hint && <p className="text-[10px] text-slate-400 mt-1">{f.hint}</p>}
+            </div>
+          ))}
+        </div>
+
+        {/* Webhook URLs */}
+        <div className="bg-slate-50 rounded-2xl border border-slate-100 p-5 space-y-3">
+          <h3 className="font-black text-slate-800 text-sm mb-1">Webhook URLs</h3>
+          {[
+            { label: 'SMS Status Callback', url: smsCbUrl, hint: 'Set in Console → Phone Numbers → your number → "A Message Comes In"' },
+            { label: 'Call Status Callback', url: callCbUrl, hint: 'Set in Console → Phone Numbers → your number → "A Call Comes In"' },
+          ].map(w => (
+            <div key={w.label}>
+              <label className="text-[11px] font-bold text-slate-500 block mb-1">{w.label}</label>
+              <div className="flex items-center gap-2 bg-white rounded-xl border border-slate-200 px-3 py-2">
+                <code className="flex-1 text-xs font-mono text-slate-700 truncate">{w.url}</code>
+                <button onClick={() => navigator.clipboard.writeText(w.url)} className="text-[10px] font-bold text-blue-500 hover:text-blue-700 shrink-0">Copy</button>
+              </div>
+              <p className="text-[10px] text-slate-400 mt-1">{w.hint}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Save / Disconnect */}
+        <div className="flex items-center justify-between pt-2">
+          {isConnected && (
+            <Button variant="ghost" className="h-10 px-4 text-red-500 hover:text-red-700 hover:bg-red-50 text-sm font-bold" onClick={handleDisconnectTwilio}>
+              Disconnect
+            </Button>
+          )}
+          <div className="ml-auto">
+            <Button disabled={isSavingTwilio} className="h-10 px-6 rounded-full bg-slate-900 text-white text-sm font-bold shadow-lg disabled:opacity-40" onClick={handleSaveTwilio}>
+              {isSavingTwilio ? 'Saving…' : isConnected ? 'Update Credentials' : 'Save & Connect'}
+            </Button>
+          </div>
+        </div>
+
+        {/* SMS + Call actions (only when connected) */}
+        {isConnected && (
+          <>
+            {/* Send SMS */}
+            <div className="bg-white rounded-2xl border border-slate-100 p-5 space-y-3">
+              <h3 className="font-black text-slate-800 text-sm">Send SMS</h3>
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">To (phone number)</label>
+                <Input type="tel" placeholder="+91XXXXXXXXXX" value={twilioSmsTo} onChange={e => setTwilioSmsTo(e.target.value)} className="h-10 rounded-xl bg-white border-slate-200 px-4 text-sm" />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">Message</label>
+                <textarea
+                  value={twilioSmsBody}
+                  onChange={e => setTwilioSmsBody(e.target.value)}
+                  placeholder="Type your SMS message…"
+                  rows={3}
+                  className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-400/30 resize-none"
+                />
+              </div>
+              <Button disabled={!twilioSmsTo || !twilioSmsBody || isSendingSms} className="h-9 px-4 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-bold disabled:opacity-40" onClick={handleSendTwilioSms}>
+                {isSendingSms ? 'Sending…' : 'Send SMS'}
+              </Button>
+            </div>
+
+            {/* Voice Call */}
+            <div className="bg-white rounded-2xl border border-slate-100 p-5 space-y-3">
+              <h3 className="font-black text-slate-800 text-sm">Initiate Voice Call</h3>
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">To (phone number)</label>
+                <Input type="tel" placeholder="+91XXXXXXXXXX" value={twilioCallTo} onChange={e => setTwilioCallTo(e.target.value)} className="h-10 rounded-xl bg-white border-slate-200 px-4 text-sm" />
+              </div>
+              <Button disabled={!twilioCallTo || isDialingTwilio} className="h-9 px-4 rounded-xl bg-green-500 hover:bg-green-600 text-white text-sm font-bold disabled:opacity-40" onClick={handleTwilioCall}>
+                {isDialingTwilio ? 'Calling…' : 'Call'}
+              </Button>
+
+              {twilioActionResult && (
+                <div className={`p-3 rounded-xl flex items-center gap-2 text-sm font-medium ${twilioActionResult.success ? 'bg-green-50 text-green-700 border border-green-100' : 'bg-red-50 text-red-700 border border-red-100'}`}>
+                  {twilioActionResult.message}
+                </div>
+              )}
+            </div>
+
+            {/* Logs */}
+            <div className="bg-white rounded-2xl border border-slate-100 p-5 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="font-black text-slate-800 text-sm">Activity Logs</h3>
+                <div className="flex items-center gap-2">
+                  <select value={twilioTabType} onChange={e => setTwilioTabType(e.target.value)} className="text-xs border border-slate-200 rounded-lg px-2 py-1 outline-none">
+                    <option value="all">All</option>
+                    <option value="sms">SMS</option>
+                    <option value="call">Calls</option>
+                  </select>
+                  <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={handleLoadTwilioLogs} disabled={twilioLoadingLogs}>
+                    {twilioLoadingLogs ? 'Loading…' : 'Refresh'}
+                  </Button>
+                </div>
+              </div>
+              {twilioLogs.length === 0
+                ? <p className="text-sm text-slate-400 text-center py-8">No logs yet. Send an SMS or make a call to see history.</p>
+                : (
+                  <div className="space-y-2 max-h-72 overflow-y-auto">
+                    {twilioLogs.map(log => (
+                      <div key={log.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${log.type === 'sms' ? 'bg-blue-100' : 'bg-green-100'}`}>
+                          <span className="text-[9px] font-black uppercase tracking-wide text-slate-600">{log.type}</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold text-slate-800 truncate">{log.contact_name || log.to_number}</p>
+                          {log.body && <p className="text-[11px] text-slate-400 truncate">{log.body}</p>}
+                          <p className="text-[10px] text-slate-400">{log.direction} · {log.status} {log.duration ? `· ${log.duration}s` : ''}</p>
+                        </div>
+                        <span className="text-[10px] text-slate-400 shrink-0">{log.created_at ? new Date(log.created_at).toLocaleString([], { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}</span>
+                      </div>
+                    ))}
+                  </div>
+                )
+              }
+            </div>
+
+            {/* Workflow Events */}
+            <div className="bg-amber-50 border border-amber-100 rounded-2xl p-5">
+              <h3 className="font-black text-slate-800 text-sm mb-3">Workflow Trigger Events</h3>
+              <div className="space-y-2">
+                {[
+                  { event: 'sms_delivered', desc: 'Fires when an outbound SMS is delivered to the recipient.' },
+                  { event: 'sms_failed', desc: 'Fires when an SMS delivery fails.' },
+                  { event: 'call_completed', desc: 'Fires when a call ends successfully.' },
+                  { event: 'call_answered', desc: 'Fires when a call is picked up (in-progress).' },
+                  { event: 'call_failed', desc: 'Fires when a call is not answered or fails.' },
+                ].map(e => (
+                  <div key={e.event} className="flex items-start gap-2">
+                    <code className="text-[10px] font-black bg-white border border-amber-200 text-amber-700 px-2 py-0.5 rounded-lg shrink-0">{e.event}</code>
+                    <p className="text-[11px] text-slate-500">{e.desc}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    );
+  };
+
   const renderDetail = () => {
     if (!activeIntegration) return null;
     if (activeIntegration.id === 'whatsapp') return renderWhatsAppDetail();
     if (activeIntegration.id === 'telegram') return renderTelegramDetail();
     if (activeIntegration.id === 'instagram') return renderInstagramDetail();
     if (activeIntegration.id === 'exotel') return renderExotelDetail();
+    if (activeIntegration.id === 'twilio') return renderTwilioDetail();
     return renderGenericDetail();
   };
 

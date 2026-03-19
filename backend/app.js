@@ -47,6 +47,7 @@ const emailTemplatesRouter = require('./src/routes/emailTemplates');
 const aiAgentRouter = require('./src/routes/aiAgent');
 const { publicRouter: webhookTriggerPublic, privateRouter: webhookTriggerPrivate } = require('./src/routes/webhookTriggers');
 const exotelWebhookRouter = require('./src/webhooks/exotel');
+const twilioWebhookRouter = require('./src/webhooks/twilio');
 const auth = require('./src/middlewares/auth');
 
 // Read environment-based config for HTTP concerns. Defaults are safe for dev.
@@ -130,6 +131,7 @@ function createApp() {
   app.use('/webhooks/kylas', require('./src/webhooks/generic/kylas'));
   app.use('/webhooks/razorpay', require('./src/webhooks/razorpay'));
   app.use('/webhooks/exotel', exotelWebhookRouter);
+  app.use('/webhooks/twilio', twilioWebhookRouter);
   app.use('/api/auth', authRouter); // Login
   app.use('/api/auth', instagramAuthRouter); // Instagram Callback
   app.use('/api/auth/whatsapp', whatsappAuthRouter); // WhatsApp Callback/Onboarding
@@ -151,6 +153,7 @@ function createApp() {
   app.use('/api/settings', settingsRouter);
   app.use('/api/settings/razorpay', require('./src/routes/razorpaySettings'));
   app.use('/api/settings/exotel', require('./src/routes/exotelSettings'));
+  app.use('/api/settings/twilio', require('./src/routes/twilioSettings'));
   app.use('/api/whatsappFlows', whatsappFlowsRouter);
   app.use('/api/contacts', contactsRouter);
   app.use('/api/labels', labelsRouter);

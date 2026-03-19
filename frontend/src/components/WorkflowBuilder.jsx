@@ -714,6 +714,42 @@ function WebhookNodeConfig({ node, workflowId, updateNodeFields }) {
   );
 }
 
+const TwilioSmsNode = ({ data, selected }) => (
+  <NodeWrapper selected={selected} title="Send SMS (Twilio)" icon={MessageSquare} colorClass="bg-red-500" status={data.nodeStatus}>
+    <div className="space-y-1.5">
+      <div className="text-[10px] text-slate-600 flex items-center gap-1">
+        <MessageSquare size={10} className="text-red-500" />
+        <span className="font-semibold">To:</span>
+        <span className="truncate font-mono">{data.toNumber || '{{contact.phone}}'}</span>
+      </div>
+      {data.message && (
+        <div className="text-[10px] text-slate-500 line-clamp-2 italic">"{data.message}"</div>
+      )}
+    </div>
+    <Handle type="target" position={Position.Top} />
+    <Handle type="source" position={Position.Bottom} id="sent" style={{ left: '30%' }} />
+    <Handle type="source" position={Position.Bottom} id="failed" style={{ left: '70%' }} />
+  </NodeWrapper>
+);
+
+const TwilioCallNode = ({ data, selected }) => (
+  <NodeWrapper selected={selected} title="Voice Call (Twilio)" icon={Phone} colorClass="bg-red-600" status={data.nodeStatus}>
+    <div className="space-y-1.5">
+      <div className="text-[10px] text-slate-600 flex items-center gap-1">
+        <Phone size={10} className="text-red-600" />
+        <span className="font-semibold">To:</span>
+        <span className="truncate font-mono">{data.toNumber || '{{contact.phone}}'}</span>
+      </div>
+      {data.record && (
+        <span className="inline-block text-[8px] font-bold bg-red-50 text-red-600 border border-red-100 px-1.5 py-0.5 rounded">REC</span>
+      )}
+    </div>
+    <Handle type="target" position={Position.Top} />
+    <Handle type="source" position={Position.Bottom} id="answered" style={{ left: '25%' }} />
+    <Handle type="source" position={Position.Bottom} id="failed" style={{ left: '75%' }} />
+  </NodeWrapper>
+);
+
 const ExotelCallNode = ({ data, selected }) => (
   <NodeWrapper selected={selected} title="Initiate Call" icon={Phone} colorClass="bg-orange-500" status={data.nodeStatus}>
     <div className="space-y-1.5">
@@ -761,6 +797,8 @@ const nodeTypes = {
   xolox_event: XoloxEventNode,
   notification: NotificationNode,
   exotel_call: ExotelCallNode,
+  twilio_sms: TwilioSmsNode,
+  twilio_call: TwilioCallNode,
 };
 
 const COURSE_PAPERS = {
@@ -1508,6 +1546,12 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
           unit: 'hours'
         };
       }
+      if (type === 'twilio_sms') {
+        newNode.data = { label: 'Send SMS', toNumber: '{{contact.phone}}', message: '' };
+      }
+      if (type === 'twilio_call') {
+        newNode.data = { label: 'Voice Call', toNumber: '{{contact.phone}}', fromNumber: '', record: false };
+      }
       if (type === 'exotel_call') {
         newNode.data = {
           label: 'Initiate Call',
@@ -2082,6 +2126,30 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
     setSelectedNode(node);
   }, [setNodes]);
 
+  const handleAddTwilioSmsAction = useCallback(() => {
+    const nodeId = getId();
+    const node = {
+      id: nodeId,
+      type: 'twilio_sms',
+      position: { x: 0, y: 400 },
+      data: { label: 'Send SMS', toNumber: '{{contact.phone}}', message: '' },
+    };
+    setNodes(nds => [...nds, node]);
+    setSelectedNode(node);
+  }, [setNodes]);
+
+  const handleAddTwilioCallAction = useCallback(() => {
+    const nodeId = getId();
+    const node = {
+      id: nodeId,
+      type: 'twilio_call',
+      position: { x: 0, y: 400 },
+      data: { label: 'Voice Call', toNumber: '{{contact.phone}}', fromNumber: '', record: false },
+    };
+    setNodes(nds => [...nds, node]);
+    setSelectedNode(node);
+  }, [setNodes]);
+
   const handleAddPaymentReminderAction = useCallback(() => {
     const nodeId = getId();
     const node = {
@@ -2199,6 +2267,18 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
         const failEdge = edges.find(e => e.source === node.id && e.sourceHandle === 'fail');
         if (successEdge) nodeDef.onSuccess = successEdge.target;
         if (failEdge) nodeDef.onFail = failEdge.target;
+      } else if (node.type === 'twilio_sms') {
+        const sentEdge = edges.find(e => e.source === node.id && e.sourceHandle === 'sent');
+        const failedEdge = edges.find(e => e.source === node.id && e.sourceHandle === 'failed');
+        nodeDef.routes = {};
+        if (sentEdge) nodeDef.routes.sent = sentEdge.target;
+        if (failedEdge) nodeDef.routes.failed = failedEdge.target;
+      } else if (node.type === 'twilio_call') {
+        const answeredEdge = edges.find(e => e.source === node.id && e.sourceHandle === 'answered');
+        const failedEdge = edges.find(e => e.source === node.id && e.sourceHandle === 'failed');
+        nodeDef.routes = {};
+        if (answeredEdge) nodeDef.routes.answered = answeredEdge.target;
+        if (failedEdge) nodeDef.routes.failed = failedEdge.target;
       } else if (node.type === 'exotel_call') {
         const answeredEdge = edges.find(e => e.source === node.id && e.sourceHandle === 'answered');
         const failedEdge = edges.find(e => e.source === node.id && e.sourceHandle === 'failed');
@@ -3259,6 +3339,48 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 <div className="min-w-0">
                   <div className="text-sm font-semibold text-orange-800">Exotel Call</div>
                   <div className="text-xs text-orange-600">Initiate VoIP call</div>
+                </div>
+              </div>
+            )}
+
+            {viewMode === 'canvas' && (
+              <div
+                className="flex items-center gap-3 p-3 rounded-md bg-red-50 border border-red-200 cursor-pointer hover:bg-red-100 transition-colors"
+                draggable
+                onDragStart={(e) => {
+                    e.dataTransfer.setData('application/reactflow', 'twilio_sms');
+                    e.dataTransfer.effectAllowed = 'move';
+                }}
+                onClick={handleAddTwilioSmsAction}
+                title="Send an SMS via Twilio"
+              >
+                <div className="w-9 h-9 rounded-md bg-red-500 flex items-center justify-center shrink-0">
+                  <MessageSquare size={16} className="text-white" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-red-800">Twilio SMS</div>
+                  <div className="text-xs text-red-600">Send SMS message</div>
+                </div>
+              </div>
+            )}
+
+            {viewMode === 'canvas' && (
+              <div
+                className="flex items-center gap-3 p-3 rounded-md bg-red-50 border border-red-200 cursor-pointer hover:bg-red-100 transition-colors"
+                draggable
+                onDragStart={(e) => {
+                    e.dataTransfer.setData('application/reactflow', 'twilio_call');
+                    e.dataTransfer.effectAllowed = 'move';
+                }}
+                onClick={handleAddTwilioCallAction}
+                title="Make an outbound voice call via Twilio"
+              >
+                <div className="w-9 h-9 rounded-md bg-red-600 flex items-center justify-center shrink-0">
+                  <Phone size={16} className="text-white" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-red-800">Twilio Call</div>
+                  <div className="text-xs text-red-600">Outbound voice call</div>
                 </div>
               </div>
             )}
@@ -5339,6 +5461,122 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                             <div className="w-2 h-2 rounded-full bg-red-500" />
                             <span className="text-xs font-bold text-red-800">FAILED / BUSY</span>
                           </div>
+                          <span className="text-[9px] text-red-600 font-medium">Handle: failed</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {selectedNode.type === 'twilio_sms' && (
+                <div className="space-y-6">
+                  <div className="p-4 bg-red-50 rounded-lg border border-red-100 flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-red-500 flex items-center justify-center text-white shadow-sm">
+                      <MessageSquare size={20} />
+                    </div>
+                    <div>
+                      <span className="text-xs font-semibold text-red-800 uppercase tracking-tight">Twilio</span>
+                      <h3 className="text-sm font-bold text-slate-800">Send SMS</h3>
+                    </div>
+                  </div>
+                  <div className="space-y-4 px-1 pb-10">
+                    <div className="p-3 bg-blue-50 rounded-xl border border-blue-100">
+                      <p className="text-[10px] text-blue-700 font-medium leading-normal">
+                        Sends an SMS via Twilio to the specified number. Use <code className="bg-blue-100 px-1 rounded">{'{{contact.phone}}'}</code> for the current contact. Twilio must be connected in Settings → Integrations.
+                      </p>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-500 uppercase">To Number</label>
+                      <input
+                        className="w-full text-sm p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-red-500/20 focus:outline-none"
+                        value={selectedNode.data.toNumber || '{{contact.phone}}'}
+                        onChange={e => updateNodeData('toNumber', e.target.value)}
+                        placeholder="{{contact.phone}} or +91XXXXXXXXXX"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-500 uppercase">SMS Message</label>
+                      <textarea
+                        className="w-full text-sm p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-red-500/20 focus:outline-none resize-none"
+                        rows={4}
+                        value={selectedNode.data.message || ''}
+                        onChange={e => updateNodeData('message', e.target.value)}
+                        placeholder="Hello {{contact.name}}, your order is confirmed!"
+                      />
+                      <p className="text-[10px] text-slate-400">Supports variables like {'{{contact.name}}'}.</p>
+                    </div>
+                    <div className="space-y-2 mt-2">
+                      <label className="text-[10px] font-bold text-slate-500 uppercase">Branches</label>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="p-3 bg-green-50 border border-green-100 rounded-xl">
+                          <div className="flex items-center gap-1.5 mb-1"><div className="w-2 h-2 rounded-full bg-green-500" /><span className="text-xs font-bold text-green-800">SENT</span></div>
+                          <span className="text-[9px] text-green-600 font-medium">Handle: sent</span>
+                        </div>
+                        <div className="p-3 bg-red-50 border border-red-100 rounded-xl">
+                          <div className="flex items-center gap-1.5 mb-1"><div className="w-2 h-2 rounded-full bg-red-500" /><span className="text-xs font-bold text-red-800">FAILED</span></div>
+                          <span className="text-[9px] text-red-600 font-medium">Handle: failed</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {selectedNode.type === 'twilio_call' && (
+                <div className="space-y-6">
+                  <div className="p-4 bg-red-50 rounded-lg border border-red-100 flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-red-600 flex items-center justify-center text-white shadow-sm">
+                      <Phone size={20} />
+                    </div>
+                    <div>
+                      <span className="text-xs font-semibold text-red-800 uppercase tracking-tight">Twilio</span>
+                      <h3 className="text-sm font-bold text-slate-800">Outbound Voice Call</h3>
+                    </div>
+                  </div>
+                  <div className="space-y-4 px-1 pb-10">
+                    <div className="p-3 bg-blue-50 rounded-xl border border-blue-100">
+                      <p className="text-[10px] text-blue-700 font-medium leading-normal">
+                        Places an outbound call via Twilio. Use <code className="bg-blue-100 px-1 rounded">{'{{contact.phone}}'}</code> to call the current contact. Twilio must be connected in Settings → Integrations.
+                      </p>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-500 uppercase">To Number</label>
+                      <input
+                        className="w-full text-sm p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-red-500/20 focus:outline-none"
+                        value={selectedNode.data.toNumber || '{{contact.phone}}'}
+                        onChange={e => updateNodeData('toNumber', e.target.value)}
+                        placeholder="{{contact.phone}} or +91XXXXXXXXXX"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-500 uppercase">From Number (optional)</label>
+                      <input
+                        className="w-full text-sm p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-red-500/20 focus:outline-none"
+                        value={selectedNode.data.fromNumber || ''}
+                        onChange={e => updateNodeData('fromNumber', e.target.value)}
+                        placeholder="Leave blank to use default from Settings"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        id="twilio_record"
+                        checked={!!selectedNode.data.record}
+                        onChange={e => updateNodeData('record', e.target.checked)}
+                        className="w-4 h-4 accent-red-500"
+                      />
+                      <label htmlFor="twilio_record" className="text-sm text-slate-700 font-medium">Record this call</label>
+                    </div>
+                    <div className="space-y-2 mt-2">
+                      <label className="text-[10px] font-bold text-slate-500 uppercase">Branches</label>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="p-3 bg-green-50 border border-green-100 rounded-xl">
+                          <div className="flex items-center gap-1.5 mb-1"><div className="w-2 h-2 rounded-full bg-green-500" /><span className="text-xs font-bold text-green-800">ANSWERED</span></div>
+                          <span className="text-[9px] text-green-600 font-medium">Handle: answered</span>
+                        </div>
+                        <div className="p-3 bg-red-50 border border-red-100 rounded-xl">
+                          <div className="flex items-center gap-1.5 mb-1"><div className="w-2 h-2 rounded-full bg-red-500" /><span className="text-xs font-bold text-red-800">FAILED / BUSY</span></div>
                           <span className="text-[9px] text-red-600 font-medium">Handle: failed</span>
                         </div>
                       </div>

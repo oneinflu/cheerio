@@ -521,6 +521,24 @@ async function runMigrations() {
           console.log('[migrate] exotel_settings table already exists.');
         }
 
+        // 0026 – twilio_settings and twilio_logs tables
+        const twilioSettingsRes = await client.query(`
+          SELECT EXISTS (
+            SELECT FROM information_schema.tables
+            WHERE  table_schema = 'public'
+            AND    table_name   = 'twilio_settings'
+          );
+        `);
+        if (!twilioSettingsRes.rows[0].exists) {
+          console.log('[migrate] Adding twilio_settings and twilio_logs tables...');
+          await client.query('BEGIN');
+          await runSQLFile(client, path.join(__dirname, '..', 'db', 'migrations', '0026_twilio_settings.sql'));
+          await client.query('COMMIT');
+          console.log('[migrate] Applied 0026_twilio_settings migration.');
+        } else {
+          console.log('[migrate] twilio_settings table already exists.');
+        }
+
         return;
 
 

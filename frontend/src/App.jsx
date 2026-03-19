@@ -99,6 +99,7 @@ import GalleryPage from './components/GalleryPage.jsx';
 import LandingPage from './components/LandingPage.jsx';
 import AiAgentPage from './components/AiAgentPage.jsx';
 import CallsPage from './components/CallsPage.jsx';
+import SmsPage from './components/SmsPage.jsx';
 import OnboardingTour from './components/OnboardingTour.jsx';
 import { connectSocket } from './socket.js';
 import { getInbox, getInboxCounts, getMessages, claimConversation, reassignConversation, forceReassignConversation, releaseConversation, markAsRead, resolveConversation, deleteConversation, blockConversation, unblockConversation, pinConversation, updateWorkflow, getTeamUser, getTeamUsers, reassignExternalLead, toggleAiForConversation, completeOnboarding } from './api.js';
@@ -211,6 +212,7 @@ export default function App() {
       instagram:       'Instagram — Social Inbox',
       telegram:        'Telegram — Bot Inbox',
       calls:           'Calls — Exotel VoIP',
+      sms:             'SMS — Twilio Messaging',
       gallery:         'File Manager — Media Assets',
     };
     document.title = pageTitles[activePage] ? `${pageTitles[activePage]} | Greeto` : 'Greeto';
@@ -1006,6 +1008,10 @@ export default function App() {
                 <div style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Phone size={18} /></div>
                 <span className="ml-2 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100 text-sm font-medium">Calls</span>
               </button>
+              <button style={navBtn('sms')} onClick={() => setActivePage('sms')} title="SMS">
+                <div style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><MessageSquare size={18} /></div>
+                <span className="ml-2 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100 text-sm font-medium">SMS</span>
+              </button>
               <button style={navBtn('gallery')} onClick={() => setActivePage('gallery')} title="File Manager">
                 <div style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><FileText size={18} /></div>
                 <span className="ml-2 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100 text-sm font-medium">File Manager</span>
@@ -1084,6 +1090,7 @@ export default function App() {
         {activePage === 'instagram' && <InstagramPage currentUser={currentUser} socket={socket} />}
         {activePage === 'telegram' && <TelegramPage currentUser={currentUser} socket={socket} />}
         {activePage === 'calls' && <CallsPage currentUser={currentUser} />}
+        {activePage === 'sms' && <SmsPage currentUser={currentUser} />}
         {activePage === 'gallery' && <GalleryPage />}
         {activePage === 'ai-agent' && <AiAgentPage />}
 

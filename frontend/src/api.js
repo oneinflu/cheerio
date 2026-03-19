@@ -1234,3 +1234,70 @@ export async function getExotelCallLogs(teamId, { limit = 25, offset = 0 } = {})
   const res = await fetch(`/api/settings/exotel/calls?${params.toString()}`, { headers });
   return res.json();
 }
+
+// ─── Twilio ───────────────────────────────────────────────────────────────────
+
+export async function getTwilioSettings(teamId) {
+  const params = new URLSearchParams();
+  if (teamId) params.set('teamId', teamId);
+  const headers = getAuthHeaders();
+  const res = await fetch(`/api/settings/twilio?${params.toString()}`, { headers });
+  return res.json();
+}
+
+export async function updateTwilioSettings(data, teamId) {
+  const params = new URLSearchParams();
+  if (teamId) params.set('teamId', teamId);
+  const headers = getAuthHeaders();
+  const res = await fetch(`/api/settings/twilio?${params.toString()}`, {
+    method: 'PUT',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  });
+  return res.json();
+}
+
+export async function disconnectTwilio(teamId) {
+  const params = new URLSearchParams();
+  if (teamId) params.set('teamId', teamId);
+  const headers = getAuthHeaders();
+  const res = await fetch(`/api/settings/twilio?${params.toString()}`, {
+    method: 'DELETE', headers
+  });
+  return res.json();
+}
+
+export async function sendTwilioSms(data, teamId) {
+  const params = new URLSearchParams();
+  if (teamId) params.set('teamId', teamId);
+  const headers = getAuthHeaders();
+  const res = await fetch(`/api/settings/twilio/sms?${params.toString()}`, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  });
+  return res.json();
+}
+
+export async function initiateTwilioCall(data, teamId) {
+  const params = new URLSearchParams();
+  if (teamId) params.set('teamId', teamId);
+  const headers = getAuthHeaders();
+  const res = await fetch(`/api/settings/twilio/call?${params.toString()}`, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  });
+  return res.json();
+}
+
+export async function getTwilioLogs(teamId, { type, limit = 25, offset = 0 } = {}) {
+  const params = new URLSearchParams();
+  if (teamId) params.set('teamId', teamId);
+  if (type) params.set('type', type);
+  params.set('limit', limit);
+  params.set('offset', offset);
+  const headers = getAuthHeaders();
+  const res = await fetch(`/api/settings/twilio/logs?${params.toString()}`, { headers });
+  return res.json();
+}
