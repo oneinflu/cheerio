@@ -1740,7 +1740,11 @@ export default function SettingsPage({ currentUser }) {
     const callCbUrl = `${window.location.origin}/webhooks/twilio/call`;
 
     return (
-      <div className="flex-1 overflow-y-auto p-6 space-y-6">
+      <div className="p-6 max-w-3xl mx-auto space-y-5">
+        <Button variant="ghost" size="sm" className="text-slate-500 hover:text-slate-900 -ml-2" onClick={() => setActiveIntegrationId(null)}>
+          <ArrowLeft className="w-4 h-4 mr-1.5" /> All Integrations
+        </Button>
+
         {/* Header */}
         <div className="flex items-start gap-4 pb-4 border-b border-slate-100">
           <div className="w-14 h-14 bg-white rounded-2xl border border-slate-100 shadow-sm flex items-center justify-center p-3 shrink-0">
