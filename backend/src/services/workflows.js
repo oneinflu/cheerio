@@ -748,7 +748,7 @@ async function runWorkflow(id, phoneNumber, context = {}) {
         }
 
 
-      } else if (currentNode.type === 'payment_request') {
+      } else if (currentNode.type === 'payment_request' || currentNode.type === 'razorpay_link') {
         const d = currentNode.data || {};
         const amount = parseFloat(d.amount || '0');
         const type = d.requestType || 'course';
@@ -833,7 +833,7 @@ async function runWorkflow(id, phoneNumber, context = {}) {
           } catch (e) { }
         }
 
-      } else if (currentNode.type === 'payment_reminder') {
+      } else if (currentNode.type === 'payment_reminder' || currentNode.type === 'razorpay_status') {
         const d = currentNode.data || {};
         const duration = parseInt(d.duration || '24', 10);
         const unit = d.unit || 'hours';

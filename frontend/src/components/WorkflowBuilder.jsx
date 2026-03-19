@@ -728,6 +728,8 @@ const nodeTypes = {
   feedback: FeedbackNode,
   payment_request: PaymentRequestNode,
   payment_reminder: PaymentReminderNode,
+  razorpay_link: PaymentRequestNode,
+  razorpay_status: PaymentReminderNode,
   campaign_trigger: CampaignTriggerNode,
   campaign_condition: CampaignConditionNode,
   incoming_webhook: IncomingWebhookNode,
@@ -1459,9 +1461,9 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
       if (type === 'notification') {
         newNode.data = { message: 'Alert team!' };
       }
-      if (type === 'payment_request') {
+      if (type === 'payment_request' || type === 'razorpay_link') {
         newNode.data = {
-          label: 'Payment Request',
+          label: type === 'razorpay_link' ? 'Razorpay Link' : 'Payment Request',
           requestType: 'course',
           amount: '15000',
           course: 'CPA US',
@@ -1474,11 +1476,11 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
           footerText: 'Official Razorpay link',
         };
       }
-      if (type === 'payment_reminder') {
+      if (type === 'payment_reminder' || type === 'razorpay_status') {
         newNode.data = {
-          label: 'Payment Reminder',
+          label: type === 'razorpay_status' ? 'Razorpay Status' : 'Payment Reminder',
           duration: '24',
-          unit: 'hours',
+          unit: 'hours'
         };
       }
       if (type === 'delay') {
@@ -3033,6 +3035,53 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 <div className="min-w-0">
                   <div className="text-sm font-semibold text-yellow-800">Feedback Collection</div>
                   <div className="text-xs text-yellow-600">Track customer CSAT</div>
+                </div>
+              </div>
+            )}
+
+            {/* Razorpay Payments */}
+            {viewMode === 'canvas' && (
+              <div className="pt-4 pb-1">
+                <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] px-1">Razorpay Integrations</h3>
+              </div>
+            )}
+            {viewMode === 'canvas' && (
+              <div
+                className="flex items-center gap-3 p-3 rounded-md bg-indigo-50 border border-indigo-200 cursor-pointer hover:bg-indigo-100 transition-colors"
+                draggable
+                onDragStart={(e) => {
+                    e.dataTransfer.setData('application/reactflow', 'razorpay_link');
+                    e.dataTransfer.effectAllowed = 'move';
+                }}
+                onClick={() => handleAddNodeFromPalette('razorpay_link')}
+                title="Create and send a Razorpay payment link"
+              >
+                <div className="w-9 h-9 rounded-md bg-indigo-600 flex items-center justify-center shrink-0">
+                  <CreditCard size={16} className="text-white" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-indigo-800">Create Payment Link</div>
+                  <div className="text-xs text-indigo-600">Razorpay auto-generation</div>
+                </div>
+              </div>
+            )}
+            {viewMode === 'canvas' && (
+              <div
+                className="flex items-center gap-3 p-3 rounded-md bg-indigo-50 border border-indigo-200 cursor-pointer hover:bg-indigo-100 transition-colors"
+                draggable
+                onDragStart={(e) => {
+                    e.dataTransfer.setData('application/reactflow', 'razorpay_status');
+                    e.dataTransfer.effectAllowed = 'move';
+                }}
+                onClick={() => handleAddNodeFromPalette('razorpay_status')}
+                title="Check payment status and branch the flow"
+              >
+                <div className="w-9 h-9 rounded-md bg-indigo-600 flex items-center justify-center shrink-0">
+                  <RefreshCw size={16} className="text-white" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-indigo-800">Check Payment Status</div>
+                  <div className="text-xs text-indigo-600">Branch on Paid/Unpaid</div>
                 </div>
               </div>
             )}
@@ -4743,15 +4792,17 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 </div>
               )}
 
-              {selectedNode.type === 'payment_request' && (
+              {(selectedNode.type === 'payment_request' || selectedNode.type === 'razorpay_link') && (
                 <div className="space-y-6">
                   <div className="p-4 bg-indigo-50 rounded-lg border border-indigo-100 flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center text-white shadow-sm">
                       <CreditCard size={20} />
                     </div>
                     <div>
-                      <span className="text-xs font-semibold text-indigo-800 uppercase tracking-tight">Payment Request</span>
-                      <h3 className="text-sm font-bold text-slate-800">Generate Transction Link</h3>
+                      <span className="text-xs font-semibold text-indigo-800 uppercase tracking-tight">
+                        {selectedNode.type === 'razorpay_link' ? 'Razorpay Link' : 'Payment Request'}
+                      </span>
+                      <h3 className="text-sm font-bold text-slate-800">Generate & Send</h3>
                     </div>
                   </div>
 
@@ -5043,14 +5094,16 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 </div>
               )}
 
-              {selectedNode.type === 'payment_reminder' && (
+              {(selectedNode.type === 'payment_reminder' || selectedNode.type === 'razorpay_status') && (
                 <div className="space-y-6">
                   <div className="p-4 bg-orange-50 rounded-lg border border-orange-100 flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-orange-500 flex items-center justify-center text-white shadow-sm">
                       <BellRing size={20} />
                     </div>
                     <div>
-                      <span className="text-xs font-semibold text-orange-800 uppercase tracking-tight">Payment Reminder</span>
+                      <span className="text-xs font-semibold text-orange-800 uppercase tracking-tight">
+                        {selectedNode.type === 'razorpay_status' ? 'Razorpay Status' : 'Payment Reminder'}
+                      </span>
                       <h3 className="text-sm font-bold text-slate-800">Smart Follow-up</h3>
                     </div>
                   </div>
