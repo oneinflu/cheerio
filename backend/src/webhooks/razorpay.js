@@ -42,12 +42,16 @@ router.post('/', async (req, res) => {
     // Verify signature if secret is configured
     try {
         const creds = await getCredentials(teamId);
-        if (creds.webhookSecret && signature) {
+        if (!creds.webhookSecret) {
+            console.error(`[RazorpayWebhook] [Team: ${teamId}] No webhook secret configured. Rejecting.`);
+            return res.status(400).send('Razorpay integration not configured for this team.');
+        }
+
+        if (signature) {
             const isValid = verifySignature(req.rawBody || JSON.stringify(payload), signature, creds.webhookSecret);
             if (!isValid) {
                 console.warn(`[RazorpayWebhook] [Team: ${teamId}] Invalid signature detected.`);
-                // In production, you might want to return 400 here
-                // return res.status(400).send('Invalid signature');
+                return res.status(400).send('Invalid signature');
             }
         }
     } catch (err) {

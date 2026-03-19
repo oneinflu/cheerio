@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   ReactFlow,
   addEdge,
@@ -2175,6 +2175,25 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
   };
 
   const [saveStatus, setSaveStatus] = useState(null); // null | 'saving' | 'saved' | 'error'
+  const [autoSaveStatus, setAutoSaveStatus] = useState(null); // null | 'saving' | 'saved'
+
+  // Auto-save every 10 seconds
+  useEffect(() => {
+    if (!onSave || !initialWorkflow?.id) return;
+    const interval = setInterval(async () => {
+      setAutoSaveStatus('saving');
+      try {
+        const json = handleSave();
+        await onSave(json);
+        setAutoSaveStatus('saved');
+        setTimeout(() => setAutoSaveStatus(null), 2000);
+      } catch {
+        setAutoSaveStatus(null);
+      }
+    }, 10000);
+    return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onSave, initialWorkflow?.id, nodes, edges]);
 
   const handleManualSave = async () => {
     setSaveStatus('saving');
@@ -2767,6 +2786,15 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
             {hasIncomingWebhookTrigger ? <Link size={16} /> : <Play size={16} />}
             Run Test
           </Button>
+          {autoSaveStatus && (
+            <span className="flex items-center gap-1.5 text-xs text-slate-500">
+              {autoSaveStatus === 'saving' ? (
+                <><Loader2 size={13} className="animate-spin text-slate-400" /> Auto-saving…</>
+              ) : (
+                <><Check size={13} className="text-green-500" /> Auto-saved</>
+              )}
+            </span>
+          )}
           <Button
             onClick={handleManualSave}
             disabled={saveStatus === 'saving'}

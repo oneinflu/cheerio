@@ -829,7 +829,10 @@ async function runWorkflow(id, phoneNumber, context = {}) {
           console.error(`[WorkflowRunner] Payment request node failed: ${err.message}`);
           try {
             const conversationId = await ensureConversation(phoneNumber);
-            await outboundWhatsApp.sendText(conversationId, `⚠️ Payment link generation failed. Error: ${err.message}`);
+            const errMsg = err.message.includes('not configured')
+              ? '⚠️ Razorpay is not connected yet. Please go to *Integrations > Payments* to set up your account and come back.'
+              : `⚠️ Payment link generation failed: ${err.message}`;
+            await outboundWhatsApp.sendText(conversationId, errMsg);
           } catch (e) { }
         }
 

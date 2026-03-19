@@ -7,13 +7,7 @@ const db = require('../../db');
  * Get Razorpay credentials for a team
  */
 async function getCredentials(teamId) {
-    if (!teamId) {
-        return {
-            keyId: process.env.RAZORPAY_KEY_ID,
-            keySecret: process.env.RAZORPAY_KEY_SECRET,
-            webhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET
-        };
-    }
+    if (!teamId) return {};
 
     try {
         const result = await db.query(
@@ -32,12 +26,7 @@ async function getCredentials(teamId) {
         console.error('[Razorpay] Error fetching credentials from DB:', err.message);
     }
 
-    // Fallback to env vars
-    return {
-        keyId: process.env.RAZORPAY_KEY_ID,
-        keySecret: process.env.RAZORPAY_KEY_SECRET,
-        webhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET
-    };
+    return {};
 }
 
 /**
