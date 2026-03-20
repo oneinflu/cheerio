@@ -599,26 +599,22 @@ export default function SettingsPage({ currentUser }) {
     if (!window.FB) return alert('SDK loading...');
     setLoadingWhatsapp(true);
 
-    // Modern Embedded Signup configuration
+    // Standard Facebook Login (Instagram Style) to bypass Meta restrictions
     const loginOptions = {
-      config_id: '784402480993297', // Replace with your WhatsApp Configuration ID from App Dashboard
-      response_type: 'code',
-      override_default_response_type: true,
       scope: 'whatsapp_business_management,whatsapp_business_messaging,business_management,public_profile'
     };
 
     window.FB.login((response) => {
       if (response.authResponse) {
-        const payload = response.authResponse.code
-          ? { code: response.authResponse.code }
-          : { accessToken: response.authResponse.accessToken };
+        // Just use the access token (same as Instagram)
+        const payload = { accessToken: response.authResponse.accessToken };
 
         onboardWhatsApp(payload, teamId).then(res => {
           if (res.success) {
             if (res.data.phones?.length > 1) {
               setDiscoveredPhones(res.data.phones);
               setDiscoveredWabaId(res.data.businessAccountId);
-              setDiscoveredToken(res.data.accessToken);
+              setDiscoveredToken(res.data.accessToken || response.authResponse.accessToken);
               setIsPhoneSelectModalOpen(true);
             } else if (res.data.phones?.length === 1) {
               const p = res.data.phones[0];
@@ -637,6 +633,7 @@ export default function SettingsPage({ currentUser }) {
       } else setLoadingWhatsapp(false);
     }, loginOptions);
   };
+
 
 
   const handleConnectTelegram = async () => {
