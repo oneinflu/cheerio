@@ -702,8 +702,9 @@ export async function forceReassignConversation(conversationId, teamId, newAssig
 }
 
 function getAuthHeaders(contentType = 'application/json') {
-  const token = localStorage.getItem('accessToken');
+  let token = localStorage.getItem('accessToken') || localStorage.getItem('token');
   const user = localStorage.getItem('user');
+
   const decodeJwt = (jwtToken) => {
     try {
       const parts = String(jwtToken || '').split('.');
@@ -750,7 +751,8 @@ function getAuthHeaders(contentType = 'application/json') {
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
     headers['x-user-role'] = role;
-    // Do not send custom team header; backend will derive/fallback
+  } else {
+    console.warn('API call made without authentication token');
   }
   return headers;
 }

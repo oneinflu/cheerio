@@ -293,13 +293,8 @@ export default function App() {
 
   const handleOnboardingComplete = async () => {
     try {
-      // Mark v3 as completed in backend and frontend
-      const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` };
-      await fetch('/api/auth/onboarding', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ version: 'v3' })
-      });
+      // Use the shared API function which correctly handles headers and token
+      await completeOnboarding();
 
       setShowOnboarding(false);
       const updatedUser = { 
