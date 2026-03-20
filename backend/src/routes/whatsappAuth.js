@@ -6,8 +6,9 @@ const db = require('../../db');
 const auth = require('../middlewares/auth');
 
 const GRAPH_BASE = 'https://graph.facebook.com/v21.0';
-const APP_ID = process.env.WHATSAPP_APP_ID || process.env.FACEBOOK_APP_ID;
-const APP_SECRET = process.env.WHATSAPP_APP_SECRET || process.env.FACEBOOK_APP_SECRET;
+const APP_ID = process.env.WHATSAPP_APP_ID || process.env.FACEBOOK_APP_ID || process.env.META_APP_ID;
+const APP_SECRET = process.env.WHATSAPP_APP_SECRET || process.env.FACEBOOK_APP_SECRET || process.env.META_APP_SECRET;
+
 
 async function resolveTeamId(req) {
   if (req.query && req.query.teamId) return req.query.teamId;
@@ -22,14 +23,27 @@ async function resolveTeamId(req) {
  * Handle callback from Embedded Signup (received via frontend popup)
  */
 router.post('/onboard', auth.requireRole('admin', 'super_admin'), async (req, res, next) => {
-  const { accessToken } = req.body;
+  let { accessToken, code } = req.body;
   const teamId = await resolveTeamId(req);
 
-  if (!accessToken) {
-    return res.status(400).json({ error: 'Access token is required' });
+  if (!accessToken && !code) {
+    return res.status(400).json({ error: 'Access token or code is required' });
   }
 
   try {
+    if (code && !accessToken) {
+      console.log('[WhatsApp Auth] Exchanging code for token from Embedded Signup...');
+      const tokenRes = await axios.get(`${GRAPH_BASE}/oauth/access_token`, {
+        params: {
+          client_id: APP_ID,
+          client_secret: APP_SECRET,
+          code: code
+        }
+      });
+      accessToken = tokenRes.data.access_token;
+      console.log('[WhatsApp Auth] Code exchanged for token.');
+    }
+
     // 1. Get WABA IDs associated with this token
     // We'll try multiple ways to find them as Graph API can be inconsistent with field availability
     console.log('[WhatsApp Auth] Exhaustive Search for WABAs starting...');

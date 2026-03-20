@@ -1001,17 +1001,23 @@ export async function updateWhatsAppSettings(data, teamId) {
   });
   return res.json();
 }
-export async function onboardWhatsApp(accessToken, teamId) {
+export async function onboardWhatsApp(payload, teamId) {
   const params = new URLSearchParams();
   if (teamId) params.append('teamId', teamId);
   const headers = getAuthHeaders();
+  
+  const body = typeof payload === 'string' 
+    ? { accessToken: payload } 
+    : payload;
+
   const res = await fetch(`/api/auth/whatsapp/onboard?${params.toString()}`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ accessToken }),
+    body: JSON.stringify(body),
   });
   return res.json();
 }
+
 
 export async function disconnectWhatsApp(phoneNumberId, teamId) {
   const params = new URLSearchParams();

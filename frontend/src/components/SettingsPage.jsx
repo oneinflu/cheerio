@@ -598,9 +598,22 @@ export default function SettingsPage({ currentUser }) {
   const handleConnectWhatsApp = () => {
     if (!window.FB) return alert('SDK loading...');
     setLoadingWhatsapp(true);
+    
+    // Modern Embedded Signup configuration
+    const loginOptions = {
+      config_id: '321531509460250', // Replace with your WhatsApp Configuration ID from App Dashboard
+      response_type: 'code',
+      override_default_response_type: true,
+      scope: 'whatsapp_business_management,whatsapp_business_messaging,business_management,public_profile'
+    };
+
     window.FB.login((response) => {
       if (response.authResponse) {
-        onboardWhatsApp(response.authResponse.accessToken, teamId).then(res => {
+        const payload = response.authResponse.code 
+          ? { code: response.authResponse.code } 
+          : { accessToken: response.authResponse.accessToken };
+
+        onboardWhatsApp(payload, teamId).then(res => {
           if (res.success) {
             if (res.data.phones?.length > 1) {
               setDiscoveredPhones(res.data.phones);
@@ -609,15 +622,22 @@ export default function SettingsPage({ currentUser }) {
               setIsPhoneSelectModalOpen(true);
             } else if (res.data.phones?.length === 1) {
               const p = res.data.phones[0];
-              const s = { phone_number_id: p.id, business_account_id: res.data.businessAccountId, display_phone_number: p.displayPhoneNumber, permanent_token: response.authResponse.accessToken, is_active: true };
+              const s = { 
+                phone_number_id: p.id, 
+                business_account_id: res.data.businessAccountId, 
+                display_phone_number: p.displayPhoneNumber, 
+                permanent_token: res.data.accessToken || response.authResponse.accessToken, 
+                is_active: true 
+              };
               setWhatsappSettings(s);
               setAllWhatsappSettings(prev => [...prev.filter(x => x.phone_number_id !== p.id), s]);
             }
           }
         }).finally(() => setLoadingWhatsapp(false));
       } else setLoadingWhatsapp(false);
-    }, { scope: 'whatsapp_business_management,whatsapp_business_messaging,business_management,public_profile' });
+    }, loginOptions);
   };
+
 
   const handleConnectTelegram = async () => {
     try {
