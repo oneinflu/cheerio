@@ -15,7 +15,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { Button } from './ui/Button';
-import { Save, ArrowLeft, Plus, Clock, MessageSquare, GitBranch, Zap, StopCircle, Loader2, Play, MessageCircle, Code, UserCheck, Tag, Mic, Workflow as WorkflowIcon, Megaphone, Filter, Link, Copy, Check, RefreshCw, Trash2, Globe, Send, ChevronDown, ChevronUp, Image, Video, FileText as FileIcon, Upload, X, Star, CreditCard, BellRing, Bell, Mail, ListChecks, Phone, FileSpreadsheet, Download } from 'lucide-react';const LinkIcon = Link;
+import { Save, ArrowLeft, Plus, Clock, MessageSquare, GitBranch, Zap, StopCircle, Loader2, Play, MessageCircle, Code, UserCheck, Tag, Mic, Workflow as WorkflowIcon, Megaphone, Filter, Link, Copy, Check, RefreshCw, Trash2, Globe, Send, ChevronDown, ChevronUp, Image, Video, FileText as FileIcon, Upload, X, Star, CreditCard, BellRing, Bell, Mail, ListChecks, Phone, Download, Settings } from 'lucide-react';const LinkIcon = Link;
 import { getTemplates, runWorkflow, aiGenerateWorkflow, getWorkflows, getCampaigns, getWebhookEvents, clearWebhookEvents, fetchMediaLibrary, uploadFlowMedia, createPaymentLink, getLabels, getEmailTemplates, getLeadStages } from '../api';
 import { GallerySelectModal } from './GallerySelectModal';
 import { connectSocket } from '../socket';
@@ -2807,7 +2807,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
             <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-green-100 text-green-600 rounded-lg">
-                  <FileSpreadsheet size={24} />
+                  <FileIcon size={24} />
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-slate-900">CSV Bulk Interface</h3>
@@ -3130,7 +3130,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
             onClick={() => setIsCSVModalOpen(true)}
             className="flex items-center gap-2 text-slate-700 border-slate-200 hover:bg-slate-50"
           >
-            <FileSpreadsheet size={16} />
+            <FileIcon size={16} />
             CSV Interface
           </Button>
           <Button
