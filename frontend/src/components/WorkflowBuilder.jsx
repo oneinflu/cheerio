@@ -6561,18 +6561,18 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
         {/* ── Gallery Picker Modal ────────────────────────────────────── */}
         {/* ── FULL-SCREEN INTERACTIVE CSV BUILDER ────────────────────────── */}
         {isCSVModalOpen && (
-          <div className="fixed inset-0 z-[100] bg-slate-900 flex flex-col overflow-hidden animate-in fade-in duration-300">
-            {/* Dark Mode Header */}
-            <div className="h-16 border-b border-slate-800 bg-slate-950 flex items-center justify-between px-8 text-white shadow-lg">
+          <div className="fixed inset-0 z-[100] bg-white flex flex-col overflow-hidden animate-in fade-in duration-300">
+            {/* High-Contrast Header */}
+            <div className="h-16 border-b border-slate-200 bg-white flex items-center justify-between px-8 text-slate-900 shadow-sm">
               <div className="flex items-center gap-4">
-                <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-600/20">
                   <TableIcon size={20} className="text-white" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-black tracking-tight uppercase">Interactive Planning Workspace</h3>
+                  <h3 className="text-sm font-black tracking-tight uppercase text-slate-900">Interactive Planning Workspace</h3>
                   <div className="flex items-center gap-2 mt-0.5">
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                    <span className="text-[10px] font-bold text-slate-400">DRAFTING MODE • {csvBuilderRows.length} STEPS DEFINED</span>
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">DRAFTING MODE • {csvBuilderRows.length} STEPS DEFINED</span>
                   </div>
                 </div>
               </div>
@@ -6580,15 +6580,15 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => setIsShortcutsOpen(!isShortcutsOpen)}
-                  className={`p-2 rounded-lg transition-all ${isShortcutsOpen ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-600/30' : 'bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700'}`}
+                  className={`p-2 rounded-lg transition-all ${isShortcutsOpen ? 'bg-indigo-50 text-indigo-600 border border-indigo-200' : 'bg-slate-50 text-slate-400 border border-slate-200 hover:bg-slate-100 hover:text-slate-600'}`}
                   title="Keyboard Shortcuts"
                 >
                   <Keyboard size={18} />
                 </button>
-                <div className="h-6 w-px bg-slate-800 mx-2" />
+                <div className="h-6 w-px bg-slate-200 mx-2" />
                 <button
                   onClick={() => setIsCSVModalOpen(false)}
-                  className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-xs font-bold transition-all text-slate-300"
+                  className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-lg text-xs font-bold transition-all text-slate-600"
                 >
                   <X size={16} /> EXIT BUILDER
                 </button>
@@ -6597,7 +6597,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
 
             <div className="flex-1 flex overflow-hidden">
               {/* Left Main Workspace */}
-              <div className="flex-1 overflow-auto bg-[#0a0a0f] relative custom-scrollbar">
+              <div className="flex-1 overflow-auto bg-slate-50/30 relative custom-scrollbar">
                 {/* Visual grid background */}
                 <div className="absolute inset-0 opacity-[0.03] pointer-events-none" 
                   style={{ backgroundImage: 'radial-gradient(#4f46e5 1px, transparent 1px)', backgroundSize: '30px 30px' }} 
@@ -6606,22 +6606,22 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 <div className="p-12 relative z-10">
                   <div className="max-w-[1200px] mx-auto space-y-8">
                     {/* Workspace Controls */}
-                    <div className="flex items-center justify-between gap-4 bg-slate-900/50 p-6 rounded-2xl border border-slate-800 backdrop-blur-md shadow-2xl">
+                    <div className="flex items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-xl shadow-slate-200/50">
                       <div className="space-y-1">
-                        <h4 className="text-white font-black text-lg">Step Sequence Editor</h4>
-                        <p className="text-slate-400 text-[11px] font-medium italic">Define your flow logic using the spreadsheet interface below. Download the CSV when ready to sync.</p>
+                        <h4 className="text-slate-900 font-black text-lg tracking-tight">Step Sequence Editor</h4>
+                        <p className="text-slate-500 text-[11px] font-medium">Define your flow logic using the spreadsheet interface below. Download the CSV when ready to sync.</p>
                       </div>
                       <div className="flex items-center gap-3">
                         <Button
                           onClick={downloadBuilderCSV}
                           variant="outline"
-                          className="bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700 text-xs font-black h-10 px-6 gap-2"
+                          className="bg-white border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-bold h-10 px-6 gap-2"
                         >
                           <Download size={14} /> EXPORT CSV
                         </Button>
                         <Button
                           onClick={handleAddBuilderRow}
-                          className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black h-10 px-6 shadow-lg shadow-indigo-600/20 gap-2 border-0"
+                          className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black h-10 px-6 shadow-lg shadow-indigo-600/30 gap-2 border-0"
                         >
                           <Plus size={16} /> ADD NEW STEP
                         </Button>
@@ -6629,30 +6629,30 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                     </div>
 
                     {/* Table Container */}
-                    <div className="bg-slate-900/30 rounded-3xl border border-slate-800 overflow-hidden shadow-2xl backdrop-blur-xl">
+                    <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-2xl shadow-slate-200/60 overflow-x-auto">
                       <table className="w-full text-left border-collapse min-w-[1000px]">
                         <thead>
-                          <tr className="bg-slate-950/80 border-b border-slate-800">
-                            <th className="p-5 text-slate-500 text-[10px] font-black uppercase tracking-widest whitespace-nowrap w-20">#</th>
-                            <th className="p-5 text-slate-500 text-[10px] font-black uppercase tracking-widest whitespace-nowrap">Step Identity</th>
-                            <th className="p-5 text-slate-500 text-[10px] font-black uppercase tracking-widest whitespace-nowrap">Category</th>
-                            <th className="p-5 text-slate-500 text-[10px] font-black uppercase tracking-widest whitespace-nowrap">Module Type</th>
-                            <th className="p-5 text-slate-500 text-[10px] font-black uppercase tracking-widest whitespace-nowrap">Configuration Data</th>
-                            <th className="p-5 text-slate-500 text-[10px] font-black uppercase tracking-widest whitespace-nowrap">Routing</th>
+                          <tr className="bg-slate-50 border-b border-slate-200">
+                            <th className="p-5 text-slate-400 text-[10px] font-black uppercase tracking-widest whitespace-nowrap w-20">#</th>
+                            <th className="p-5 text-slate-400 text-[10px] font-black uppercase tracking-widest whitespace-nowrap">Step Identity</th>
+                            <th className="p-5 text-slate-400 text-[10px] font-black uppercase tracking-widest whitespace-nowrap">Category</th>
+                            <th className="p-5 text-slate-400 text-[10px] font-black uppercase tracking-widest whitespace-nowrap">Module Type</th>
+                            <th className="p-5 text-slate-400 text-[10px] font-black uppercase tracking-widest whitespace-nowrap">Configuration Data</th>
+                            <th className="p-5 text-slate-400 text-[10px] font-black uppercase tracking-widest whitespace-nowrap">Routing</th>
                             <th className="p-5 w-16"></th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-800/50">
+                        <tbody className="divide-y divide-slate-100">
                           {csvBuilderRows.map((row, idx) => {
                             const currentTypeConfig = (CATEGORY_MAP[row.category] || []).find(t => t.value === row.type);
                             
                             return (
-                              <tr key={idx} className="group hover:bg-indigo-600/5 transition-all duration-200">
-                                <td className="p-5 text-slate-600 font-mono text-xs">{idx + 1}</td>
+                              <tr key={idx} className="group hover:bg-slate-50/80 transition-all duration-200">
+                                <td className="p-5 text-slate-300 font-mono text-xs">{idx + 1}</td>
                                 <td className="p-4 w-48">
                                   <input
                                     ref={el => cellRefs.current[idx * 5 + 0] = el}
-                                    className="w-full bg-slate-950/40 border border-slate-800 rounded-xl p-2.5 text-slate-200 text-xs font-bold outline-none ring-1 ring-transparent focus:ring-indigo-500/50 focus:border-indigo-500 transition-all shadow-inner"
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 text-xs font-bold outline-none ring-1 ring-transparent focus:ring-indigo-500/50 focus:border-indigo-500 transition-all shadow-sm"
                                     value={row.step_id}
                                     onKeyDown={(e) => handleTableKeyDown(e, idx, 0)}
                                     onChange={(e) => handleUpdateBuilderRow(idx, 'step_id', e.target.value)}
@@ -6661,7 +6661,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                                 <td className="p-4 w-40">
                                   <select
                                     ref={el => cellRefs.current[idx * 5 + 1] = el}
-                                    className="w-full bg-slate-950/40 border border-slate-800 rounded-xl p-2.5 text-slate-200 text-xs font-bold outline-none focus:ring-1 focus:ring-indigo-500 transition-all appearance-none cursor-pointer"
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 text-xs font-bold outline-none focus:ring-1 focus:ring-indigo-500 transition-all appearance-none cursor-pointer"
                                     value={row.category}
                                     onKeyDown={(e) => handleTableKeyDown(e, idx, 1)}
                                     onChange={(e) => handleUpdateBuilderRow(idx, 'category', e.target.value)}
@@ -6674,7 +6674,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                                 <td className="p-4 w-56">
                                   <select
                                     ref={el => cellRefs.current[idx * 5 + 2] = el}
-                                    className="w-full bg-slate-950/40 border border-slate-800 rounded-xl p-2.5 text-slate-300 text-xs font-bold outline-none focus:ring-1 focus:ring-indigo-500 transition-all appearance-none cursor-pointer"
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-700 text-xs font-bold outline-none focus:ring-1 focus:ring-indigo-500 transition-all appearance-none cursor-pointer"
                                     value={row.type}
                                     onKeyDown={(e) => handleTableKeyDown(e, idx, 2)}
                                     onChange={(e) => handleUpdateBuilderRow(idx, 'type', e.target.value)}
@@ -6687,7 +6687,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                                 <td className="p-4">
                                   <input
                                     ref={el => cellRefs.current[idx * 5 + 3] = el}
-                                    className="w-full bg-slate-950/40 border border-slate-800 rounded-xl p-2.5 text-slate-400 text-xs outline-none focus:ring-1 focus:ring-indigo-500 transition-all placeholder:text-slate-700 font-medium"
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-600 text-xs outline-none focus:ring-1 focus:ring-indigo-500 transition-all placeholder:text-slate-300 font-medium"
                                     placeholder={currentTypeConfig?.placeholder || 'Config data...'}
                                     value={row.content}
                                     onKeyDown={(e) => handleTableKeyDown(e, idx, 3)}
@@ -6697,7 +6697,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                                 <td className="p-4 w-48">
                                   <select
                                     ref={el => cellRefs.current[idx * 5 + 4] = el}
-                                    className="w-full bg-slate-950/40 border border-slate-800 rounded-xl p-2.5 text-slate-500 text-xs font-bold outline-none focus:ring-1 focus:ring-indigo-500 transition-all appearance-none cursor-pointer"
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-400 text-xs font-bold outline-none focus:ring-1 focus:ring-indigo-500 transition-all appearance-none cursor-pointer"
                                     value={row.next_step_id}
                                     onKeyDown={(e) => handleTableKeyDown(e, idx, 4)}
                                     onChange={(e) => handleUpdateBuilderRow(idx, 'next_step_id', e.target.value)}
@@ -6711,7 +6711,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                                 <td className="p-4 text-center">
                                   <button
                                     onClick={() => handleDeleteBuilderRow(idx)}
-                                    className="p-2 text-slate-700 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                                    className="p-2 text-slate-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
                                     title="Remove Step"
                                   >
                                     <Trash2 size={16} />
@@ -6728,10 +6728,10 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
               </div>
 
               {/* Right Sidebar Guide */}
-              <div className="w-[360px] border-l border-slate-800 bg-slate-950 p-8 flex flex-col gap-8 custom-scrollbar overflow-y-auto">
+              <div className="w-[360px] border-l border-slate-200 bg-white p-8 flex flex-col gap-8 custom-scrollbar overflow-y-auto">
                 <div className="space-y-4">
-                  <h4 className="text-white text-[10px] font-black flex items-center gap-2 tracking-widest text-slate-500">
-                      <Zap size={14} className="text-indigo-500" /> KEYBOARD ACCELERATORS
+                  <h4 className="text-slate-400 text-[10px] font-black flex items-center gap-2 tracking-widest uppercase">
+                      <Zap size={14} className="text-indigo-600" /> KEYBOARD ACCELERATORS
                   </h4>
                   <div className="space-y-3">
                     {[
@@ -6741,10 +6741,10 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                       { keys: ['Shift', 'Tab'], desc: 'Previous Cell' },
                     ].map(s => (
                       <div key={s.desc} className="flex items-center justify-between group">
-                        <span className="text-[10px] text-slate-500 font-bold group-hover:text-slate-400 transition-colors uppercase tracking-tight">{s.desc}</span>
+                        <span className="text-[10px] text-slate-500 font-bold group-hover:text-slate-900 transition-colors uppercase tracking-tight">{s.desc}</span>
                         <div className="flex gap-1.5">
                           {s.keys.map(k => (
-                            <kbd key={k} className="px-1.5 py-0.5 bg-slate-800 border-b-2 border-slate-600 rounded text-[9px] font-black text-slate-300 shadow-sm">{k}</kbd>
+                            <kbd key={k} className="px-1.5 py-0.5 bg-slate-50 border-b-2 border-slate-300 rounded text-[9px] font-black text-slate-600 shadow-sm">{k}</kbd>
                           ))}
                         </div>
                       </div>
@@ -6753,56 +6753,56 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 </div>
 
                 <div className="space-y-6">
-                  <div className="p-6 bg-indigo-600/10 border border-indigo-600/20 rounded-2xl space-y-4 shadow-2xl">
+                  <div className="p-6 bg-indigo-50 border border-indigo-100 rounded-2xl space-y-4 shadow-sm">
                     <div className="flex items-center gap-3">
                       <div className="p-2 bg-indigo-600 rounded-lg text-white">
                         <Zap size={14} />
                       </div>
-                      <h4 className="text-white text-xs font-black uppercase tracking-wider">Sync Logic</h4>
+                      <h4 className="text-indigo-900 text-xs font-black uppercase tracking-wider">Sync Logic</h4>
                     </div>
-                    <p className="text-[11px] text-indigo-300 leading-relaxed font-medium">
+                    <p className="text-[11px] text-indigo-700/80 leading-relaxed font-medium">
                       Blueprint your workflow in real-time. Export the CSV and upload it to the visual canvas to materialize the nodes and connections instantly.
                     </p>
-                    <label className="flex-1 flex items-center justify-center gap-2 p-3 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-[11px] font-black text-white cursor-pointer transition-all shadow-lg ring-4 ring-indigo-600/10">
+                    <label className="flex-1 flex items-center justify-center gap-2 p-3 bg-indigo-600 hover:bg-indigo-700 rounded-xl text-[11px] font-black text-white cursor-pointer transition-all shadow-lg shadow-indigo-600/20">
                       <Upload size={14} /> IMPORT AS FLOW
                       <input type="file" className="hidden" accept=".csv" onChange={handleUploadSimplified} />
                     </label>
                   </div>
 
-                  <div className="space-y-4 border-t border-slate-800 pt-6">
-                    <h4 className="text-white text-[10px] font-black flex items-center gap-2 tracking-widest text-slate-500 uppercase">
-                      <Code size={14} className="text-pink-500" /> Pabbly Migration
+                  <div className="space-y-4 border-t border-slate-100 pt-6">
+                    <h4 className="text-slate-400 text-[10px] font-black flex items-center gap-2 tracking-widest uppercase">
+                      <Code size={14} className="text-pink-600" /> Pabbly Migration
                     </h4>
                     <p className="text-[10px] text-slate-500 font-medium italic leading-relaxed">Paste Pabbly workflow JSON to auto-convert external logic into this builder format.</p>
                     <textarea
-                      className="w-full h-32 p-4 bg-slate-900 border border-slate-800 rounded-2xl text-[10px] font-mono text-slate-400 focus:border-pink-500/50 outline-none transition-all resize-none shadow-inner"
+                      className="w-full h-32 p-4 bg-slate-50 border border-slate-200 rounded-2xl text-[10px] font-mono text-slate-600 focus:border-indigo-500 outline-none transition-all resize-none shadow-inner"
                       placeholder="Paste JSON..."
                       value={pabblyJSON}
                       onChange={(e) => setPabblyJSON(e.target.value)}
                     />
                     <Button
                       onClick={handleMigratePabbly}
-                      className="w-full bg-pink-600/10 border border-pink-600/20 text-pink-400 hover:bg-pink-600 hover:text-white text-xs font-black h-11 transition-all rounded-xl"
+                      className="w-full bg-pink-50 border border-pink-100 text-pink-600 hover:bg-pink-600 hover:text-white text-xs font-black h-11 transition-all rounded-xl shadow-sm"
                     >
                       MIGRATE STEPS
                     </Button>
                   </div>
 
-                  <div className="space-y-4 border-t border-slate-800 pt-6">
-                    <h4 className="text-white text-[10px] font-black flex items-center gap-2 tracking-widest text-slate-500 uppercase">
-                      <Info size={14} className="text-emerald-500" /> Module Guide
+                  <div className="space-y-4 border-t border-slate-100 pt-6">
+                    <h4 className="text-slate-400 text-[10px] font-black flex items-center gap-2 tracking-widest uppercase">
+                      <Info size={14} className="text-emerald-600" /> Module Guide
                     </h4>
                     <div className="space-y-4">
                       {Object.keys(CATEGORY_MAP).map(cat => (
                         <div key={cat} className="space-y-2">
-                           <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">{cat} Layer</p>
+                           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{cat} Layer</p>
                            <ul className="space-y-1.5">
                               {CATEGORY_MAP[cat].slice(0, 3).map(m => (
-                                <li key={m.value} className="text-[10px] text-slate-400 flex items-center gap-2 font-medium">
-                                   <m.icon size={12} className="text-slate-700" /> {m.label}
+                                <li key={m.value} className="text-[10px] text-slate-500 flex items-center gap-2 font-medium">
+                                   <m.icon size={12} className="text-slate-400" /> {m.label}
                                 </li>
                               ))}
-                              <li className="text-[9px] text-indigo-500 font-bold pl-5 cursor-pointer hover:underline" onClick={() => setIsCSVGuideOpen(true)}>+ View all modules</li>
+                              <li className="text-[9px] text-indigo-600 font-bold pl-5 cursor-pointer hover:underline" onClick={() => setIsCSVGuideOpen(true)}>+ View all modules</li>
                            </ul>
                         </div>
                       ))}
@@ -6815,48 +6815,63 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
         )}
 
         {isCSVGuideOpen && (
-          <div className="fixed inset-0 z-[110] flex items-center justify-center p-8 bg-black/80 backdrop-blur-xl animate-in zoom-in-95 duration-300">
-            <div className="bg-slate-900 w-full max-w-4xl border border-slate-800 rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col">
-               <div className="p-10 border-b border-slate-800 flex items-center justify-between bg-slate-950/50">
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-8 bg-slate-900/40 backdrop-blur-md animate-in zoom-in-95 duration-300">
+            <div className="bg-white w-full max-w-4xl border border-slate-200 rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col">
+               <div className="p-10 border-b border-slate-100 flex items-center justify-between bg-white">
                   <div className="flex items-center gap-4">
-                     <div className="w-12 h-12 bg-emerald-600/20 text-emerald-400 rounded-2xl flex items-center justify-center border border-emerald-600/30">
+                     <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center border border-emerald-100 shadow-sm">
                         <Info size={24} />
                      </div>
                      <div>
-                        <h3 className="text-white text-xl font-black tracking-tight">Technical Reference</h3>
-                        <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Automation node dictionary & configuration rules</p>
+                        <h3 className="text-slate-900 text-xl font-black tracking-tight">Technical Reference</h3>
+                        <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Automation node dictionary & configuration rules</p>
                      </div>
                   </div>
-                  <button onClick={() => setIsCSVGuideOpen(false)} className="p-3 text-slate-500 hover:text-white transition-colors bg-slate-800 rounded-full hover:bg-slate-700">
+                  <button onClick={() => setIsCSVGuideOpen(false)} className="p-3 text-slate-400 hover:text-slate-900 transition-colors bg-slate-50 rounded-full hover:bg-slate-100">
                      <X size={24} />
                   </button>
                </div>
-               <div className="p-10 overflow-y-auto grid grid-cols-3 gap-10 bg-[#0c0c12]">
+               <div className="p-10 overflow-y-auto grid grid-cols-3 gap-10 bg-white">
                   {Object.keys(CATEGORY_MAP).map(cat => (
                     <div key={cat} className="space-y-6">
-                       <h4 className="text-indigo-400 text-xs font-black uppercase tracking-widest border-b border-indigo-500/20 pb-2">{cat} modules</h4>
+                       <h4 className="text-indigo-600 text-xs font-black uppercase tracking-widest border-b border-indigo-50 pb-2">{cat} modules</h4>
                        <div className="space-y-8">
                           {CATEGORY_MAP[cat].map(m => (
                              <div key={m.value} className="space-y-2 group">
                                 <div className="flex items-center gap-3 group-hover:translate-x-1 transition-transform">
-                                   <div className="p-1.5 bg-slate-800 rounded-lg text-slate-400 group-hover:text-indigo-400 group-hover:bg-indigo-400/10 transition-colors">
+                                   <div className="p-1.5 bg-slate-50 rounded-lg text-slate-400 group-hover:text-indigo-600 group-hover:bg-indigo-50 transition-colors border border-slate-100">
                                       <m.icon size={14} />
                                    </div>
-                                   <span className="text-xs font-black text-white">{m.label}</span>
+                                   <span className="text-xs font-black text-slate-900">{m.label}</span>
                                 </div>
-                                <p className="text-[10px] text-slate-500 pl-9 leading-relaxed bg-slate-900/50 p-3 rounded-xl border border-slate-800/30 font-medium italic">Example content: {m.placeholder}</p>
+                                <p className="text-[10px] text-slate-500 pl-9 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-100 font-medium italic">Example: {m.placeholder}</p>
                              </div>
                           ))}
                        </div>
                     </div>
                   ))}
                </div>
-               <div className="p-6 bg-slate-950/80 border-t border-slate-800 flex justify-center italic text-[10px] text-slate-500 font-bold tracking-wide uppercase">
+               <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-center italic text-[10px] text-slate-400 font-bold tracking-wide uppercase">
                   Select these types in the Step Type column to ensure valid automation builds.
                </div>
             </div>
           </div>
         )}
+        <GallerySelectModal
+          isOpen={showGalleryModal}
+          onClose={() => setShowGalleryModal(false)}
+          onSelect={(url) => {
+            const isVideo = /\.(mp4|mov|webm)$/i.test(url);
+            const isImage = /\.(png|jpg|jpeg|gif|webp)$/i.test(url);
+            updateNodeFields(selectedNode?.id, {
+              headerUrl: url,
+              headerFileName: url.split('/').pop(),
+              headerType: isVideo ? 'video' : isImage ? 'image' : 'document'
+            });
+            setShowGalleryModal(false);
+          }}
+          resourceType={selectedNode?.data?.headerType === 'video' ? 'video' : selectedNode?.data?.headerType === 'document' ? 'raw' : 'image'}
+        />
       </div>
     </div>
   );
