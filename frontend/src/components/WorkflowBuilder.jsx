@@ -1818,29 +1818,6 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
     document.body.removeChild(link);
   };
 
-  const handleDownloadNodes = () => {
-    const data = nodes.map(n => ({
-      id: n.id,
-      type: n.type,
-      label: n.data?.label || '',
-      x: n.position?.x || 0,
-      y: n.position?.y || 0,
-      data: JSON.stringify(n.data || {})
-    }));
-    downloadCSV(data, 'workflow_nodes.csv');
-  };
-
-  const handleDownloadEdges = () => {
-    const data = edges.map(e => ({
-      id: e.id,
-      source: e.source,
-      target: e.target,
-      sourceHandle: e.sourceHandle || '',
-      targetHandle: e.targetHandle || ''
-    }));
-    downloadCSV(data, 'workflow_edges.csv');
-  };
-
   const parseCSV = (text) => {
     const lines = text.split(/\r?\n/);
     if (lines.length < 2) return [];
@@ -1858,49 +1835,91 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
     });
   };
 
-  const handleUploadNodes = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const rows = parseCSV(event.target.result);
-        const newNodes = rows.map(row => ({
-          id: row.id || getId(),
-          type: row.type || 'send_message',
-          position: { x: parseFloat(row.x || 0), y: parseFloat(row.y || 0) },
-          data: row.data ? JSON.parse(row.data) : { label: row.label }
-        }));
-        setNodes(newNodes);
-        alert(`Successfully imported ${newNodes.length} nodes.`);
-      } catch (err) {
-        console.error(err);
-        alert('Failed to parse Nodes CSV. Please check the format.');
-      }
-    };
-    reader.readAsText(file);
-    e.target.value = ''; // Reset
+  const handleDownloadFull = () => {
+    const rows = [];
+    
+    // Add Nodes
+    nodes.forEach(n => {
+      rows.push({
+        entry_type: 'node',
+        id: n.id,
+        type: n.type,
+        label: n.data?.label || '',
+        x: n.position?.x || 0,
+        y: n.position?.y || 0,
+        source: '',
+        target: '',
+        sourceHandle: '',
+        targetHandle: '',
+        data: JSON.stringify(n.data || {})
+      });
+    });
+
+    // Add Edges
+    edges.forEach(e => {
+      rows.push({
+        entry_type: 'edge',
+        id: e.id,
+        type: '',
+        label: '',
+        x: '',
+        y: '',
+        source: e.source,
+        target: e.target,
+        sourceHandle: e.sourceHandle || '',
+        targetHandle: e.targetHandle || '',
+        data: ''
+      });
+    });
+
+    if (rows.length === 0) {
+      alert("Workflow is empty. Add some nodes first.");
+      return;
+    }
+    
+    downloadCSV(rows, 'workflow_full.csv');
   };
 
-  const handleUploadEdges = (e) => {
+  const handleUploadFull = (e) => {
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (event) => {
       try {
         const rows = parseCSV(event.target.result);
-        const newEdges = rows.map(row => ({
-          id: row.id || `e_${row.source}_${row.target}`,
-          source: row.source,
-          target: row.target,
-          sourceHandle: row.sourceHandle || undefined,
-          targetHandle: row.targetHandle || undefined
-        }));
-        setEdges(newEdges);
-        alert(`Successfully imported ${newEdges.length} edges.`);
+        const nextNodes = [];
+        const nextEdges = [];
+
+        rows.forEach(row => {
+          if (row.entry_type === 'node') {
+            nextNodes.push({
+              id: row.id || getId(),
+              type: row.type || 'send_message',
+              position: { x: parseFloat(row.x || 0), y: parseFloat(row.y || 0) },
+              data: row.data ? JSON.parse(row.data) : { label: row.label }
+            });
+          } else if (row.entry_type === 'edge') {
+            nextEdges.push({
+              id: row.id || `e_${row.source}_${row.target}`,
+              source: row.source,
+              target: row.target,
+              sourceHandle: row.sourceHandle || undefined,
+              targetHandle: row.targetHandle || undefined
+            });
+          }
+        });
+
+        if (nextNodes.length === 0) {
+          alert("No nodes found in the CSV. Please check the 'entry_type' column.");
+          return;
+        }
+
+        setNodes(nextNodes);
+        setEdges(nextEdges);
+        alert(`Successfully imported ${nextNodes.length} nodes and ${nextEdges.length} edges.`);
       } catch (err) {
         console.error(err);
-        alert('Failed to parse Edges CSV. Please check the format.');
+        alert('Failed to parse Full Workflow CSV. Ensure JSON in the "data" column is valid.');
       }
     };
     reader.readAsText(file);
@@ -2823,74 +2842,54 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
             </div>
 
             <div className="p-6 space-y-6">
-              {/* Export Section */}
-              <div className="space-y-3">
-                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Export Current Flow</h4>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    onClick={handleDownloadNodes}
-                    className="flex flex-col items-center justify-center gap-2 p-4 border border-slate-200 rounded-xl hover:border-green-300 hover:bg-green-50/50 transition-all group"
-                  >
-                    <Download className="text-slate-400 group-hover:text-green-600" size={24} />
-                    <span className="text-xs font-semibold text-slate-700">Download Nodes</span>
-                  </button>
-                  <button
-                    onClick={handleDownloadEdges}
-                    className="flex flex-col items-center justify-center gap-2 p-4 border border-slate-200 rounded-xl hover:border-blue-300 hover:bg-blue-50/50 transition-all group"
-                  >
-                    <Download className="text-slate-400 group-hover:text-blue-600" size={24} />
-                    <span className="text-xs font-semibold text-slate-700">Download Edges</span>
-                  </button>
+              <div className="p-4 bg-amber-50 border border-amber-100 rounded-xl flex gap-3">
+                <div className="p-1.5 bg-white text-amber-600 rounded shadow-sm h-fit">
+                  <Settings size={14} />
+                </div>
+                <div>
+                  <p className="text-[11px] text-amber-800 font-bold">Unified CSV Management</p>
+                  <p className="text-[10px] text-amber-700 leading-relaxed mt-0.5">
+                    We've combined Nodes and Edges into a single file. 
+                    <b>Uploads will REFRESH</b> the entire canvas. Always back up your current flow before importing.
+                  </p>
                 </div>
               </div>
 
-              {/* Import Section */}
-              <div className="space-y-4 pt-2 border-t border-slate-100">
-                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Import Structure</h4>
-                
-                <div className="space-y-4">
-                  <div className="p-4 bg-amber-50 border border-amber-100 rounded-xl flex gap-3">
-                    <div className="p-1.5 bg-white text-amber-600 rounded shadow-sm h-fit">
-                      <Settings size={14} />
-                    </div>
-                    <div>
-                      <p className="text-[11px] text-amber-800 font-medium font-bold">Important Notice</p>
-                      <p className="text-[10px] text-amber-700 leading-relaxed mt-0.5">
-                        Uploading CSV will <b>REPLACE</b> the existing nodes and connections. 
-                        We recommend downloading the current structure first as a backup.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-3">
-                    <label className="relative flex items-center justify-between p-3 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 bg-slate-100 text-slate-600 rounded-lg">
-                          <Upload size={18} />
-                        </div>
-                        <div>
-                          <div className="text-sm font-semibold text-slate-800">Upload Nodes CSV</div>
-                          <div className="text-[10px] text-slate-500">Required: id, type, label, x, y, data</div>
-                        </div>
+              <div className="grid grid-cols-1 gap-4">
+                <div className="space-y-2">
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Step 1: Download Format</h4>
+                  <button
+                    onClick={handleDownloadFull}
+                    className="w-full flex items-center justify-between p-4 border border-slate-200 rounded-xl hover:border-green-300 hover:bg-green-50 transition-all group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-green-100 text-green-600 rounded-lg group-hover:scale-110 transition-transform">
+                        <Download size={20} />
                       </div>
-                      <input type="file" className="hidden" accept=".csv" onChange={handleUploadNodes} />
-                      <div className="text-[10px] font-bold text-green-600 bg-green-50 px-2 py-1 rounded">Select File</div>
-                    </label>
-
-                    <label className="relative flex items-center justify-between p-3 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 bg-slate-100 text-slate-600 rounded-lg">
-                          <LinkIcon size={18} />
-                        </div>
-                        <div>
-                          <div className="text-sm font-semibold text-slate-800">Upload Edges CSV</div>
-                          <div className="text-[10px] text-slate-500">Required: id, source, target</div>
-                        </div>
+                      <div className="text-left">
+                        <div className="text-sm font-bold text-slate-800">Download Current Flow</div>
+                        <div className="text-[10px] text-slate-500">Includes all nodes, data, and connections.</div>
                       </div>
-                      <input type="file" className="hidden" accept=".csv" onChange={handleUploadEdges} />
-                      <div className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded">Select File</div>
-                    </label>
-                  </div>
+                    </div>
+                    <div className="text-[10px] font-bold text-green-600 border border-green-200 px-2 py-1 rounded bg-white">Get CSV</div>
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Step 2: Upload Changes</h4>
+                  <label className="relative flex items-center justify-between p-4 border border-slate-200 rounded-xl cursor-pointer hover:border-blue-300 hover:bg-blue-50 transition-all group">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-blue-100 text-blue-600 rounded-lg group-hover:scale-110 transition-transform">
+                        <Upload size={20} />
+                      </div>
+                      <div className="text-left">
+                        <div className="text-sm font-bold text-slate-800">Upload Restructured CSV</div>
+                        <div className="text-[10px] text-slate-500">Must follow the unified format (entry_type: node/edge).</div>
+                      </div>
+                    </div>
+                    <input type="file" className="hidden" accept=".csv" onChange={handleUploadFull} />
+                    <div className="text-[10px] font-bold text-blue-600 border border-blue-200 px-2 py-1 rounded bg-white">Upload File</div>
+                  </label>
                 </div>
               </div>
             </div>
