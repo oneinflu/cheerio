@@ -601,7 +601,7 @@ export default function SettingsPage({ currentUser }) {
 
     // Modern Embedded Signup configuration
     const loginOptions = {
-      config_id: '926298566616073', // Replace with your WhatsApp Configuration ID from App Dashboard
+      config_id: '784402480993297', // Replace with your WhatsApp Configuration ID from App Dashboard
       response_type: 'code',
       override_default_response_type: true,
       scope: 'whatsapp_business_management,whatsapp_business_messaging,business_management,public_profile'
