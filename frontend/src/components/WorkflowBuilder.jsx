@@ -15,7 +15,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { Button } from './ui/Button';
-import { Save, ArrowLeft, Plus, Clock, MessageSquare, GitBranch, Zap, StopCircle, Loader2, Play, MessageCircle, Code, UserCheck, Tag, Mic, Workflow as WorkflowIcon, Megaphone, Filter, Link, Copy, Check, RefreshCw, Trash2, Globe, Send, ChevronDown, ChevronUp, Image, Video, FileText as FileIcon, Upload, X, Star, CreditCard, BellRing, Bell, Mail, ListChecks, Phone, Download, Settings } from 'lucide-react';const LinkIcon = Link;
+import { Save, ArrowLeft, Plus, Clock, MessageSquare, GitBranch, Zap, StopCircle, Loader2, Play, MessageCircle, Code, UserCheck, Tag, Mic, Workflow as WorkflowIcon, Megaphone, Filter, Link, Copy, Check, RefreshCw, Trash2, Globe, Send, ChevronDown, ChevronUp, Image, Video, FileText as FileIcon, Upload, X, Star, CreditCard, BellRing, Bell, Mail, ListChecks, Phone, Download, Settings, Keyboard, Info, Table as TableIcon, FileDown } from 'lucide-react'; const LinkIcon = Link;
 import { getTemplates, runWorkflow, aiGenerateWorkflow, getWorkflows, getCampaigns, getWebhookEvents, clearWebhookEvents, fetchMediaLibrary, uploadFlowMedia, createPaymentLink, getLabels, getEmailTemplates, getLeadStages } from '../api';
 import { GallerySelectModal } from './GallerySelectModal';
 import { connectSocket } from '../socket';
@@ -373,13 +373,13 @@ const ActionNode = ({ data, selected }) => {
   const isVar = data.actionType === 'set_variable';
   const isWorkflow = data.actionType === 'start_workflow';
   const isStatus = data.actionType === 'update_chat_status';
-    const isLeadStage = data.actionType === 'update_lead_stage';
+  const isLeadStage = data.actionType === 'update_lead_stage';
 
   return (
     <NodeWrapper
       selected={selected}
       title="Action"
-        icon={isLeadStage ? ListChecks : isAssign ? UserCheck : isWorkflow ? WorkflowIcon : isTag ? Tag : Plus}
+      icon={isLeadStage ? ListChecks : isAssign ? UserCheck : isWorkflow ? WorkflowIcon : isTag ? Tag : Plus}
       colorClass="bg-indigo-600"
       status={data.nodeStatus}
     >
@@ -398,7 +398,7 @@ const ActionNode = ({ data, selected }) => {
                     ? 'Update Chat Status'
                     : data.actionType === 'update_lead_stage'
                       ? 'Update Lead Stage'
-                    : 'Action'}
+                      : 'Action'}
       </div>
       <div className="text-xs text-slate-500 truncate max-w-[180px]">
         {isVar
@@ -407,9 +407,9 @@ const ActionNode = ({ data, selected }) => {
             ? data.targetWorkflowName || 'Select workflow...'
             : isStatus
               ? data.actionValue || 'open'
-            : isLeadStage
-              ? data.leadStageName || 'Select stage...'
-              : data.actionValue || 'Configure...'}
+              : isLeadStage
+                ? data.leadStageName || 'Select stage...'
+                : data.actionValue || 'Configure...'}
       </div>
       <Handle type="target" position={Position.Top} className="w-3 h-3 bg-slate-400" />
       <Handle type="source" position={Position.Bottom} className="w-3 h-3 bg-slate-400" />
@@ -1087,9 +1087,11 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
   const [templateFocusedVarKey, setTemplateFocusedVarKey] = useState(null);
   const [isCSVModalOpen, setIsCSVModalOpen] = useState(false);
   const [isCSVGuideOpen, setIsCSVGuideOpen] = useState(false);
+  const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
   const [csvBuilderRows, setCsvBuilderRows] = useState([
     { step_id: 'trigger_1', type: 'trigger', content: 'hello', next_step_id: '' }
   ]);
+  const cellRefs = useRef([]);
   const [pabblyJSON, setPabblyJSON] = useState('');
   const recognitionRef = useRef(null);
   const hasIncomingWebhookTrigger = nodes.some((n) => n && n.type === 'incoming_webhook');
@@ -1231,7 +1233,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
         s.off('workflow:run:complete', onComplete);
         clearEdgeTimer();
         s.disconnect();
-      } catch {}
+      } catch { }
     };
   }, [initialWorkflow, setNodes, setEdges]);
 
@@ -1796,7 +1798,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
       return positionedNodes;
     });
   }, [setNodes, setEdges]);
-  
+
   // --- CSV Helpers ---
   const downloadCSV = (rows, filename) => {
     if (!rows.length) return;
@@ -1842,7 +1844,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
 
   const handleDownloadFull = () => {
     const rows = [];
-    
+
     // Add Nodes
     nodes.forEach(n => {
       rows.push({
@@ -1881,7 +1883,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
       alert("Workflow is empty. Add some nodes first.");
       return;
     }
-    
+
     downloadCSV(rows, 'workflow_full.csv');
   };
 
@@ -1927,7 +1929,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
         const rows = parseCSV(event.target.result);
         const nextNodes = [];
         const nextEdges = [];
-        
+
         let currentY = 0;
 
         rows.forEach((row, index) => {
@@ -1970,7 +1972,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
             });
           }
 
-          currentY += 160; 
+          currentY += 160;
         });
 
         if (nextNodes.length === 0) {
@@ -1992,12 +1994,12 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
   };
 
   const handleAddBuilderRow = () => {
-    const lastId = csvBuilderRows.length ? csvBuilderRows[csvBuilderRows.length-1].step_id : 'step_0';
-    setCsvBuilderRows([...csvBuilderRows, { 
-      step_id: `step_${csvBuilderRows.length + 1}`, 
-      type: 'send_message', 
-      content: '', 
-      next_step_id: '' 
+    const lastId = csvBuilderRows.length ? csvBuilderRows[csvBuilderRows.length - 1].step_id : 'step_0';
+    setCsvBuilderRows([...csvBuilderRows, {
+      step_id: `step_${csvBuilderRows.length + 1}`,
+      type: 'send_message',
+      content: '',
+      next_step_id: ''
     }]);
   };
 
@@ -2017,6 +2019,53 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
       return;
     }
     downloadCSV(csvBuilderRows, 'my_custom_workflow.csv');
+  };
+
+  const handleTableKeyDown = (e, rowIndex, colIndex) => {
+    const totalRows = csvBuilderRows.length;
+    const totalCols = 4; // step_id, type, content, next_step_id
+
+    const focusCell = (r, c) => {
+      if (r >= 0 && r < totalRows && c >= 0 && c < totalCols) {
+        const el = cellRefs.current[r * totalCols + c];
+        if (el) el.focus();
+      }
+    };
+
+    if (e.key === 'ArrowDown' || (e.key === 'Enter' && !e.shiftKey)) {
+      e.preventDefault();
+      if (rowIndex < totalRows - 1) {
+        focusCell(rowIndex + 1, colIndex);
+      } else if (e.key === 'Enter') {
+        handleAddBuilderRow();
+        setTimeout(() => focusCell(rowIndex + 1, colIndex), 50);
+      }
+    } else if (e.key === 'ArrowUp' || (e.key === 'Enter' && e.shiftKey)) {
+      e.preventDefault();
+      focusCell(rowIndex - 1, colIndex);
+    } else if (e.key === 'ArrowRight' || (e.key === 'Tab' && !e.shiftKey)) {
+      if (e.key === 'Tab') {
+        if (colIndex < totalCols - 1) {
+          // Normal tab within row
+        } else if (rowIndex < totalRows - 1) {
+          e.preventDefault();
+          focusCell(rowIndex + 1, 0);
+        } else {
+          e.preventDefault();
+          handleAddBuilderRow();
+          setTimeout(() => focusCell(rowIndex + 1, 0), 50);
+        }
+      }
+    } else if (e.key === 'ArrowLeft' || (e.key === 'Tab' && e.shiftKey)) {
+      if (e.key === 'Tab' && e.shiftKey) {
+        if (colIndex > 0) {
+          // Normal shift+tab
+        } else if (rowIndex > 0) {
+          e.preventDefault();
+          focusCell(rowIndex - 1, totalCols - 1);
+        }
+      }
+    }
   };
 
   const handleMigratePabbly = () => {
@@ -2678,7 +2727,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
       }
     }, 10000);
     return () => clearInterval(interval);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onSave, initialWorkflow?.id, nodes, edges]);
 
   const handleManualSave = async () => {
@@ -3048,7 +3097,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                   <p className="text-xs text-slate-500">Import or Export workflow structure via Google Sheets / Excel.</p>
                 </div>
               </div>
-              <button 
+              <button
                 onClick={() => setIsCSVModalOpen(false)}
                 className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
               >
@@ -3064,7 +3113,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 <div>
                   <p className="text-[11px] text-indigo-800 font-bold">Auto-Build Workflow Interface</p>
                   <p className="text-[10px] text-indigo-700 leading-relaxed mt-0.5">
-                    Admins can define a sequence of triggers, delays, and messages in a simple CSV. 
+                    Admins can define a sequence of triggers, delays, and messages in a simple CSV.
                     The system will automatically generate all nodes and connections.
                   </p>
                 </div>
@@ -3073,7 +3122,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
               <div className="space-y-4">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                   <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Auto-Build Guide</h4>
-                  <button 
+                  <button
                     onClick={() => setIsCSVGuideOpen(!isCSVGuideOpen)}
                     className="text-[10px] font-bold text-indigo-600 flex items-center gap-1 hover:underline"
                   >
@@ -3087,7 +3136,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                     <div className="space-y-2">
                       <p className="font-bold text-slate-800 border-l-2 border-green-500 pl-2 uppercase tracking-tighter text-[10px]">Triggers</p>
                       <ul className="space-y-1 text-slate-600 pl-4 list-disc">
-                        <li><strong>trigger</strong>: Wait for keywords. <br className="mb-0.5"/><span className="text-slate-400 font-mono">Content: "hello, hi, help"</span></li>
+                        <li><strong>trigger</strong>: Wait for keywords. <br className="mb-0.5" /><span className="text-slate-400 font-mono">Content: "hello, hi, help"</span></li>
                         <li><strong>campaign_trigger</strong>: When a campaign is sent.</li>
                         <li><strong>incoming_webhook</strong>: POST to a unique URL.</li>
                         <li><strong>new_contact</strong>: When person is added.</li>
@@ -3130,13 +3179,43 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                         <TableIcon size={14} className="text-indigo-600" />
                         Interactive Planning Table
                       </h4>
-                      <button 
-                        onClick={handleAddBuilderRow}
-                        className="text-[10px] bg-indigo-600 hover:bg-indigo-700 text-white px-2 py-1 rounded font-bold shadow-sm transition-all"
-                      >
-                        + Add Step
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setIsShortcutsOpen(!isShortcutsOpen)}
+                          className="p-1 px-1.5 bg-white border border-slate-200 text-slate-400 hover:text-indigo-600 hover:border-indigo-200 rounded text-[10px] flex items-center gap-1 transition-all"
+                          title="Keyboard Shortcuts"
+                        >
+                          <Keyboard size={12} />
+                          {isShortcutsOpen ? 'Hide Tips' : 'Show Keys'}
+                        </button>
+                        <button
+                          onClick={handleAddBuilderRow}
+                          className="text-[10px] bg-indigo-600 hover:bg-indigo-700 text-white px-2 py-1 rounded font-bold shadow-sm transition-all"
+                        >
+                          + Add Step
+                        </button>
+                      </div>
                     </div>
+
+                    {isShortcutsOpen && (
+                      <div className="grid grid-cols-2 gap-2 bg-indigo-50/50 p-3 rounded-lg border border-indigo-100 mb-2">
+                        <div className="space-y-1">
+                          <p className="text-[9px] font-bold text-indigo-800 flex items-center gap-1"><Info size={10} /> Navigation</p>
+                          <ul className="text-[9px] text-indigo-700 space-y-0.5 list-none">
+                            <li><span className="bg-white px-1 border rounded shadow-xs font-mono">↑ / ↓</span> : Move Up / Down</li>
+                            <li><span className="bg-white px-1 border rounded shadow-xs font-mono">Tab</span> : Move Right</li>
+                            <li><span className="bg-white px-1 border rounded shadow-xs font-mono">Shift+Tab</span> : Move Left</li>
+                          </ul>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-[9px] font-bold text-indigo-800 flex items-center gap-1"><Zap size={10} /> Shortcuts</p>
+                          <ul className="text-[9px] text-indigo-700 space-y-0.5 list-none">
+                            <li><span className="bg-white px-1 border rounded shadow-xs font-mono">Enter</span> : Move Down</li>
+                            <li><span className="bg-white px-1 border rounded shadow-xs font-mono">Enter</span> (at end) : New Step</li>
+                          </ul>
+                        </div>
+                      </div>
+                    )}
 
                     <div className="space-y-2 overflow-x-auto">
                       <table className="w-full text-[10px] text-slate-600">
@@ -3153,16 +3232,20 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                           {csvBuilderRows.map((row, idx) => (
                             <tr key={idx} className="group">
                               <td className="py-2 pr-1">
-                                <input 
-                                  className="w-[80px] border border-slate-200 rounded p-1 bg-white"
+                                <input
+                                  ref={el => cellRefs.current[idx * 4 + 0] = el}
+                                  className="w-[80px] border border-slate-200 rounded p-1 bg-white outline-indigo-500"
                                   value={row.step_id}
+                                  onKeyDown={(e) => handleTableKeyDown(e, idx, 0)}
                                   onChange={(e) => handleUpdateBuilderRow(idx, 'step_id', e.target.value)}
                                 />
                               </td>
                               <td className="py-2 pr-1">
-                                <select 
-                                  className="w-[90px] border border-slate-200 rounded p-1 bg-white outline-none"
+                                <select
+                                  ref={el => cellRefs.current[idx * 4 + 1] = el}
+                                  className="w-[90px] border border-slate-200 rounded p-1 bg-white outline-indigo-500"
                                   value={row.type}
+                                  onKeyDown={(e) => handleTableKeyDown(e, idx, 1)}
                                   onChange={(e) => handleUpdateBuilderRow(idx, 'type', e.target.value)}
                                 >
                                   <option value="trigger">Trigger</option>
@@ -3172,17 +3255,21 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                                 </select>
                               </td>
                               <td className="py-2 pr-1">
-                                <input 
-                                  className="w-[120px] border border-slate-200 rounded p-1 bg-white"
+                                <input
+                                  ref={el => cellRefs.current[idx * 4 + 2] = el}
+                                  className="w-[120px] border border-slate-200 rounded p-1 bg-white outline-indigo-500"
                                   placeholder={row.type === 'delay' ? '1 day' : 'Keywords/Text'}
                                   value={row.content}
+                                  onKeyDown={(e) => handleTableKeyDown(e, idx, 2)}
                                   onChange={(e) => handleUpdateBuilderRow(idx, 'content', e.target.value)}
                                 />
                               </td>
                               <td className="py-2 pr-1">
-                                <select 
-                                  className="w-[80px] border border-slate-200 rounded p-1 bg-white outline-none"
+                                <select
+                                  ref={el => cellRefs.current[idx * 4 + 3] = el}
+                                  className="w-[80px] border border-slate-200 rounded p-1 bg-white outline-indigo-500"
                                   value={row.next_step_id}
+                                  onKeyDown={(e) => handleTableKeyDown(e, idx, 3)}
                                   onChange={(e) => handleUpdateBuilderRow(idx, 'next_step_id', e.target.value)}
                                 >
                                   <option value="">-None-</option>
@@ -3192,7 +3279,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                                 </select>
                               </td>
                               <td className="py-2 text-right">
-                                <button 
+                                <button
                                   onClick={() => handleDeleteBuilderRow(idx)}
                                   className="text-slate-300 hover:text-red-500 transition-colors"
                                 >
@@ -3235,7 +3322,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                   </div>
 
                   <div className="pt-4 border-t border-slate-100 flex gap-4">
-                    <button 
+                    <button
                       onClick={handleDownloadFull}
                       className="flex-1 flex items-center justify-center gap-1.5 p-2 border border-slate-200 rounded-lg text-[10px] font-bold text-slate-500 hover:bg-slate-50"
                     >
@@ -3264,7 +3351,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                   value={pabblyJSON}
                   onChange={(e) => setPabblyJSON(e.target.value)}
                 />
-                <Button 
+                <Button
                   onClick={handleMigratePabbly}
                   className="w-full bg-pink-600 hover:bg-pink-700 text-xs py-2 shadow-sm"
                 >
@@ -3569,8 +3656,8 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 className="flex items-center gap-3 p-3 rounded-md bg-green-50 border border-green-200 cursor-pointer hover:bg-green-100 transition-colors"
                 draggable
                 onDragStart={(e) => {
-                    e.dataTransfer.setData('application/reactflow', 'trigger');
-                    e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData('application/reactflow', 'trigger');
+                  e.dataTransfer.effectAllowed = 'move';
                 }}
                 onClick={() => handleAddNodeFromPalette('trigger')}
                 title="Triggers when a specific keyword is received"
@@ -3589,8 +3676,8 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 className="flex items-center gap-3 p-3 rounded-md bg-purple-50 border border-purple-200 cursor-pointer hover:bg-purple-100 transition-colors"
                 draggable
                 onDragStart={(e) => {
-                    e.dataTransfer.setData('application/reactflow', 'campaign_trigger');
-                    e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData('application/reactflow', 'campaign_trigger');
+                  e.dataTransfer.effectAllowed = 'move';
                 }}
                 onClick={handleAddCampaignTrigger}
                 title="Adds Campaign Sent trigger + Condition node pre-wired"
@@ -3609,8 +3696,8 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 className="flex items-center gap-3 p-3 rounded-md bg-cyan-50 border border-cyan-200 cursor-pointer hover:bg-cyan-100 transition-colors"
                 draggable
                 onDragStart={(e) => {
-                    e.dataTransfer.setData('application/reactflow', 'incoming_webhook');
-                    e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData('application/reactflow', 'incoming_webhook');
+                  e.dataTransfer.effectAllowed = 'move';
                 }}
                 onClick={handleAddWebhookTrigger}
                 title="HTTP POST webhook that triggers this workflow"
@@ -3629,8 +3716,8 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 className="flex items-center gap-3 p-3 rounded-md bg-emerald-50 border border-emerald-200 cursor-pointer hover:bg-emerald-100 transition-colors"
                 draggable
                 onDragStart={(e) => {
-                    e.dataTransfer.setData('application/reactflow', 'new_contact');
-                    e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData('application/reactflow', 'new_contact');
+                  e.dataTransfer.effectAllowed = 'move';
                 }}
                 onClick={handleAddNewContactTrigger}
                 title="Triggers when a new contact is created"
@@ -3658,9 +3745,9 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 className="flex items-center gap-3 p-3 rounded-md bg-indigo-50 border border-indigo-200 cursor-pointer hover:bg-indigo-100 transition-colors"
                 draggable
                 onDragStart={(e) => {
-                    e.dataTransfer.setData('application/reactflow', 'action');
-                    e.dataTransfer.setData('application/actiontype', 'start_workflow');
-                    e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData('application/reactflow', 'action');
+                  e.dataTransfer.setData('application/actiontype', 'start_workflow');
+                  e.dataTransfer.effectAllowed = 'move';
                 }}
                 onClick={() => handleAddNodeFromPalette('action', 'start_workflow')}
                 title="Trigger another workflow"
@@ -3679,8 +3766,8 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 className="flex items-center gap-3 p-3 rounded-md bg-orange-50 border border-orange-200 cursor-pointer hover:bg-orange-100 transition-colors"
                 draggable
                 onDragStart={(e) => {
-                    e.dataTransfer.setData('application/reactflow', 'xolox_event');
-                    e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData('application/reactflow', 'xolox_event');
+                  e.dataTransfer.effectAllowed = 'move';
                 }}
                 onClick={handleAddXoloxEvent}
                 title="Send data to XOLOX CRM webhook; branches on success/fail"
@@ -3701,8 +3788,8 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 className="flex items-center gap-3 p-3 rounded-md bg-green-50 border border-green-200 cursor-pointer hover:bg-green-100 transition-colors"
                 draggable
                 onDragStart={(e) => {
-                    e.dataTransfer.setData('application/reactflow', 'send_template');
-                    e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData('application/reactflow', 'send_template');
+                  e.dataTransfer.effectAllowed = 'move';
                 }}
                 onClick={handleAddSendTemplateAction}
                 title="Send a WhatsApp template with variables and optional media header"
@@ -3723,8 +3810,8 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 className="flex items-center gap-3 p-3 rounded-md bg-teal-50 border border-teal-200 cursor-pointer hover:bg-teal-100 transition-colors"
                 draggable
                 onDragStart={(e) => {
-                    e.dataTransfer.setData('application/reactflow', 'response_message');
-                    e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData('application/reactflow', 'response_message');
+                  e.dataTransfer.effectAllowed = 'move';
                 }}
                 onClick={handleAddResponseMessageAction}
                 title="Send a direct message with optional media and quick reply options"
@@ -3744,9 +3831,9 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 className="flex items-center gap-3 p-3 rounded-md bg-blue-50 border border-blue-200 cursor-pointer hover:bg-blue-100 transition-colors"
                 draggable
                 onDragStart={(e) => {
-                    e.dataTransfer.setData('application/reactflow', 'action');
-                    e.dataTransfer.setData('application/actiontype', 'send_email');
-                    e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData('application/reactflow', 'action');
+                  e.dataTransfer.setData('application/actiontype', 'send_email');
+                  e.dataTransfer.effectAllowed = 'move';
                 }}
                 onClick={() => handleAddNodeFromPalette('action', 'send_email')}
                 title="Send an email using a selected template"
@@ -3766,9 +3853,9 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 className="flex items-center gap-3 p-3 rounded-md bg-fuchsia-50 border border-fuchsia-200 cursor-pointer hover:bg-fuchsia-100 transition-colors"
                 draggable
                 onDragStart={(e) => {
-                    e.dataTransfer.setData('application/reactflow', 'action');
-                    e.dataTransfer.setData('application/actiontype', 'send_sms_otp');
-                    e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData('application/reactflow', 'action');
+                  e.dataTransfer.setData('application/actiontype', 'send_sms_otp');
+                  e.dataTransfer.effectAllowed = 'move';
                 }}
                 onClick={() => handleAddNodeFromPalette('action', 'send_sms_otp')}
                 title="Send OTP SMS with configurable digit count"
@@ -3789,8 +3876,8 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 className="flex items-center gap-3 p-3 rounded-md bg-yellow-50 border border-yellow-200 cursor-pointer hover:bg-yellow-100 transition-colors"
                 draggable
                 onDragStart={(e) => {
-                    e.dataTransfer.setData('application/reactflow', 'feedback');
-                    e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData('application/reactflow', 'feedback');
+                  e.dataTransfer.effectAllowed = 'move';
                 }}
                 onClick={handleAddFeedbackAction}
                 title="Collect CSAT feedback from customers at the end of a flow"
@@ -3816,8 +3903,8 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 className="flex items-center gap-3 p-3 rounded-md bg-indigo-50 border border-indigo-200 cursor-pointer hover:bg-indigo-100 transition-colors"
                 draggable
                 onDragStart={(e) => {
-                    e.dataTransfer.setData('application/reactflow', 'razorpay_link');
-                    e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData('application/reactflow', 'razorpay_link');
+                  e.dataTransfer.effectAllowed = 'move';
                 }}
                 onClick={() => handleAddNodeFromPalette('razorpay_link')}
                 title="Create and send a Razorpay payment link"
@@ -3836,8 +3923,8 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 className="flex items-center gap-3 p-3 rounded-md bg-indigo-50 border border-indigo-200 cursor-pointer hover:bg-indigo-100 transition-colors"
                 draggable
                 onDragStart={(e) => {
-                    e.dataTransfer.setData('application/reactflow', 'razorpay_status');
-                    e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData('application/reactflow', 'razorpay_status');
+                  e.dataTransfer.effectAllowed = 'move';
                 }}
                 onClick={() => handleAddNodeFromPalette('razorpay_status')}
                 title="Check payment status and branch the flow"
@@ -3862,9 +3949,9 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 className="flex items-center gap-3 p-3 rounded-md bg-slate-50 border border-slate-200 cursor-pointer hover:bg-slate-100 transition-colors"
                 draggable
                 onDragStart={(e) => {
-                    e.dataTransfer.setData('application/reactflow', 'action');
-                    e.dataTransfer.setData('application/actiontype', 'update_lead_stage');
-                    e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData('application/reactflow', 'action');
+                  e.dataTransfer.setData('application/actiontype', 'update_lead_stage');
+                  e.dataTransfer.effectAllowed = 'move';
                 }}
                 onClick={() => handleAddNodeFromPalette('action', 'update_lead_stage')}
                 title="Update the conversation's lead stage"
@@ -3885,8 +3972,8 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 className="flex items-center gap-3 p-3 rounded-md bg-indigo-50 border border-indigo-200 cursor-pointer hover:bg-indigo-100 transition-colors"
                 draggable
                 onDragStart={(e) => {
-                    e.dataTransfer.setData('application/reactflow', 'payment_request');
-                    e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData('application/reactflow', 'payment_request');
+                  e.dataTransfer.effectAllowed = 'move';
                 }}
                 onClick={handleAddPaymentRequestAction}
                 title="Send a payment request for courses or webinars"
@@ -3907,8 +3994,8 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 className="flex items-center gap-3 p-3 rounded-md bg-orange-50 border border-orange-200 cursor-pointer hover:bg-orange-100 transition-colors"
                 draggable
                 onDragStart={(e) => {
-                    e.dataTransfer.setData('application/reactflow', 'payment_reminder');
-                    e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData('application/reactflow', 'payment_reminder');
+                  e.dataTransfer.effectAllowed = 'move';
                 }}
                 onClick={handleAddPaymentReminderAction}
                 title="Follow up on pending payments with specific conditions"
@@ -3929,8 +4016,8 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 className="flex items-center gap-3 p-3 rounded-md bg-orange-50 border border-orange-200 cursor-pointer hover:bg-orange-100 transition-colors"
                 draggable
                 onDragStart={(e) => {
-                    e.dataTransfer.setData('application/reactflow', 'exotel_call');
-                    e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData('application/reactflow', 'exotel_call');
+                  e.dataTransfer.effectAllowed = 'move';
                 }}
                 onClick={handleAddExotelCallAction}
                 title="Initiate an outbound VoIP call via Exotel"
@@ -3950,8 +4037,8 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 className="flex items-center gap-3 p-3 rounded-md bg-red-50 border border-red-200 cursor-pointer hover:bg-red-100 transition-colors"
                 draggable
                 onDragStart={(e) => {
-                    e.dataTransfer.setData('application/reactflow', 'twilio_sms');
-                    e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData('application/reactflow', 'twilio_sms');
+                  e.dataTransfer.effectAllowed = 'move';
                 }}
                 onClick={handleAddTwilioSmsAction}
                 title="Send an SMS via Twilio"
@@ -3971,8 +4058,8 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 className="flex items-center gap-3 p-3 rounded-md bg-red-50 border border-red-200 cursor-pointer hover:bg-red-100 transition-colors"
                 draggable
                 onDragStart={(e) => {
-                    e.dataTransfer.setData('application/reactflow', 'twilio_call');
-                    e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData('application/reactflow', 'twilio_call');
+                  e.dataTransfer.effectAllowed = 'move';
                 }}
                 onClick={handleAddTwilioCallAction}
                 title="Make an outbound voice call via Twilio"
@@ -3993,8 +4080,8 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 className="flex items-center gap-3 p-3 rounded-md bg-orange-50 border border-orange-200 cursor-pointer hover:bg-orange-100 transition-colors"
                 draggable
                 onDragStart={(e) => {
-                    e.dataTransfer.setData('application/reactflow', 'notification');
-                    e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData('application/reactflow', 'notification');
+                  e.dataTransfer.effectAllowed = 'move';
                 }}
                 onClick={handleAddNotificationAction}
                 title="Send an internal alert to agents when this point is reached"
@@ -4013,9 +4100,9 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 className="flex items-center gap-3 p-3 rounded-md bg-orange-50 border border-orange-200 cursor-pointer hover:bg-orange-100 transition-colors"
                 draggable
                 onDragStart={(e) => {
-                    e.dataTransfer.setData('application/reactflow', 'action');
-                    e.dataTransfer.setData('application/actiontype', 'assign_agent');
-                    e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData('application/reactflow', 'action');
+                  e.dataTransfer.setData('application/actiontype', 'assign_agent');
+                  e.dataTransfer.effectAllowed = 'move';
                 }}
                 onClick={() => handleAddNodeFromPalette('action', 'assign_agent')}
                 title="Assign conversation to an agent (Round Robin or Direct)"
@@ -4034,8 +4121,8 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 className="flex items-center gap-3 p-3 rounded-md bg-orange-50 border border-orange-200 cursor-pointer hover:bg-orange-100 transition-colors"
                 draggable
                 onDragStart={(e) => {
-                    e.dataTransfer.setData('application/reactflow', 'delay');
-                    e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData('application/reactflow', 'delay');
+                  e.dataTransfer.effectAllowed = 'move';
                 }}
                 onClick={() => handleAddNodeFromPalette('delay')}
                 title="Wait before executing the next node"
@@ -4054,8 +4141,8 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 className="flex items-center gap-3 p-3 rounded-md bg-slate-50 border border-slate-200 cursor-pointer hover:bg-slate-100 transition-colors"
                 draggable
                 onDragStart={(e) => {
-                    e.dataTransfer.setData('application/reactflow', 'end');
-                    e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData('application/reactflow', 'end');
+                  e.dataTransfer.effectAllowed = 'move';
                 }}
                 onClick={() => handleAddNodeFromPalette('end')}
                 title="Terminate the workflow here"
@@ -4074,9 +4161,9 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 className="flex items-center gap-3 p-3 rounded-md bg-cyan-50 border border-cyan-200 cursor-pointer hover:bg-cyan-100 transition-colors"
                 draggable
                 onDragStart={(e) => {
-                    e.dataTransfer.setData('application/reactflow', 'action');
-                    e.dataTransfer.setData('application/actiontype', 'update_chat_status');
-                    e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData('application/reactflow', 'action');
+                  e.dataTransfer.setData('application/actiontype', 'update_chat_status');
+                  e.dataTransfer.effectAllowed = 'move';
                 }}
                 onClick={() => handleAddNodeFromPalette('action', 'update_chat_status')}
                 title="Change conversation status (open / snoozed / closed)"
@@ -4095,9 +4182,9 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 className="flex items-center gap-3 p-3 rounded-md bg-emerald-50 border border-emerald-200 cursor-pointer hover:bg-emerald-100 transition-colors"
                 draggable
                 onDragStart={(e) => {
-                    e.dataTransfer.setData('application/reactflow', 'action');
-                    e.dataTransfer.setData('application/actiontype', 'add_to_label');
-                    e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData('application/reactflow', 'action');
+                  e.dataTransfer.setData('application/actiontype', 'add_to_label');
+                  e.dataTransfer.effectAllowed = 'move';
                 }}
                 onClick={() => handleAddNodeFromPalette('action', 'add_to_label')}
                 title="Add contact to a label (group)"
@@ -4116,8 +4203,8 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 className="flex items-center gap-3 p-3 rounded-md bg-violet-50 border border-violet-200 cursor-pointer hover:bg-violet-100 transition-colors"
                 draggable
                 onDragStart={(e) => {
-                    e.dataTransfer.setData('application/reactflow', 'attribute_condition');
-                    e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData('application/reactflow', 'attribute_condition');
+                  e.dataTransfer.effectAllowed = 'move';
                 }}
                 onClick={() => handleAddNodeFromPalette('attribute_condition')}
                 title="Route based on contact attributes with AND/OR groups"
@@ -4530,7 +4617,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 </div>
               </div>
             )}
-            
+
             {selectedNode?.data?.lastContextPreview && (
               <div className="px-4 pt-4">
                 <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
@@ -6447,34 +6534,34 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                                           <option value={cl.key}>{cl.key}</option>
                                         )}
                                       </select>
-                                  <select
-                                    className="w-full border border-slate-300 rounded-md p-2 text-sm"
-                                    value={cl.op || 'eq'}
-                                    onChange={(e) => {
-                                      const groups = JSON.parse(JSON.stringify(selectedNode.data.groups || []));
-                                      groups[gi].clauses[ci].op = e.target.value;
-                                      updateNodeFields(selectedNode.id, { groups });
-                                    }}
-                                  >
-                                    <option value="eq">equal to (==)</option>
-                                    <option value="neq">not equal to (!=)</option>
-                                    <option value="gt">greater than (&gt;)</option>
-                                    <option value="lt">less than (&lt;)</option>
-                                    <option value="contains">contains</option>
-                                    <option value="not_contains">not contains</option>
-                                    <option value="starts_with">starts with</option>
-                                    <option value="ends_with">ends with</option>
-                                  </select>
-                                  <input
-                                    placeholder="Value"
-                                    className="w-full border border-slate-300 rounded-md p-2 text-sm"
-                                    value={cl.value || ''}
-                                    onChange={(e) => {
-                                      const groups = JSON.parse(JSON.stringify(selectedNode.data.groups || []));
-                                      groups[gi].clauses[ci].value = e.target.value;
-                                      updateNodeFields(selectedNode.id, { groups });
-                                    }}
-                                  />
+                                      <select
+                                        className="w-full border border-slate-300 rounded-md p-2 text-sm"
+                                        value={cl.op || 'eq'}
+                                        onChange={(e) => {
+                                          const groups = JSON.parse(JSON.stringify(selectedNode.data.groups || []));
+                                          groups[gi].clauses[ci].op = e.target.value;
+                                          updateNodeFields(selectedNode.id, { groups });
+                                        }}
+                                      >
+                                        <option value="eq">equal to (==)</option>
+                                        <option value="neq">not equal to (!=)</option>
+                                        <option value="gt">greater than (&gt;)</option>
+                                        <option value="lt">less than (&lt;)</option>
+                                        <option value="contains">contains</option>
+                                        <option value="not_contains">not contains</option>
+                                        <option value="starts_with">starts with</option>
+                                        <option value="ends_with">ends with</option>
+                                      </select>
+                                      <input
+                                        placeholder="Value"
+                                        className="w-full border border-slate-300 rounded-md p-2 text-sm"
+                                        value={cl.value || ''}
+                                        onChange={(e) => {
+                                          const groups = JSON.parse(JSON.stringify(selectedNode.data.groups || []));
+                                          groups[gi].clauses[ci].value = e.target.value;
+                                          updateNodeFields(selectedNode.id, { groups });
+                                        }}
+                                      />
                                     </div>
                                     {ci < clauses.length - 1 && (
                                       <div className="flex items-center gap-2">
@@ -6611,72 +6698,72 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                   {selectedNode.data.actionType === 'assign_agent' ? (
                     <div className="space-y-3">
                       <div className="space-y-1">
-                         <label className="text-xs text-slate-500">Assignment Mode</label>
-                         <select 
-                           className="w-full border border-slate-300 rounded-md p-2 text-sm"
-                           value={selectedNode.data.assignMode || (selectedNode.data.actionValue?.includes('{') ? 'round_robin' : 'direct')}
-                           onChange={(e) => {
-                             const mode = e.target.value;
-                             // Update local state for UI toggle
-                             const newData = { ...selectedNode.data, assignMode: mode };
-                             
-                             if (mode === 'direct') {
-                               newData.actionValue = '';
-                             } else {
-                               newData.actionValue = JSON.stringify({ course: '', language: '' });
-                             }
-                             
-                             // We need to update the node in the parent state
-                             // Since updateNodeData only updates one field, we might need a helper or just rely on react flow state
-                             // But here updateNodeData is a local helper in this component.
-                             // Let's check updateNodeData implementation.
-                             // It calls setNodes...
-                             // We can call it for assignMode first.
-                             updateNodeFields(selectedNode.id, newData);
-                           }}
-                         >
-                           <option value="direct">Direct Email</option>
-                           <option value="round_robin">Round Robin (Conditions)</option>
-                         </select>
+                        <label className="text-xs text-slate-500">Assignment Mode</label>
+                        <select
+                          className="w-full border border-slate-300 rounded-md p-2 text-sm"
+                          value={selectedNode.data.assignMode || (selectedNode.data.actionValue?.includes('{') ? 'round_robin' : 'direct')}
+                          onChange={(e) => {
+                            const mode = e.target.value;
+                            // Update local state for UI toggle
+                            const newData = { ...selectedNode.data, assignMode: mode };
+
+                            if (mode === 'direct') {
+                              newData.actionValue = '';
+                            } else {
+                              newData.actionValue = JSON.stringify({ course: '', language: '' });
+                            }
+
+                            // We need to update the node in the parent state
+                            // Since updateNodeData only updates one field, we might need a helper or just rely on react flow state
+                            // But here updateNodeData is a local helper in this component.
+                            // Let's check updateNodeData implementation.
+                            // It calls setNodes...
+                            // We can call it for assignMode first.
+                            updateNodeFields(selectedNode.id, newData);
+                          }}
+                        >
+                          <option value="direct">Direct Email</option>
+                          <option value="round_robin">Round Robin (Conditions)</option>
+                        </select>
                       </div>
 
                       {(selectedNode.data.assignMode === 'round_robin' || (selectedNode.data.actionValue && selectedNode.data.actionValue.includes('{'))) ? (
                         <div className="space-y-2 border-l-2 border-slate-200 pl-2">
-                           {(() => {
-                              let cond = {};
-                              try { cond = JSON.parse(selectedNode.data.actionValue || '{}'); } catch(e){}
-                              
-                              const updateCond = (key, val) => {
-                                 const newCond = { ...cond, [key]: val };
-                                 updateNodeData('actionValue', JSON.stringify(newCond));
-                              };
+                          {(() => {
+                            let cond = {};
+                            try { cond = JSON.parse(selectedNode.data.actionValue || '{}'); } catch (e) { }
 
-                              return (
-                                <>
-                                  <div className="space-y-1">
-                                    <label className="text-xs text-slate-500">Course</label>
-                                    <input
-                                      placeholder="e.g. CPA"
-                                      className="w-full border border-slate-300 rounded-md p-2 text-sm"
-                                      value={cond.course || ''}
-                                      onChange={(e) => updateCond('course', e.target.value)}
-                                    />
-                                  </div>
-                                  <div className="space-y-1">
-                                    <label className="text-xs text-slate-500">Language</label>
-                                    <input
-                                      placeholder="e.g. English"
-                                      className="w-full border border-slate-300 rounded-md p-2 text-sm"
-                                      value={cond.language || ''}
-                                      onChange={(e) => updateCond('language', e.target.value)}
-                                    />
-                                  </div>
-                                  <p className="text-[10px] text-slate-500">
-                                    Assigns to available agent via Round Robin logic (Least Recently Assigned).
-                                  </p>
-                                </>
-                              );
-                           })()}
+                            const updateCond = (key, val) => {
+                              const newCond = { ...cond, [key]: val };
+                              updateNodeData('actionValue', JSON.stringify(newCond));
+                            };
+
+                            return (
+                              <>
+                                <div className="space-y-1">
+                                  <label className="text-xs text-slate-500">Course</label>
+                                  <input
+                                    placeholder="e.g. CPA"
+                                    className="w-full border border-slate-300 rounded-md p-2 text-sm"
+                                    value={cond.course || ''}
+                                    onChange={(e) => updateCond('course', e.target.value)}
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-xs text-slate-500">Language</label>
+                                  <input
+                                    placeholder="e.g. English"
+                                    className="w-full border border-slate-300 rounded-md p-2 text-sm"
+                                    value={cond.language || ''}
+                                    onChange={(e) => updateCond('language', e.target.value)}
+                                  />
+                                </div>
+                                <p className="text-[10px] text-slate-500">
+                                  Assigns to available agent via Round Robin logic (Least Recently Assigned).
+                                </p>
+                              </>
+                            );
+                          })()}
                         </div>
                       ) : (
                         <div className="space-y-1">
