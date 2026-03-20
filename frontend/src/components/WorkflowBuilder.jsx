@@ -1087,6 +1087,9 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
   const [templateFocusedVarKey, setTemplateFocusedVarKey] = useState(null);
   const [isCSVModalOpen, setIsCSVModalOpen] = useState(false);
   const [isCSVGuideOpen, setIsCSVGuideOpen] = useState(false);
+  const [csvBuilderRows, setCsvBuilderRows] = useState([
+    { step_id: 'trigger_1', type: 'trigger', content: 'hello', next_step_id: '' }
+  ]);
   const [pabblyJSON, setPabblyJSON] = useState('');
   const recognitionRef = useRef(null);
   const hasIncomingWebhookTrigger = nodes.some((n) => n && n.type === 'incoming_webhook');
@@ -1986,6 +1989,34 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
     };
     reader.readAsText(file);
     e.target.value = '';
+  };
+
+  const handleAddBuilderRow = () => {
+    const lastId = csvBuilderRows.length ? csvBuilderRows[csvBuilderRows.length-1].step_id : 'step_0';
+    setCsvBuilderRows([...csvBuilderRows, { 
+      step_id: `step_${csvBuilderRows.length + 1}`, 
+      type: 'send_message', 
+      content: '', 
+      next_step_id: '' 
+    }]);
+  };
+
+  const handleUpdateBuilderRow = (index, field, value) => {
+    const nextArr = [...csvBuilderRows];
+    nextArr[index][field] = value;
+    setCsvBuilderRows(nextArr);
+  };
+
+  const handleDeleteBuilderRow = (index) => {
+    setCsvBuilderRows(csvBuilderRows.filter((_, i) => i !== index));
+  };
+
+  const downloadBuilderCSV = () => {
+    if (csvBuilderRows.length === 0) {
+      alert("Add some rows first.");
+      return;
+    }
+    downloadCSV(csvBuilderRows, 'my_custom_workflow.csv');
   };
 
   const handleMigratePabbly = () => {
@@ -3093,64 +3124,127 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 )}
 
                 <div className="grid grid-cols-1 gap-4">
-                  <div className="space-y-2">
-                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Step 1: Get the Sample</h4>
+                  <div className="space-y-3 bg-slate-50 border border-slate-200 rounded-xl p-4">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-[11px] font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                        <TableIcon size={14} className="text-indigo-600" />
+                        Interactive Planning Table
+                      </h4>
+                      <button 
+                        onClick={handleAddBuilderRow}
+                        className="text-[10px] bg-indigo-600 hover:bg-indigo-700 text-white px-2 py-1 rounded font-bold shadow-sm transition-all"
+                      >
+                        + Add Step
+                      </button>
+                    </div>
+
+                    <div className="space-y-2 overflow-x-auto">
+                      <table className="w-full text-[10px] text-slate-600">
+                        <thead>
+                          <tr className="border-b border-slate-200">
+                            <th className="text-left pb-1 font-bold">Step Name</th>
+                            <th className="text-left pb-1 font-bold">Type</th>
+                            <th className="text-left pb-1 font-bold">Content/Data</th>
+                            <th className="text-left pb-1 font-bold">Next Step</th>
+                            <th className="pb-1"></th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {csvBuilderRows.map((row, idx) => (
+                            <tr key={idx} className="group">
+                              <td className="py-2 pr-1">
+                                <input 
+                                  className="w-[80px] border border-slate-200 rounded p-1 bg-white"
+                                  value={row.step_id}
+                                  onChange={(e) => handleUpdateBuilderRow(idx, 'step_id', e.target.value)}
+                                />
+                              </td>
+                              <td className="py-2 pr-1">
+                                <select 
+                                  className="w-[90px] border border-slate-200 rounded p-1 bg-white outline-none"
+                                  value={row.type}
+                                  onChange={(e) => handleUpdateBuilderRow(idx, 'type', e.target.value)}
+                                >
+                                  <option value="trigger">Trigger</option>
+                                  <option value="send_template">Template</option>
+                                  <option value="send_message">Message</option>
+                                  <option value="delay">Delay</option>
+                                </select>
+                              </td>
+                              <td className="py-2 pr-1">
+                                <input 
+                                  className="w-[120px] border border-slate-200 rounded p-1 bg-white"
+                                  placeholder={row.type === 'delay' ? '1 day' : 'Keywords/Text'}
+                                  value={row.content}
+                                  onChange={(e) => handleUpdateBuilderRow(idx, 'content', e.target.value)}
+                                />
+                              </td>
+                              <td className="py-2 pr-1">
+                                <select 
+                                  className="w-[80px] border border-slate-200 rounded p-1 bg-white outline-none"
+                                  value={row.next_step_id}
+                                  onChange={(e) => handleUpdateBuilderRow(idx, 'next_step_id', e.target.value)}
+                                >
+                                  <option value="">-None-</option>
+                                  {csvBuilderRows.filter((_, i) => i !== idx).map(r => (
+                                    <option key={r.step_id} value={r.step_id}>{r.step_id}</option>
+                                  ))}
+                                </select>
+                              </td>
+                              <td className="py-2 text-right">
+                                <button 
+                                  onClick={() => handleDeleteBuilderRow(idx)}
+                                  className="text-slate-300 hover:text-red-500 transition-colors"
+                                >
+                                  <XCircle size={14} />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
                     <button
-                      onClick={handleDownloadSample}
-                      className="w-full flex items-center justify-between p-4 border border-slate-200 rounded-xl hover:border-green-300 hover:bg-green-50 transition-all group"
+                      onClick={downloadBuilderCSV}
+                      className="w-full flex items-center justify-between p-3 bg-white border border-indigo-200 rounded-lg hover:border-indigo-400 transition-all text-[11px] font-bold text-indigo-700 shadow-sm"
                     >
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 bg-green-100 text-green-600 rounded-lg group-hover:scale-110 transition-transform">
-                          <FileIcon size={20} />
-                        </div>
-                        <div className="text-left">
-                          <div className="text-sm font-bold text-slate-800">Download Planning Sample</div>
-                          <div className="text-[10px] text-slate-500">Edit this example in Excel/Google Sheets.</div>
-                        </div>
-                      </div>
-                      <div className="text-[10px] font-bold text-green-600 border border-green-200 px-2 py-1 rounded bg-white">Sample CSV</div>
+                      Export Table to CSV
+                      <FileDown size={14} />
                     </button>
-                    <button
-                      onClick={handleDownloadSimplified}
-                      className="mt-2 w-full flex items-center justify-between p-2 px-3 border border-slate-200 rounded-lg text-[10px] font-medium text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
-                    >
-                      <div className="flex items-center gap-2">
-                        <Download size={14} /> Export Current as Execution CSV
-                      </div>
-                    </button>
+                    <p className="text-[9px] text-slate-400 italic">
+                      Step 1: Build your sequence here. Step 2: Download the CSV. Step 3: Upload it below to build!
+                    </p>
                   </div>
 
-                  <div className="space-y-2">
-                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Step 2: Upload & Auto-Build</h4>
-                    <label className="relative flex items-center justify-between p-4 border border-slate-200 rounded-xl cursor-pointer hover:border-blue-300 hover:bg-blue-50 transition-all group">
+                  <div className="space-y-2 pt-2">
+                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Ready to Auto-Build?</h4>
+                    <label className="relative flex items-center justify-between p-4 border border-indigo-200 rounded-xl cursor-pointer hover:border-indigo-300 hover:bg-slate-50 transition-all group bg-white shadow-sm">
                       <div className="flex items-center gap-3">
-                        <div className="p-2 bg-blue-100 text-blue-600 rounded-lg group-hover:scale-110 transition-transform">
+                        <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg group-hover:scale-110 transition-transform">
                           <Zap size={20} />
                         </div>
                         <div className="text-left">
-                          <div className="text-sm font-bold text-slate-800">Fast Upload & Build</div>
-                          <div className="text-[10px] text-slate-500">Automatically creates nodes, layout, and edges.</div>
+                          <div className="text-sm font-bold text-slate-800">Final Upload & Build</div>
+                          <div className="text-[10px] text-slate-500">Creates your visual flow from the CSV above.</div>
                         </div>
                       </div>
                       <input type="file" className="hidden" accept=".csv" onChange={handleUploadSimplified} />
-                      <div className="text-[10px] font-bold text-blue-600 border border-blue-200 px-2 py-1 rounded bg-white">Import CSV</div>
+                      <div className="text-[10px] font-bold text-white bg-indigo-600 px-3 py-1 rounded-full shadow-lg">IMPORT FILE</div>
                     </label>
                   </div>
 
-                  <div className="pt-4 border-t border-slate-100 space-y-2">
-                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">System Backup (Full Graph)</h4>
-                    <div className="flex gap-2">
-                      <button 
-                        onClick={handleDownloadFull}
-                        className="flex-1 flex items-center gap-2 p-2 px-3 border border-slate-200 rounded-lg text-[11px] font-medium text-slate-600 hover:bg-slate-50"
-                      >
-                        <Download size={14} /> Backup Current
-                      </button>
-                      <label className="flex-1 flex items-center gap-2 p-2 px-3 border border-slate-200 rounded-lg text-[11px] font-medium text-slate-600 hover:bg-slate-50 cursor-pointer">
-                        <Upload size={14} /> Restore Backup
-                        <input type="file" className="hidden" accept=".csv" onChange={handleUploadFull} />
-                      </label>
-                    </div>
+                  <div className="pt-4 border-t border-slate-100 flex gap-4">
+                    <button 
+                      onClick={handleDownloadFull}
+                      className="flex-1 flex items-center justify-center gap-1.5 p-2 border border-slate-200 rounded-lg text-[10px] font-bold text-slate-500 hover:bg-slate-50"
+                    >
+                      <Download size={12} /> Backup Logic
+                    </button>
+                    <label className="flex-1 flex items-center justify-center gap-1.5 p-2 border border-slate-200 rounded-lg text-[10px] font-bold text-slate-500 hover:bg-slate-50 cursor-pointer">
+                      <Upload size={12} /> Restore Logic
+                      <input type="file" className="hidden" accept=".csv" onChange={handleUploadFull} />
+                    </label>
                   </div>
                 </div>
               </div>
