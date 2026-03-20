@@ -1880,6 +1880,89 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
     downloadCSV(rows, 'workflow_full.csv');
   };
 
+  const handleDownloadSample = () => {
+    const sampleRows = [
+      { step_id: 'trigger_1', type: 'trigger', content: 'hello, hi, start', next_step_id: 'msg_1' },
+      { step_id: 'msg_1', type: 'send_template', content: 'welcome_template', next_step_id: 'delay_1' },
+      { step_id: 'delay_1', type: 'delay', content: '1 day', next_step_id: 'msg_2' },
+      { step_id: 'msg_2', type: 'send_message', content: 'How are you finding the course?', next_step_id: '' }
+    ];
+    downloadCSV(sampleRows, 'workflow_sample.csv');
+  };
+
+  const handleUploadSimplified = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const rows = parseCSV(event.target.result);
+        const nextNodes = [];
+        const nextEdges = [];
+        
+        let currentY = 0;
+
+        rows.forEach((row, index) => {
+          const id = row.step_id || `step_${index}`;
+          const type = (row.type || 'send_message').toLowerCase();
+          const content = row.content || '';
+
+          let nodeData = { label: id };
+          let nodeType = type;
+
+          if (type === 'trigger') {
+            nodeType = 'trigger';
+            nodeData = { ...nodeData, keywords: content, label: 'WhatsApp Incoming' };
+          } else if (type === 'send_template') {
+            nodeType = 'send_template';
+            nodeData = { ...nodeData, template: content, label: 'Send Template' };
+          } else if (type === 'send_message' || type === 'message') {
+            nodeType = 'send_message';
+            nodeData = { ...nodeData, message: content, label: 'Response Message' };
+          } else if (type === 'delay') {
+            nodeType = 'delay';
+            const parts = content.split(' ');
+            const duration = parseInt(parts[0], 10) || 1;
+            const unit = (parts[1] || 'minutes').toLowerCase();
+            nodeData = { ...nodeData, duration, unit, label: 'Time Delay' };
+          }
+
+          nextNodes.push({
+            id,
+            type: nodeType,
+            position: { x: 250, y: currentY },
+            data: nodeData
+          });
+
+          if (row.next_step_id) {
+            nextEdges.push({
+              id: `e_${id}_${row.next_step_id}`,
+              source: id,
+              target: row.next_step_id
+            });
+          }
+
+          currentY += 160; 
+        });
+
+        if (nextNodes.length === 0) {
+          alert("No steps found in the CSV.");
+          return;
+        }
+
+        setNodes(nextNodes);
+        setEdges(nextEdges);
+        alert(`Auto-built workflow with ${nextNodes.length} steps!`);
+        setIsCSVModalOpen(false);
+      } catch (err) {
+        console.error(err);
+        alert('Failed to auto-build workflow. Ensure column names are correct: step_id, type, content, next_step_id');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
   const handleUploadFull = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -2842,54 +2925,70 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
             </div>
 
             <div className="p-6 space-y-6">
-              <div className="p-4 bg-amber-50 border border-amber-100 rounded-xl flex gap-3">
-                <div className="p-1.5 bg-white text-amber-600 rounded shadow-sm h-fit">
-                  <Settings size={14} />
+              <div className="p-4 bg-indigo-50 border border-indigo-100 rounded-xl flex gap-3 shadow-sm">
+                <div className="p-1.5 bg-white text-indigo-600 rounded-lg shadow-sm h-fit">
+                  <WorkflowIcon size={16} />
                 </div>
                 <div>
-                  <p className="text-[11px] text-amber-800 font-bold">Unified CSV Management</p>
-                  <p className="text-[10px] text-amber-700 leading-relaxed mt-0.5">
-                    We've combined Nodes and Edges into a single file. 
-                    <b>Uploads will REFRESH</b> the entire canvas. Always back up your current flow before importing.
+                  <p className="text-[11px] text-indigo-800 font-bold">Auto-Build Workflow Interface</p>
+                  <p className="text-[10px] text-indigo-700 leading-relaxed mt-0.5">
+                    Admins can define a sequence of triggers, delays, and messages in a simple CSV. 
+                    The system will automatically generate all nodes and connections.
                   </p>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 gap-4">
                 <div className="space-y-2">
-                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Step 1: Download Format</h4>
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Step 1: Get the Sample</h4>
                   <button
-                    onClick={handleDownloadFull}
+                    onClick={handleDownloadSample}
                     className="w-full flex items-center justify-between p-4 border border-slate-200 rounded-xl hover:border-green-300 hover:bg-green-50 transition-all group"
                   >
                     <div className="flex items-center gap-3">
                       <div className="p-2 bg-green-100 text-green-600 rounded-lg group-hover:scale-110 transition-transform">
-                        <Download size={20} />
+                        <FileIcon size={20} />
                       </div>
                       <div className="text-left">
-                        <div className="text-sm font-bold text-slate-800">Download Current Flow</div>
-                        <div className="text-[10px] text-slate-500">Includes all nodes, data, and connections.</div>
+                        <div className="text-sm font-bold text-slate-800">Download Planning Sample</div>
+                        <div className="text-[10px] text-slate-500">Edit this example in Excel/Google Sheets.</div>
                       </div>
                     </div>
-                    <div className="text-[10px] font-bold text-green-600 border border-green-200 px-2 py-1 rounded bg-white">Get CSV</div>
+                    <div className="text-[10px] font-bold text-green-600 border border-green-200 px-2 py-1 rounded bg-white">Sample CSV</div>
                   </button>
                 </div>
 
                 <div className="space-y-2">
-                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Step 2: Upload Changes</h4>
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Step 2: Upload & Auto-Build</h4>
                   <label className="relative flex items-center justify-between p-4 border border-slate-200 rounded-xl cursor-pointer hover:border-blue-300 hover:bg-blue-50 transition-all group">
                     <div className="flex items-center gap-3">
                       <div className="p-2 bg-blue-100 text-blue-600 rounded-lg group-hover:scale-110 transition-transform">
-                        <Upload size={20} />
+                        <Zap size={20} />
                       </div>
                       <div className="text-left">
-                        <div className="text-sm font-bold text-slate-800">Upload Restructured CSV</div>
-                        <div className="text-[10px] text-slate-500">Must follow the unified format (entry_type: node/edge).</div>
+                        <div className="text-sm font-bold text-slate-800">Fast Upload & Build</div>
+                        <div className="text-[10px] text-slate-500">Automatically creates nodes, layout, and edges.</div>
                       </div>
                     </div>
-                    <input type="file" className="hidden" accept=".csv" onChange={handleUploadFull} />
-                    <div className="text-[10px] font-bold text-blue-600 border border-blue-200 px-2 py-1 rounded bg-white">Upload File</div>
+                    <input type="file" className="hidden" accept=".csv" onChange={handleUploadSimplified} />
+                    <div className="text-[10px] font-bold text-blue-600 border border-blue-200 px-2 py-1 rounded bg-white">Import CSV</div>
                   </label>
+                </div>
+
+                <div className="pt-4 border-t border-slate-100 space-y-2">
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">System Backup (Full Graph)</h4>
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={handleDownloadFull}
+                      className="flex-1 flex items-center gap-2 p-2 px-3 border border-slate-200 rounded-lg text-[11px] font-medium text-slate-600 hover:bg-slate-50"
+                    >
+                      <Download size={14} /> Backup Current
+                    </button>
+                    <label className="flex-1 flex items-center gap-2 p-2 px-3 border border-slate-200 rounded-lg text-[11px] font-medium text-slate-600 hover:bg-slate-50 cursor-pointer">
+                      <Upload size={14} /> Restore Backup
+                      <input type="file" className="hidden" accept=".csv" onChange={handleUploadFull} />
+                    </label>
+                  </div>
                 </div>
               </div>
             </div>
