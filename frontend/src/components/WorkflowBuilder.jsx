@@ -15,7 +15,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { Button } from './ui/Button';
-import { Save, ArrowLeft, Plus, Clock, MessageSquare, GitBranch, Zap, StopCircle, Loader2, Play, MessageCircle, Code, UserCheck, Tag, Mic, Workflow as WorkflowIcon, Megaphone, Filter, Link, Copy, Check, RefreshCw, Trash2, Globe, Send, ChevronDown, ChevronUp, Image, Video, FileText as FileIcon, Upload, X, Star, CreditCard, BellRing, Bell, Mail, ListChecks, Phone } from 'lucide-react';
+import { Save, ArrowLeft, Plus, Clock, MessageSquare, GitBranch, Zap, StopCircle, Loader2, Play, MessageCircle, Code, UserCheck, Tag, Mic, Workflow as WorkflowIcon, Megaphone, Filter, Link, Copy, Check, RefreshCw, Trash2, Globe, Send, ChevronDown, ChevronUp, Image, Video, FileText as FileIcon, Upload, X, Star, CreditCard, BellRing, Bell, Mail, ListChecks, Phone, FileSpreadsheet, Download } from 'lucide-react';const LinkIcon = Link;
 import { getTemplates, runWorkflow, aiGenerateWorkflow, getWorkflows, getCampaigns, getWebhookEvents, clearWebhookEvents, fetchMediaLibrary, uploadFlowMedia, createPaymentLink, getLabels, getEmailTemplates, getLeadStages } from '../api';
 import { GallerySelectModal } from './GallerySelectModal';
 import { connectSocket } from '../socket';
@@ -1085,6 +1085,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
   const [showGalleryModal, setShowGalleryModal] = useState(false);
   const [galleryTarget, setGalleryTarget] = useState(null); // 'header' | null
   const [templateFocusedVarKey, setTemplateFocusedVarKey] = useState(null);
+  const [isCSVModalOpen, setIsCSVModalOpen] = useState(false);
   const recognitionRef = useRef(null);
   const hasIncomingWebhookTrigger = nodes.some((n) => n && n.type === 'incoming_webhook');
 
@@ -1790,6 +1791,121 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
       return positionedNodes;
     });
   }, [setNodes, setEdges]);
+  
+  // --- CSV Helpers ---
+  const downloadCSV = (rows, filename) => {
+    if (!rows.length) return;
+    const headers = Object.keys(rows[0]);
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => headers.map(h => {
+        let val = row[h] === undefined ? '' : row[h];
+        if (typeof val === 'object') val = JSON.stringify(val);
+        // Escape quotes
+        val = String(val).replace(/"/g, '""');
+        return `"${val}"`;
+      }).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleDownloadNodes = () => {
+    const data = nodes.map(n => ({
+      id: n.id,
+      type: n.type,
+      label: n.data?.label || '',
+      x: n.position?.x || 0,
+      y: n.position?.y || 0,
+      data: JSON.stringify(n.data || {})
+    }));
+    downloadCSV(data, 'workflow_nodes.csv');
+  };
+
+  const handleDownloadEdges = () => {
+    const data = edges.map(e => ({
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      sourceHandle: e.sourceHandle || '',
+      targetHandle: e.targetHandle || ''
+    }));
+    downloadCSV(data, 'workflow_edges.csv');
+  };
+
+  const parseCSV = (text) => {
+    const lines = text.split(/\r?\n/);
+    if (lines.length < 2) return [];
+    const headers = lines[0].split(',').map(h => h.replace(/^"|"$/g, '').trim());
+    return lines.slice(1).filter(l => l.trim()).map(line => {
+      // Simple regex for CSV parsing that handles quotes
+      const values = line.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || [];
+      const row = {};
+      headers.forEach((h, i) => {
+        let val = values[i] || '';
+        val = val.replace(/^"|"$/g, '').replace(/""/g, '"');
+        row[h] = val;
+      });
+      return row;
+    });
+  };
+
+  const handleUploadNodes = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const rows = parseCSV(event.target.result);
+        const newNodes = rows.map(row => ({
+          id: row.id || getId(),
+          type: row.type || 'send_message',
+          position: { x: parseFloat(row.x || 0), y: parseFloat(row.y || 0) },
+          data: row.data ? JSON.parse(row.data) : { label: row.label }
+        }));
+        setNodes(newNodes);
+        alert(`Successfully imported ${newNodes.length} nodes.`);
+      } catch (err) {
+        console.error(err);
+        alert('Failed to parse Nodes CSV. Please check the format.');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = ''; // Reset
+  };
+
+  const handleUploadEdges = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const rows = parseCSV(event.target.result);
+        const newEdges = rows.map(row => ({
+          id: row.id || `e_${row.source}_${row.target}`,
+          source: row.source,
+          target: row.target,
+          sourceHandle: row.sourceHandle || undefined,
+          targetHandle: row.targetHandle || undefined
+        }));
+        setEdges(newEdges);
+        alert(`Successfully imported ${newEdges.length} edges.`);
+      } catch (err) {
+        console.error(err);
+        alert('Failed to parse Edges CSV. Please check the format.');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = ''; // Reset
+  };
 
   const handleListItemDragStart = (event, nodeId) => {
     setDraggingNodeId(nodeId);
@@ -2684,6 +2800,107 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
 
   return (
     <div className="flex flex-col h-screen w-full bg-slate-50 relative">
+      {/* CSV Modal */}
+      {isCSVModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl w-[500px] max-w-[95vw] overflow-hidden">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-green-100 text-green-600 rounded-lg">
+                  <FileSpreadsheet size={24} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">CSV Bulk Interface</h3>
+                  <p className="text-xs text-slate-500">Import or Export workflow structure via Google Sheets / Excel.</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsCSVModalOpen(false)}
+                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* Export Section */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Export Current Flow</h4>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={handleDownloadNodes}
+                    className="flex flex-col items-center justify-center gap-2 p-4 border border-slate-200 rounded-xl hover:border-green-300 hover:bg-green-50/50 transition-all group"
+                  >
+                    <Download className="text-slate-400 group-hover:text-green-600" size={24} />
+                    <span className="text-xs font-semibold text-slate-700">Download Nodes</span>
+                  </button>
+                  <button
+                    onClick={handleDownloadEdges}
+                    className="flex flex-col items-center justify-center gap-2 p-4 border border-slate-200 rounded-xl hover:border-blue-300 hover:bg-blue-50/50 transition-all group"
+                  >
+                    <Download className="text-slate-400 group-hover:text-blue-600" size={24} />
+                    <span className="text-xs font-semibold text-slate-700">Download Edges</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Import Section */}
+              <div className="space-y-4 pt-2 border-t border-slate-100">
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Import Structure</h4>
+                
+                <div className="space-y-4">
+                  <div className="p-4 bg-amber-50 border border-amber-100 rounded-xl flex gap-3">
+                    <div className="p-1.5 bg-white text-amber-600 rounded shadow-sm h-fit">
+                      <Settings size={14} />
+                    </div>
+                    <div>
+                      <p className="text-[11px] text-amber-800 font-medium font-bold">Important Notice</p>
+                      <p className="text-[10px] text-amber-700 leading-relaxed mt-0.5">
+                        Uploading CSV will <b>REPLACE</b> the existing nodes and connections. 
+                        We recommend downloading the current structure first as a backup.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-3">
+                    <label className="relative flex items-center justify-between p-3 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-slate-100 text-slate-600 rounded-lg">
+                          <Upload size={18} />
+                        </div>
+                        <div>
+                          <div className="text-sm font-semibold text-slate-800">Upload Nodes CSV</div>
+                          <div className="text-[10px] text-slate-500">Required: id, type, label, x, y, data</div>
+                        </div>
+                      </div>
+                      <input type="file" className="hidden" accept=".csv" onChange={handleUploadNodes} />
+                      <div className="text-[10px] font-bold text-green-600 bg-green-50 px-2 py-1 rounded">Select File</div>
+                    </label>
+
+                    <label className="relative flex items-center justify-between p-3 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-slate-100 text-slate-600 rounded-lg">
+                          <LinkIcon size={18} />
+                        </div>
+                        <div>
+                          <div className="text-sm font-semibold text-slate-800">Upload Edges CSV</div>
+                          <div className="text-[10px] text-slate-500">Required: id, source, target</div>
+                        </div>
+                      </div>
+                      <input type="file" className="hidden" accept=".csv" onChange={handleUploadEdges} />
+                      <div className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded">Select File</div>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end">
+              <Button onClick={() => setIsCSVModalOpen(false)}>Close Interface</Button>
+            </div>
+          </div>
+        </div>
+      )}
       {isVoiceModalOpen && (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="bg-white rounded-lg shadow-xl w-[480px] max-w-[95vw] p-6 space-y-4">
@@ -2907,6 +3124,14 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
           >
             <Mic size={16} />
             Add using voice
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => setIsCSVModalOpen(true)}
+            className="flex items-center gap-2 text-slate-700 border-slate-200 hover:bg-slate-50"
+          >
+            <FileSpreadsheet size={16} />
+            CSV Interface
           </Button>
           <Button
             variant="outline"
