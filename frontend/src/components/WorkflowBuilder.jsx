@@ -1086,6 +1086,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
   const [galleryTarget, setGalleryTarget] = useState(null); // 'header' | null
   const [templateFocusedVarKey, setTemplateFocusedVarKey] = useState(null);
   const [isCSVModalOpen, setIsCSVModalOpen] = useState(false);
+  const [isCSVGuideOpen, setIsCSVGuideOpen] = useState(false);
   const [pabblyJSON, setPabblyJSON] = useState('');
   const recognitionRef = useRef(null);
   const hasIncomingWebhookTrigger = nodes.some((n) => n && n.type === 'incoming_webhook');
@@ -3038,64 +3039,118 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-4">
-                <div className="space-y-2">
-                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Step 1: Get the Sample</h4>
-                  <button
-                    onClick={handleDownloadSample}
-                    className="w-full flex items-center justify-between p-4 border border-slate-200 rounded-xl hover:border-green-300 hover:bg-green-50 transition-all group"
+              <div className="space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                  <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Auto-Build Guide</h4>
+                  <button 
+                    onClick={() => setIsCSVGuideOpen(!isCSVGuideOpen)}
+                    className="text-[10px] font-bold text-indigo-600 flex items-center gap-1 hover:underline"
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-green-100 text-green-600 rounded-lg group-hover:scale-110 transition-transform">
-                        <FileIcon size={20} />
-                      </div>
-                      <div className="text-left">
-                        <div className="text-sm font-bold text-slate-800">Download Planning Sample</div>
-                        <div className="text-[10px] text-slate-500">Edit this example in Excel/Google Sheets.</div>
-                      </div>
-                    </div>
-                    <div className="text-[10px] font-bold text-green-600 border border-green-200 px-2 py-1 rounded bg-white">Sample CSV</div>
-                  </button>
-                  <button
-                    onClick={handleDownloadSimplified}
-                    className="mt-2 w-full flex items-center justify-between p-2 px-3 border border-slate-200 rounded-lg text-[10px] font-medium text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
-                  >
-                    <div className="flex items-center gap-2">
-                      <Download size={14} /> Export Current as Execution CSV
-                    </div>
+                    {isCSVGuideOpen ? 'Hide Guide' : 'Show Supported Types'}
+                    {isCSVGuideOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
                   </button>
                 </div>
 
-                <div className="space-y-2">
-                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Step 2: Upload & Auto-Build</h4>
-                  <label className="relative flex items-center justify-between p-4 border border-slate-200 rounded-xl cursor-pointer hover:border-blue-300 hover:bg-blue-50 transition-all group">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-blue-100 text-blue-600 rounded-lg group-hover:scale-110 transition-transform">
-                        <Zap size={20} />
-                      </div>
-                      <div className="text-left">
-                        <div className="text-sm font-bold text-slate-800">Fast Upload & Build</div>
-                        <div className="text-[10px] text-slate-500">Automatically creates nodes, layout, and edges.</div>
-                      </div>
+                {isCSVGuideOpen && (
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 overflow-y-auto max-h-[300px] text-[11px] space-y-4 shadow-inner">
+                    <div className="space-y-2">
+                      <p className="font-bold text-slate-800 border-l-2 border-green-500 pl-2 uppercase tracking-tighter text-[10px]">Triggers</p>
+                      <ul className="space-y-1 text-slate-600 pl-4 list-disc">
+                        <li><strong>trigger</strong>: Wait for keywords. <br className="mb-0.5"/><span className="text-slate-400 font-mono">Content: "hello, hi, help"</span></li>
+                        <li><strong>campaign_trigger</strong>: When a campaign is sent.</li>
+                        <li><strong>incoming_webhook</strong>: POST to a unique URL.</li>
+                        <li><strong>new_contact</strong>: When person is added.</li>
+                      </ul>
                     </div>
-                    <input type="file" className="hidden" accept=".csv" onChange={handleUploadSimplified} />
-                    <div className="text-[10px] font-bold text-blue-600 border border-blue-200 px-2 py-1 rounded bg-white">Import CSV</div>
-                  </label>
-                </div>
 
-                <div className="pt-4 border-t border-slate-100 space-y-2">
-                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">System Backup (Full Graph)</h4>
-                  <div className="flex gap-2">
-                    <button 
-                      onClick={handleDownloadFull}
-                      className="flex-1 flex items-center gap-2 p-2 px-3 border border-slate-200 rounded-lg text-[11px] font-medium text-slate-600 hover:bg-slate-50"
+                    <div className="space-y-2">
+                      <p className="font-bold text-slate-800 border-l-2 border-indigo-500 pl-2 uppercase tracking-tighter text-[10px]">Core Actions</p>
+                      <ul className="space-y-1 text-slate-600 pl-4 list-disc">
+                        <li><strong>send_template</strong>: Send WhatsApp template. <br className="mb-0.5" /><span className="text-slate-400 font-mono">Content: "template_name"</span></li>
+                        <li><strong>send_message</strong>: Direct WhatsApp message. <br className="mb-0.5" /><span className="text-slate-400 font-mono">Content: "Your message text"</span></li>
+                        <li><strong>delay</strong>: Wait before next step. <br className="mb-0.5" /><span className="text-slate-400 font-mono">Content: "1 day" or "15 minutes"</span></li>
+                        <li><strong>send_email</strong>: Template-based email action.</li>
+                        <li><strong>send_sms_otp</strong>: Fast2SMS OTP action.</li>
+                      </ul>
+                    </div>
+
+                    <div className="space-y-2">
+                      <p className="font-bold text-slate-800 border-l-2 border-orange-500 pl-2 uppercase tracking-tighter text-[10px]">Operations & Payments</p>
+                      <ul className="space-y-1 text-slate-600 pl-4 list-disc">
+                        <li><strong>update_lead_stage</strong>: Move CRM stage.</li>
+                        <li><strong>assign_agent</strong>: Route to specific agent.</li>
+                        <li><strong>razorpay_link</strong>: Generate payment link.</li>
+                        <li><strong>payment_request</strong>: Collect fees.</li>
+                        <li><strong>add_to_label</strong>: Segment contacts.</li>
+                        <li><strong>end</strong>: Terminate the sequence.</li>
+                      </ul>
+                    </div>
+
+                    <p className="text-[10px] text-slate-400 italic pt-2 border-t border-slate-200">
+                      * Refer to the Sample CSV for the exact column headers: <span className="font-mono bg-slate-100 px-1 rounded">step_id, type, content, next_step_id</span>.
+                    </p>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 gap-4">
+                  <div className="space-y-2">
+                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Step 1: Get the Sample</h4>
+                    <button
+                      onClick={handleDownloadSample}
+                      className="w-full flex items-center justify-between p-4 border border-slate-200 rounded-xl hover:border-green-300 hover:bg-green-50 transition-all group"
                     >
-                      <Download size={14} /> Backup Current
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-green-100 text-green-600 rounded-lg group-hover:scale-110 transition-transform">
+                          <FileIcon size={20} />
+                        </div>
+                        <div className="text-left">
+                          <div className="text-sm font-bold text-slate-800">Download Planning Sample</div>
+                          <div className="text-[10px] text-slate-500">Edit this example in Excel/Google Sheets.</div>
+                        </div>
+                      </div>
+                      <div className="text-[10px] font-bold text-green-600 border border-green-200 px-2 py-1 rounded bg-white">Sample CSV</div>
                     </button>
-                    <label className="flex-1 flex items-center gap-2 p-2 px-3 border border-slate-200 rounded-lg text-[11px] font-medium text-slate-600 hover:bg-slate-50 cursor-pointer">
-                      <Upload size={14} /> Restore Backup
-                      <input type="file" className="hidden" accept=".csv" onChange={handleUploadFull} />
+                    <button
+                      onClick={handleDownloadSimplified}
+                      className="mt-2 w-full flex items-center justify-between p-2 px-3 border border-slate-200 rounded-lg text-[10px] font-medium text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Download size={14} /> Export Current as Execution CSV
+                      </div>
+                    </button>
+                  </div>
+
+                  <div className="space-y-2">
+                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Step 2: Upload & Auto-Build</h4>
+                    <label className="relative flex items-center justify-between p-4 border border-slate-200 rounded-xl cursor-pointer hover:border-blue-300 hover:bg-blue-50 transition-all group">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-blue-100 text-blue-600 rounded-lg group-hover:scale-110 transition-transform">
+                          <Zap size={20} />
+                        </div>
+                        <div className="text-left">
+                          <div className="text-sm font-bold text-slate-800">Fast Upload & Build</div>
+                          <div className="text-[10px] text-slate-500">Automatically creates nodes, layout, and edges.</div>
+                        </div>
+                      </div>
+                      <input type="file" className="hidden" accept=".csv" onChange={handleUploadSimplified} />
+                      <div className="text-[10px] font-bold text-blue-600 border border-blue-200 px-2 py-1 rounded bg-white">Import CSV</div>
                     </label>
+                  </div>
+
+                  <div className="pt-4 border-t border-slate-100 space-y-2">
+                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">System Backup (Full Graph)</h4>
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={handleDownloadFull}
+                        className="flex-1 flex items-center gap-2 p-2 px-3 border border-slate-200 rounded-lg text-[11px] font-medium text-slate-600 hover:bg-slate-50"
+                      >
+                        <Download size={14} /> Backup Current
+                      </button>
+                      <label className="flex-1 flex items-center gap-2 p-2 px-3 border border-slate-200 rounded-lg text-[11px] font-medium text-slate-600 hover:bg-slate-50 cursor-pointer">
+                        <Upload size={14} /> Restore Backup
+                        <input type="file" className="hidden" accept=".csv" onChange={handleUploadFull} />
+                      </label>
+                    </div>
                   </div>
                 </div>
               </div>
