@@ -1045,6 +1045,7 @@ const getAllDefinedVariables = (nodes) => {
 
 export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
   const reactFlowWrapper = useRef(null);
+  const cellRefs = useRef([]);
   const [nodes, setNodes, onNodesChange] = useNodesState(initialWorkflow?.steps?.nodes || []);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialWorkflow?.steps?.edges || []);
   const [reactFlowInstance, setReactFlowInstance] = useState(null);
@@ -1216,7 +1217,6 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
     s.on('workflow:step:complete', onStepComplete);
     s.on('workflow:step:error', onStepError);
     s.on('workflow:run:complete', onComplete);
-
     return () => {
       s.off('workflow:run:start', onStart);
       s.off('workflow:step:start', onStepStart);
@@ -1226,6 +1226,71 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
       s.disconnect();
     };
   }, [initialWorkflow, setNodes]);
+
+  // Use the global getId defined at line 856 instead of redeclaring here
+
+
+
+  const onConnect = useCallback(
+    (params) => setEdges((eds) => addEdge({ ...params, animated: true }, eds)),
+    [setEdges]
+  );
+
+  const onDragOver = useCallback((event) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+  }, []);
+
+  const onNodeClick = useCallback((event, node) => {
+    setSelectedNode(node);
+  }, []);
+
+  const onPaneClick = useCallback(() => {
+    setSelectedNode(null);
+  }, []);
+
+  const onDrop = useCallback(
+    (event) => {
+      event.preventDefault();
+
+      const type = event.dataTransfer.getData('application/reactflow');
+      const actionType = event.dataTransfer.getData('application/actiontype');
+
+      if (!type || !reactFlowInstance) {
+        return;
+      }
+
+      const position = reactFlowInstance.screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      });
+
+      let data = { label: `${type} node`, triggerType: 'incoming_whatsapp' };
+      if (type === 'action' && actionType) {
+        data.actionType = actionType;
+      }
+      
+      if (type === 'trigger') {
+        data.label = 'WhatsApp Incoming';
+        data.triggerType = 'incoming_whatsapp';
+      }
+
+      if (type === 'delay') {
+        data = { label: 'Time Delay', duration: 1, unit: 'minutes' };
+      }
+
+      const newNode = {
+        id: getId(),
+        type,
+        position,
+        data,
+      };
+
+      setNodes((nds) => nds.concat(newNode));
+      setSelectedNode(newNode);
+    },
+    [reactFlowInstance, setNodes]
+  );
 
   const downloadCSV = (rows, filename) => {
     if (!rows || rows.length === 0) {
