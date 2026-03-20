@@ -1086,6 +1086,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
   const [galleryTarget, setGalleryTarget] = useState(null); // 'header' | null
   const [templateFocusedVarKey, setTemplateFocusedVarKey] = useState(null);
   const [isCSVModalOpen, setIsCSVModalOpen] = useState(false);
+  const [pabblyJSON, setPabblyJSON] = useState('');
   const recognitionRef = useRef(null);
   const hasIncomingWebhookTrigger = nodes.some((n) => n && n.type === 'incoming_webhook');
 
@@ -1890,6 +1891,29 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
     downloadCSV(sampleRows, 'workflow_sample.csv');
   };
 
+  const handleDownloadSimplified = () => {
+    const rows = nodes.map((n, index) => {
+      let content = '';
+      if (n.type === 'trigger') content = n.data?.keywords || '';
+      else if (n.type === 'send_template') content = n.data?.template || '';
+      else if (n.type === 'send_message') content = n.data?.message || '';
+      else if (n.type === 'delay') content = `${n.data?.duration || 1} ${n.data?.unit || 'minutes'}`;
+
+      const edge = edges.find(e => e.source === n.id);
+      return {
+        step_id: n.id,
+        type: n.type,
+        content,
+        next_step_id: edge ? edge.target : ''
+      };
+    });
+    if (rows.length === 0) {
+      alert("Workflow is empty.");
+      return;
+    }
+    downloadCSV(rows, 'workflow_execution.csv');
+  };
+
   const handleUploadSimplified = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -1961,6 +1985,82 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
     };
     reader.readAsText(file);
     e.target.value = '';
+  };
+
+  const handleMigratePabbly = () => {
+    if (!pabblyJSON.trim()) {
+      alert("Please paste the Pabbly JSON first.");
+      return;
+    }
+    try {
+      const data = JSON.parse(pabblyJSON);
+      const pabblySteps = data.steps || data.workflow?.steps || [];
+      if (!pabblySteps.length) {
+        alert("No steps found in the Pabbly JSON. Ensure you've pasted the full workflow export.");
+        return;
+      }
+
+      const nextNodes = [];
+      const nextEdges = [];
+      let currentY = 0;
+
+      pabblySteps.forEach((step, index) => {
+        const id = `pabbly_${step.id || index}`;
+        let type = 'send_message';
+        let nodeData = { label: step.name || step.label || 'Pabbly Step' };
+
+        // Simple Mapping Logic
+        const stepType = (step.type || '').toLowerCase();
+        const appName = (step.app_name || step.app || '').toLowerCase();
+
+        if (stepType === 'trigger') {
+          type = 'trigger';
+          nodeData.label = 'Pabbly Trigger';
+          nodeData.keywords = 'START'; // Default
+        } else if (appName.includes('whatsapp') || appName.includes('meta')) {
+          if (step.action_name?.toLowerCase().includes('template')) {
+            type = 'send_template';
+            nodeData.template = step.fields?.template_name || '';
+          } else {
+            type = 'send_message';
+            nodeData.message = step.fields?.message || '';
+          }
+        } else if (appName.includes('delay') || step.action_name?.toLowerCase().includes('delay')) {
+          type = 'delay';
+          nodeData.duration = parseInt(step.fields?.delay_value || '1', 10);
+          nodeData.unit = (step.fields?.delay_unit || 'minutes').toLowerCase();
+        } else if (appName.includes('email')) {
+          type = 'action';
+          nodeData.actionType = 'send_email';
+        }
+
+        nextNodes.push({
+          id,
+          type,
+          position: { x: 250, y: currentY },
+          data: nodeData
+        });
+
+        if (index > 0) {
+          nextEdges.push({
+            id: `e_${nextNodes[index - 1].id}_${id}`,
+            source: nextNodes[index - 1].id,
+            target: id
+          });
+        }
+
+        currentY += 160;
+      });
+
+      setNodes(nextNodes);
+      setEdges(nextEdges);
+      alert(`Migrated ${nextNodes.length} steps from Pabbly successfully!`);
+      setIsCSVModalOpen(false);
+      setPabblyJSON('');
+    } catch (err) {
+      console.error(err);
+      alert("Invalid JSON format. Please paste a valid Pabbly Connect workflow export.");
+    }
   };
 
   const handleUploadFull = (e) => {
@@ -2956,6 +3056,14 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                     </div>
                     <div className="text-[10px] font-bold text-green-600 border border-green-200 px-2 py-1 rounded bg-white">Sample CSV</div>
                   </button>
+                  <button
+                    onClick={handleDownloadSimplified}
+                    className="mt-2 w-full flex items-center justify-between p-2 px-3 border border-slate-200 rounded-lg text-[10px] font-medium text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Download size={14} /> Export Current as Execution CSV
+                    </div>
+                  </button>
                 </div>
 
                 <div className="space-y-2">
@@ -2993,8 +3101,30 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
               </div>
             </div>
 
-            <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end">
-              <Button onClick={() => setIsCSVModalOpen(false)}>Close Interface</Button>
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex flex-col gap-4">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 mb-1">
+                  <div className="p-1.5 bg-pink-100 text-pink-600 rounded">
+                    <Zap size={14} />
+                  </div>
+                  <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Migrate from Pabbly Connect</h4>
+                </div>
+                <textarea
+                  className="w-full h-24 p-3 text-[11px] font-mono border border-slate-200 rounded-xl bg-white focus:ring-2 focus:ring-pink-500 focus:border-transparent outline-none transition-all"
+                  placeholder='Paste Pabbly workflow JSON here...'
+                  value={pabblyJSON}
+                  onChange={(e) => setPabblyJSON(e.target.value)}
+                />
+                <Button 
+                  onClick={handleMigratePabbly}
+                  className="w-full bg-pink-600 hover:bg-pink-700 text-xs py-2 shadow-sm"
+                >
+                  Confirm Pabbly Migration
+                </Button>
+              </div>
+              <div className="flex justify-end pt-2 border-t border-slate-200">
+                <Button variant="ghost" className="text-xs" onClick={() => setIsCSVModalOpen(false)}>Close Interface</Button>
+              </div>
             </div>
           </div>
         </div>
