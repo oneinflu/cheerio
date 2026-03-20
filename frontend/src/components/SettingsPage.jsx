@@ -26,39 +26,39 @@ import {
 
 // ─── Brand icon URLs (SimpleIcons CDN + Wikimedia) ────────────────────────────
 const ICONS = {
-  whatsapp:    'https://cdn.simpleicons.org/whatsapp/25D366',
-  telegram:    'https://cdn.simpleicons.org/telegram/26A5E4',
-  instagram:   'https://cdn.simpleicons.org/instagram/E4405F',
-  gmail:       'https://cdn.simpleicons.org/gmail/EA4335',
-  slack:       'https://cdn.simpleicons.org/slack/4A154B',
-  zoho:        'https://cdn.simpleicons.org/zoho/E42527',
-  salesforce:  'https://cdn.simpleicons.org/salesforce/00A1E0',
-  notion:      'https://cdn.simpleicons.org/notion/000000',
-  hubspot:     'https://cdn.simpleicons.org/hubspot/FF7A59',
-  linear:      'https://cdn.simpleicons.org/linear/5E6AD2',
-  github:      'https://cdn.simpleicons.org/github/181717',
-  jira:        'https://cdn.simpleicons.org/jira/0052CC',
-  stripe:      'https://cdn.simpleicons.org/stripe/635BFF',
-  razorpay:    'https://cdn.simpleicons.org/razorpay/02042B',
-  cashfree:    'https://logo.clearbit.com/cashfree.com',
-  payu:        'https://logo.clearbit.com/payu.in',
-  googlesheets:'https://cdn.simpleicons.org/googlesheets/34A853',
-  twilio:      'https://cdn.simpleicons.org/twilio/F22F46',
-  airtel:      'https://logo.clearbit.com/airtel.in',
-  exotel:      'https://logo.clearbit.com/exotel.com',
-  openai:      'https://cdn.simpleicons.org/openai/412991',
-  anthropic:   'https://cdn.simpleicons.org/anthropic/191919',
-  xolox:       'https://logo.clearbit.com/xolox.in',
+  whatsapp: 'https://cdn.simpleicons.org/whatsapp/25D366',
+  telegram: 'https://cdn.simpleicons.org/telegram/26A5E4',
+  instagram: 'https://cdn.simpleicons.org/instagram/E4405F',
+  gmail: 'https://cdn.simpleicons.org/gmail/EA4335',
+  slack: 'https://cdn.simpleicons.org/slack/4A154B',
+  zoho: 'https://cdn.simpleicons.org/zoho/E42527',
+  salesforce: 'https://cdn.simpleicons.org/salesforce/00A1E0',
+  notion: 'https://cdn.simpleicons.org/notion/000000',
+  hubspot: 'https://cdn.simpleicons.org/hubspot/FF7A59',
+  linear: 'https://cdn.simpleicons.org/linear/5E6AD2',
+  github: 'https://cdn.simpleicons.org/github/181717',
+  jira: 'https://cdn.simpleicons.org/jira/0052CC',
+  stripe: 'https://cdn.simpleicons.org/stripe/635BFF',
+  razorpay: 'https://cdn.simpleicons.org/razorpay/02042B',
+  cashfree: 'https://logo.clearbit.com/cashfree.com',
+  payu: 'https://logo.clearbit.com/payu.in',
+  googlesheets: 'https://cdn.simpleicons.org/googlesheets/34A853',
+  twilio: 'https://cdn.simpleicons.org/twilio/F22F46',
+  airtel: 'https://logo.clearbit.com/airtel.in',
+  exotel: 'https://logo.clearbit.com/exotel.com',
+  openai: 'https://cdn.simpleicons.org/openai/412991',
+  anthropic: 'https://cdn.simpleicons.org/anthropic/191919',
+  xolox: 'https://logo.clearbit.com/xolox.in',
 };
 
 const CATEGORIES = [
-  { id: 'channels',  name: 'Communication Channels', icon: MessageSquare },
-  { id: 'livechat',  name: 'Live Chat & Website',    icon: Globe2 },
-  { id: 'mcp',       name: 'MCP Connectors',          icon: Server },
-  { id: 'crm',       name: 'CRM & Productivity',      icon: Database },
-  { id: 'payments',  name: 'Payments & Billing',       icon: CreditCard },
-  { id: 'voip',      name: 'VoIP & Calling',           icon: Phone },
-  { id: 'ai',        name: 'AI Providers',             icon: Sparkles },
+  { id: 'channels', name: 'Communication Channels', icon: MessageSquare },
+  { id: 'livechat', name: 'Live Chat & Website', icon: Globe2 },
+  { id: 'mcp', name: 'MCP Connectors', icon: Server },
+  { id: 'crm', name: 'CRM & Productivity', icon: Database },
+  { id: 'payments', name: 'Payments & Billing', icon: CreditCard },
+  { id: 'voip', name: 'VoIP & Calling', icon: Phone },
+  { id: 'ai', name: 'AI Providers', icon: Sparkles },
 ];
 
 const INTEGRATIONS_LIST = [
@@ -100,9 +100,9 @@ const INTEGRATIONS_LIST = [
     accentColor: '#4A154B',
     docsUrl: 'https://api.slack.com/apps',
     fields: [
-      { label: 'Bot User OAuth Token', key: 'bot_token',     placeholder: 'xoxb-...',         hint: 'From Slack App → OAuth & Permissions → Bot Token', type: 'password' },
-      { label: 'Signing Secret',       key: 'signing_secret', placeholder: 'abcd1234...',       hint: 'From Slack App → Basic Information → App Credentials', type: 'password' },
-      { label: 'Default Channel ID',   key: 'channel_id',    placeholder: 'C0123ABC456',       hint: 'Right-click a channel → View channel details → Channel ID' },
+      { label: 'Bot User OAuth Token', key: 'bot_token', placeholder: 'xoxb-...', hint: 'From Slack App → OAuth & Permissions → Bot Token', type: 'password' },
+      { label: 'Signing Secret', key: 'signing_secret', placeholder: 'abcd1234...', hint: 'From Slack App → Basic Information → App Credentials', type: 'password' },
+      { label: 'Default Channel ID', key: 'channel_id', placeholder: 'C0123ABC456', hint: 'Right-click a channel → View channel details → Channel ID' },
     ],
   },
 
@@ -116,11 +116,11 @@ const INTEGRATIONS_LIST = [
     docsUrl: 'https://xolox.in/pulse',
     badge: 'Featured',
     fields: [
-      { label: 'Pulse Site ID',       key: 'site_id',    placeholder: 'pulse_xxxxxxxxxxxx',            hint: 'Generated when you create a site in your XOLOX Pulse dashboard' },
-      { label: 'API Secret Key',      key: 'api_secret', placeholder: '••••••••••••••••••••••••',       hint: 'XOLOX Pulse → Settings → API → Copy secret key', type: 'password' },
-      { label: 'Webhook Endpoint',    key: 'webhook_url', placeholder: 'https://yourapp.com/webhook',  hint: 'Greeto will POST live-visitor events here. Leave blank to use auto-generated URL.' },
-      { label: 'Widget Theme Color',  key: 'theme_color', placeholder: '#6366f1',                      hint: 'Hex color for the Pulse chat widget launcher button' },
-      { label: 'Greeting Message',    key: 'greeting',    placeholder: 'Hi 👋 How can we help you today?', hint: 'First message visitors see when they open the Pulse chat widget' },
+      { label: 'Pulse Site ID', key: 'site_id', placeholder: 'pulse_xxxxxxxxxxxx', hint: 'Generated when you create a site in your XOLOX Pulse dashboard' },
+      { label: 'API Secret Key', key: 'api_secret', placeholder: '••••••••••••••••••••••••', hint: 'XOLOX Pulse → Settings → API → Copy secret key', type: 'password' },
+      { label: 'Webhook Endpoint', key: 'webhook_url', placeholder: 'https://yourapp.com/webhook', hint: 'Greeto will POST live-visitor events here. Leave blank to use auto-generated URL.' },
+      { label: 'Widget Theme Color', key: 'theme_color', placeholder: '#6366f1', hint: 'Hex color for the Pulse chat widget launcher button' },
+      { label: 'Greeting Message', key: 'greeting', placeholder: 'Hi 👋 How can we help you today?', hint: 'First message visitors see when they open the Pulse chat widget' },
     ],
   },
 
@@ -133,10 +133,10 @@ const INTEGRATIONS_LIST = [
     docsUrl: 'https://www.zoho.com/crm/developer/docs/api/v6/',
     mcpServer: 'https://mcp.zoho.com/v1/sse',
     fields: [
-      { label: 'Client ID',          key: 'client_id',     placeholder: '1000.XXXX...',          hint: 'From Zoho API Console → Self Client or Server-based app' },
-      { label: 'Client Secret',      key: 'client_secret', placeholder: 'xxxxxxxx...',             hint: 'Keep secret — used to exchange auth code for tokens', type: 'password' },
-      { label: 'Refresh Token',      key: 'refresh_token', placeholder: '1000.xxxx...yyyy',        hint: 'Long-lived token — generate from Zoho OAuth Playground', type: 'password' },
-      { label: 'Data Center Region', key: 'region',        placeholder: 'com / eu / in / au / jp', hint: 'Must match the region where your Zoho org is hosted' },
+      { label: 'Client ID', key: 'client_id', placeholder: '1000.XXXX...', hint: 'From Zoho API Console → Self Client or Server-based app' },
+      { label: 'Client Secret', key: 'client_secret', placeholder: 'xxxxxxxx...', hint: 'Keep secret — used to exchange auth code for tokens', type: 'password' },
+      { label: 'Refresh Token', key: 'refresh_token', placeholder: '1000.xxxx...yyyy', hint: 'Long-lived token — generate from Zoho OAuth Playground', type: 'password' },
+      { label: 'Data Center Region', key: 'region', placeholder: 'com / eu / in / au / jp', hint: 'Must match the region where your Zoho org is hosted' },
     ],
   },
   {
@@ -147,11 +147,11 @@ const INTEGRATIONS_LIST = [
     docsUrl: 'https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/',
     mcpServer: 'https://mcp.salesforce.com/v1/sse',
     fields: [
-      { label: 'Consumer Key (Client ID)',     key: 'consumer_key',    placeholder: 'Paste Consumer Key',              hint: 'From Setup → App Manager → Connected App → View' },
-      { label: 'Consumer Secret',              key: 'consumer_secret', placeholder: '••••••••',                        hint: 'Reveal from the Connected App detail page', type: 'password' },
-      { label: 'Username',                     key: 'username',        placeholder: 'user@org.salesforce.com',         hint: 'API-enabled Salesforce user (prefer a dedicated integration user)' },
-      { label: 'Security Token',               key: 'security_token',  placeholder: 'Append to password',              hint: 'Reset from My Settings → Personal → Reset My Security Token', type: 'password' },
-      { label: 'Instance / Environment URL',   key: 'instance_url',   placeholder: 'https://yourorg.salesforce.com',  hint: 'Use login.salesforce.com for prod, test.salesforce.com for sandbox' },
+      { label: 'Consumer Key (Client ID)', key: 'consumer_key', placeholder: 'Paste Consumer Key', hint: 'From Setup → App Manager → Connected App → View' },
+      { label: 'Consumer Secret', key: 'consumer_secret', placeholder: '••••••••', hint: 'Reveal from the Connected App detail page', type: 'password' },
+      { label: 'Username', key: 'username', placeholder: 'user@org.salesforce.com', hint: 'API-enabled Salesforce user (prefer a dedicated integration user)' },
+      { label: 'Security Token', key: 'security_token', placeholder: 'Append to password', hint: 'Reset from My Settings → Personal → Reset My Security Token', type: 'password' },
+      { label: 'Instance / Environment URL', key: 'instance_url', placeholder: 'https://yourorg.salesforce.com', hint: 'Use login.salesforce.com for prod, test.salesforce.com for sandbox' },
     ],
   },
   {
@@ -162,8 +162,8 @@ const INTEGRATIONS_LIST = [
     docsUrl: 'https://developers.notion.com/docs/getting-started',
     mcpServer: 'https://mcp.notion.com/sse',
     fields: [
-      { label: 'Internal Integration Secret', key: 'token',    placeholder: 'secret_xxxxxxxxxx...', hint: 'From notion.so/my-integrations → Your Integration → Show/copy secret', type: 'password' },
-      { label: 'Root Page / Database ID',     key: 'page_id',  placeholder: '8a2b3c4d5e6f...',       hint: 'Open the page in Notion → Share → Copy link → extract the 32-char ID' },
+      { label: 'Internal Integration Secret', key: 'token', placeholder: 'secret_xxxxxxxxxx...', hint: 'From notion.so/my-integrations → Your Integration → Show/copy secret', type: 'password' },
+      { label: 'Root Page / Database ID', key: 'page_id', placeholder: '8a2b3c4d5e6f...', hint: 'Open the page in Notion → Share → Copy link → extract the 32-char ID' },
     ],
   },
   {
@@ -175,7 +175,7 @@ const INTEGRATIONS_LIST = [
     mcpServer: 'https://mcp.hubspot.com/v1/sse',
     fields: [
       { label: 'Private App Token', key: 'token', placeholder: 'pat-eu1-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx', hint: 'HubSpot → Settings → Integrations → Private Apps → Create or copy token', type: 'password' },
-      { label: 'Portal / Hub ID',   key: 'hub_id', placeholder: '12345678', hint: 'Found in HubSpot URL: app.hubspot.com/contacts/{hub_id}/...' },
+      { label: 'Portal / Hub ID', key: 'hub_id', placeholder: '12345678', hint: 'Found in HubSpot URL: app.hubspot.com/contacts/{hub_id}/...' },
     ],
   },
   {
@@ -210,10 +210,10 @@ const INTEGRATIONS_LIST = [
     docsUrl: 'https://developer.atlassian.com/cloud/jira/platform/rest/v3/',
     mcpServer: 'https://mcp.atlassian.com/v1/sse',
     fields: [
-      { label: 'Atlassian Email',   key: 'email',   placeholder: 'you@company.com',                hint: 'The email linked to your Atlassian account' },
-      { label: 'API Token',         key: 'token',   placeholder: 'ATATxxxxxxxxxxxxxxxxxxxxxxxx',    hint: 'id.atlassian.com → Security → API tokens → Create', type: 'password' },
-      { label: 'Jira Cloud URL',    key: 'base_url', placeholder: 'https://yourorg.atlassian.net', hint: 'Your Jira cloud instance base URL' },
-      { label: 'Default Project Key', key: 'project', placeholder: 'ENG or SUPPORT',               hint: 'Used as the fallback project when creating/searching issues' },
+      { label: 'Atlassian Email', key: 'email', placeholder: 'you@company.com', hint: 'The email linked to your Atlassian account' },
+      { label: 'API Token', key: 'token', placeholder: 'ATATxxxxxxxxxxxxxxxxxxxxxxxx', hint: 'id.atlassian.com → Security → API tokens → Create', type: 'password' },
+      { label: 'Jira Cloud URL', key: 'base_url', placeholder: 'https://yourorg.atlassian.net', hint: 'Your Jira cloud instance base URL' },
+      { label: 'Default Project Key', key: 'project', placeholder: 'ENG or SUPPORT', hint: 'Used as the fallback project when creating/searching issues' },
     ],
   },
 
@@ -227,9 +227,9 @@ const INTEGRATIONS_LIST = [
     mcpServer: 'https://mcp.xolox.in/v1/sse',
     badge: 'New',
     fields: [
-      { label: 'XOLOX API Key',     key: 'api_key',     placeholder: 'xolox_live_xxxxxxxxxxxxxxxxxxxx', hint: 'XOLOX Dashboard → Settings → Developer → API Keys → Create', type: 'password' },
-      { label: 'Workspace ID',      key: 'workspace_id', placeholder: 'ws_xxxxxxxxxxxxxxxx',             hint: 'Found in XOLOX Dashboard URL: app.xolox.in/ws/{workspace_id}' },
-      { label: 'MCP Scope',         key: 'scope',        placeholder: 'visitors,leads,crm',              hint: 'Comma-separated scopes: visitors, leads, crm, conversations, analytics' },
+      { label: 'XOLOX API Key', key: 'api_key', placeholder: 'xolox_live_xxxxxxxxxxxxxxxxxxxx', hint: 'XOLOX Dashboard → Settings → Developer → API Keys → Create', type: 'password' },
+      { label: 'Workspace ID', key: 'workspace_id', placeholder: 'ws_xxxxxxxxxxxxxxxx', hint: 'Found in XOLOX Dashboard URL: app.xolox.in/ws/{workspace_id}' },
+      { label: 'MCP Scope', key: 'scope', placeholder: 'visitors,leads,crm', hint: 'Comma-separated scopes: visitors, leads, crm, conversations, analytics' },
     ],
   },
 
@@ -241,7 +241,7 @@ const INTEGRATIONS_LIST = [
     accentColor: '#FF7A59',
     docsUrl: 'https://developers.hubspot.com/docs/api/crm/contacts',
     fields: [
-      { label: 'Private App Token', key: 'token',  placeholder: 'pat-eu1-...',  hint: 'Settings → Integrations → Private Apps → Create app token', type: 'password' },
+      { label: 'Private App Token', key: 'token', placeholder: 'pat-eu1-...', hint: 'Settings → Integrations → Private Apps → Create app token', type: 'password' },
       { label: 'Default Pipeline ID', key: 'pipeline_id', placeholder: 'default', hint: 'Pipeline where new deals are created from conversations (optional)' },
     ],
   },
@@ -252,10 +252,10 @@ const INTEGRATIONS_LIST = [
     accentColor: '#E42527',
     docsUrl: 'https://www.zoho.com/crm/developer/docs/',
     fields: [
-      { label: 'Client ID',          key: 'client_id',     placeholder: '1000.XXXX...', hint: 'Zoho API Console → Server-based App' },
-      { label: 'Client Secret',      key: 'client_secret', placeholder: '••••••••',     type: 'password', hint: 'From the same API Console page' },
-      { label: 'Refresh Token',      key: 'refresh_token', placeholder: '1000.xxxx...', type: 'password', hint: 'Generate from accounts.zoho.com/oauth/playground' },
-      { label: 'Region',             key: 'region',        placeholder: 'com / eu / in', hint: 'Must match where your Zoho account is registered' },
+      { label: 'Client ID', key: 'client_id', placeholder: '1000.XXXX...', hint: 'Zoho API Console → Server-based App' },
+      { label: 'Client Secret', key: 'client_secret', placeholder: '••••••••', type: 'password', hint: 'From the same API Console page' },
+      { label: 'Refresh Token', key: 'refresh_token', placeholder: '1000.xxxx...', type: 'password', hint: 'Generate from accounts.zoho.com/oauth/playground' },
+      { label: 'Region', key: 'region', placeholder: 'com / eu / in', hint: 'Must match where your Zoho account is registered' },
     ],
   },
   {
@@ -267,10 +267,10 @@ const INTEGRATIONS_LIST = [
     docsUrl: 'https://xolox.in/developers/crm-api',
     badge: 'New',
     fields: [
-      { label: 'API Key',           key: 'api_key',      placeholder: 'xolox_live_xxxxxxxxxxxxxxxxxxxx', hint: 'XOLOX Dashboard → Settings → Developer → API Keys → Create', type: 'password' },
-      { label: 'Workspace ID',      key: 'workspace_id', placeholder: 'ws_xxxxxxxxxxxxxxxx',             hint: 'Found in your XOLOX workspace URL' },
-      { label: 'Default Pipeline',  key: 'pipeline_id',  placeholder: 'pipeline_xxxxxxxx',               hint: 'CRM pipeline where new deals are created from Greeto conversations (optional)' },
-      { label: 'Sync Direction',    key: 'sync_mode',    placeholder: 'bidirectional',                   hint: 'Options: bidirectional, greeto-to-xolox, xolox-to-greeto' },
+      { label: 'API Key', key: 'api_key', placeholder: 'xolox_live_xxxxxxxxxxxxxxxxxxxx', hint: 'XOLOX Dashboard → Settings → Developer → API Keys → Create', type: 'password' },
+      { label: 'Workspace ID', key: 'workspace_id', placeholder: 'ws_xxxxxxxxxxxxxxxx', hint: 'Found in your XOLOX workspace URL' },
+      { label: 'Default Pipeline', key: 'pipeline_id', placeholder: 'pipeline_xxxxxxxx', hint: 'CRM pipeline where new deals are created from Greeto conversations (optional)' },
+      { label: 'Sync Direction', key: 'sync_mode', placeholder: 'bidirectional', hint: 'Options: bidirectional, greeto-to-xolox, xolox-to-greeto' },
     ],
   },
   {
@@ -281,8 +281,8 @@ const INTEGRATIONS_LIST = [
     docsUrl: 'https://developers.google.com/sheets/api/guides/concepts',
     fields: [
       { label: 'Service Account JSON Key', key: 'sa_json', placeholder: 'Paste full JSON contents...', hint: 'GCP Console → IAM → Service Accounts → Create key (JSON). Share the sheet with the service account email.' },
-      { label: 'Spreadsheet ID',           key: 'sheet_id', placeholder: '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms', hint: 'Extract from the Google Sheets URL between /d/ and /edit' },
-      { label: 'Sheet / Tab Name',         key: 'tab_name', placeholder: 'Lead Data',                   hint: 'The exact name of the worksheet tab to write to' },
+      { label: 'Spreadsheet ID', key: 'sheet_id', placeholder: '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms', hint: 'Extract from the Google Sheets URL between /d/ and /edit' },
+      { label: 'Sheet / Tab Name', key: 'tab_name', placeholder: 'Lead Data', hint: 'The exact name of the worksheet tab to write to' },
     ],
   },
 
@@ -294,9 +294,9 @@ const INTEGRATIONS_LIST = [
     accentColor: '#02042B',
     docsUrl: 'https://razorpay.com/docs/api/',
     fields: [
-      { label: 'Key ID',       key: 'key_id',     placeholder: 'rzp_live_xxxxxxxxxxxxxxxxxx',  hint: 'Dashboard → Settings → API Keys → Generate live key' },
-      { label: 'Key Secret',   key: 'key_secret', placeholder: '••••••••••••••••••••••••',     hint: 'Copy immediately — Razorpay only shows it once', type: 'password' },
-      { label: 'Webhook Secret', key: 'webhook_secret', placeholder: 'whsec_...',             hint: 'Dashboard → Settings → Webhooks → Add new endpoint → copy secret', type: 'password' },
+      { label: 'Key ID', key: 'key_id', placeholder: 'rzp_live_xxxxxxxxxxxxxxxxxx', hint: 'Dashboard → Settings → API Keys → Generate live key' },
+      { label: 'Key Secret', key: 'key_secret', placeholder: '••••••••••••••••••••••••', hint: 'Copy immediately — Razorpay only shows it once', type: 'password' },
+      { label: 'Webhook Secret', key: 'webhook_secret', placeholder: 'whsec_...', hint: 'Dashboard → Settings → Webhooks → Add new endpoint → copy secret', type: 'password' },
     ],
   },
   {
@@ -306,9 +306,9 @@ const INTEGRATIONS_LIST = [
     accentColor: '#635BFF',
     docsUrl: 'https://stripe.com/docs/api',
     fields: [
-      { label: 'Secret Key',       key: 'secret_key',     placeholder: 'sk_live_...',   hint: 'Dashboard → Developers → API keys → Secret key (use restricted key for least privilege)', type: 'password' },
+      { label: 'Secret Key', key: 'secret_key', placeholder: 'sk_live_...', hint: 'Dashboard → Developers → API keys → Secret key (use restricted key for least privilege)', type: 'password' },
       { label: 'Webhook Signing Secret', key: 'webhook_secret', placeholder: 'whsec_...', hint: 'Stripe → Webhooks → Add endpoint → Signing secret', type: 'password' },
-      { label: 'Publishable Key',  key: 'publishable_key', placeholder: 'pk_live_...',  hint: 'Safe to expose client-side — used for Stripe.js' },
+      { label: 'Publishable Key', key: 'publishable_key', placeholder: 'pk_live_...', hint: 'Safe to expose client-side — used for Stripe.js' },
     ],
   },
   {
@@ -318,9 +318,9 @@ const INTEGRATIONS_LIST = [
     accentColor: '#1D8348',
     docsUrl: 'https://docs.cashfree.com/docs/',
     fields: [
-      { label: 'App ID',     key: 'app_id',     placeholder: 'CF_APP_ID',    hint: 'Cashfree Dashboard → Settings → Credentials' },
-      { label: 'Secret Key', key: 'secret_key', placeholder: '••••••••',     hint: 'Production secret from the same credentials page', type: 'password' },
-      { label: 'Environment', key: 'env',       placeholder: 'PROD / TEST',  hint: 'Use TEST for sandbox, PROD for live transactions' },
+      { label: 'App ID', key: 'app_id', placeholder: 'CF_APP_ID', hint: 'Cashfree Dashboard → Settings → Credentials' },
+      { label: 'Secret Key', key: 'secret_key', placeholder: '••••••••', hint: 'Production secret from the same credentials page', type: 'password' },
+      { label: 'Environment', key: 'env', placeholder: 'PROD / TEST', hint: 'Use TEST for sandbox, PROD for live transactions' },
     ],
   },
 
@@ -340,10 +340,10 @@ const INTEGRATIONS_LIST = [
     accentColor: '#E56000',
     docsUrl: 'https://developer.exotel.com/api/',
     fields: [
-      { label: 'SID (Account ID)', key: 'sid',        placeholder: 'exotel_sid',     hint: 'Exotel Dashboard → Settings → API Credentials' },
-      { label: 'API Key',          key: 'api_key',    placeholder: 'xxxxxxxx',        hint: 'From the same API Credentials page' },
-      { label: 'API Token',        key: 'api_token',  placeholder: '••••••••',        hint: 'Token paired with the API Key above', type: 'password' },
-      { label: 'Subdomain',        key: 'subdomain',  placeholder: '@api.exotel.com', hint: 'Your Exotel account subdomain (e.g. mycompany@api.in.exotel.com)' },
+      { label: 'SID (Account ID)', key: 'sid', placeholder: 'exotel_sid', hint: 'Exotel Dashboard → Settings → API Credentials' },
+      { label: 'API Key', key: 'api_key', placeholder: 'xxxxxxxx', hint: 'From the same API Credentials page' },
+      { label: 'API Token', key: 'api_token', placeholder: '••••••••', hint: 'Token paired with the API Key above', type: 'password' },
+      { label: 'Subdomain', key: 'subdomain', placeholder: '@api.exotel.com', hint: 'Your Exotel account subdomain (e.g. mycompany@api.in.exotel.com)' },
     ],
   },
   {
@@ -353,9 +353,9 @@ const INTEGRATIONS_LIST = [
     accentColor: '#E40000',
     docsUrl: 'https://developers.airtel.in/',
     fields: [
-      { label: 'Client ID',     key: 'client_id',     placeholder: 'Enter Airtel Client ID',  hint: 'Airtel Developer Console → My Applications → Client ID' },
-      { label: 'Client Secret', key: 'client_secret', placeholder: '••••••••',                 hint: 'Paired secret for OAuth token generation', type: 'password' },
-      { label: 'DID Number',    key: 'did',           placeholder: '+91XXXXXXXXXX',             hint: 'Your Airtel IQ virtual number in E.164 format' },
+      { label: 'Client ID', key: 'client_id', placeholder: 'Enter Airtel Client ID', hint: 'Airtel Developer Console → My Applications → Client ID' },
+      { label: 'Client Secret', key: 'client_secret', placeholder: '••••••••', hint: 'Paired secret for OAuth token generation', type: 'password' },
+      { label: 'DID Number', key: 'did', placeholder: '+91XXXXXXXXXX', hint: 'Your Airtel IQ virtual number in E.164 format' },
     ],
   },
 
@@ -367,9 +367,9 @@ const INTEGRATIONS_LIST = [
     accentColor: '#412991',
     docsUrl: 'https://platform.openai.com/docs/api-reference',
     fields: [
-      { label: 'API Key',        key: 'api_key',   placeholder: 'sk-proj-...',         hint: 'platform.openai.com → API keys → Create new secret key', type: 'password' },
-      { label: 'Organization ID', key: 'org_id',  placeholder: 'org-xxxxxxxxxxxxxxxxxxxxxxxx', hint: 'Optional — needed if your key belongs to multiple orgs' },
-      { label: 'Default Model',  key: 'model',     placeholder: 'gpt-4o',              hint: 'e.g. gpt-4o, gpt-4o-mini — affects cost and quality' },
+      { label: 'API Key', key: 'api_key', placeholder: 'sk-proj-...', hint: 'platform.openai.com → API keys → Create new secret key', type: 'password' },
+      { label: 'Organization ID', key: 'org_id', placeholder: 'org-xxxxxxxxxxxxxxxxxxxxxxxx', hint: 'Optional — needed if your key belongs to multiple orgs' },
+      { label: 'Default Model', key: 'model', placeholder: 'gpt-4o', hint: 'e.g. gpt-4o, gpt-4o-mini — affects cost and quality' },
     ],
   },
   {
@@ -379,8 +379,8 @@ const INTEGRATIONS_LIST = [
     accentColor: '#191919',
     docsUrl: 'https://docs.anthropic.com/en/api/getting-started',
     fields: [
-      { label: 'API Key',       key: 'api_key', placeholder: 'sk-ant-api03-...',  hint: 'console.anthropic.com → Settings → API Keys → Create Key', type: 'password' },
-      { label: 'Default Model', key: 'model',   placeholder: 'claude-sonnet-4-6', hint: 'e.g. claude-opus-4-6, claude-sonnet-4-6, claude-haiku-4-5' },
+      { label: 'API Key', key: 'api_key', placeholder: 'sk-ant-api03-...', hint: 'console.anthropic.com → Settings → API Keys → Create Key', type: 'password' },
+      { label: 'Default Model', key: 'model', placeholder: 'claude-sonnet-4-6', hint: 'e.g. claude-opus-4-6, claude-sonnet-4-6, claude-haiku-4-5' },
     ],
   },
 ];
@@ -438,58 +438,58 @@ export default function SettingsPage({ currentUser }) {
   const [fieldValues, setFieldValues] = useState({});
 
   // WhatsApp
-  const [whatsappSettings, setWhatsappSettings]       = useState({ phone_number_id:'', business_account_id:'', permanent_token:'', display_phone_number:'', is_active:false });
+  const [whatsappSettings, setWhatsappSettings] = useState({ phone_number_id: '', business_account_id: '', permanent_token: '', display_phone_number: '', is_active: false });
   const [allWhatsappSettings, setAllWhatsappSettings] = useState([]);
-  const [discoveredPhones, setDiscoveredPhones]       = useState([]);
+  const [discoveredPhones, setDiscoveredPhones] = useState([]);
   const [isPhoneSelectModalOpen, setIsPhoneSelectModalOpen] = useState(false);
-  const [discoveredWabaId, setDiscoveredWabaId]       = useState('');
-  const [razorpaySettings, setRazorpaySettings]       = useState(null);
-  const [isSavingRazorpay, setIsSavingRazorpay]       = useState(false);
+  const [discoveredWabaId, setDiscoveredWabaId] = useState('');
+  const [razorpaySettings, setRazorpaySettings] = useState(null);
+  const [isSavingRazorpay, setIsSavingRazorpay] = useState(false);
 
   // Exotel
-  const [exotelSettings, setExotelSettings]           = useState(null);
-  const [isSavingExotel, setIsSavingExotel]           = useState(false);
-  const [exotelFields, setExotelFields]               = useState({ sid: '', api_key: '', api_token: '', subdomain: 'api.in.exotel.com', caller_id: '' });
-  const [exotelCallLogs, setExotelCallLogs]           = useState([]);
-  const [exotelLoadingLogs, setExotelLoadingLogs]     = useState(false);
-  const [dialerNumber, setDialerNumber]               = useState('');
-  const [dialerFrom, setDialerFrom]                   = useState('');
-  const [isDialing, setIsDialing]                     = useState(false);
-  const [dialerStatus, setDialerStatus]               = useState(null); // null | 'calling' | 'success' | 'error'
-  const [dialerMessage, setDialerMessage]             = useState('');
-  const [discoveredToken, setDiscoveredToken]         = useState('');
-  const [loadingWhatsapp, setLoadingWhatsapp]         = useState(false);
+  const [exotelSettings, setExotelSettings] = useState(null);
+  const [isSavingExotel, setIsSavingExotel] = useState(false);
+  const [exotelFields, setExotelFields] = useState({ sid: '', api_key: '', api_token: '', subdomain: 'api.in.exotel.com', caller_id: '' });
+  const [exotelCallLogs, setExotelCallLogs] = useState([]);
+  const [exotelLoadingLogs, setExotelLoadingLogs] = useState(false);
+  const [dialerNumber, setDialerNumber] = useState('');
+  const [dialerFrom, setDialerFrom] = useState('');
+  const [isDialing, setIsDialing] = useState(false);
+  const [dialerStatus, setDialerStatus] = useState(null); // null | 'calling' | 'success' | 'error'
+  const [dialerMessage, setDialerMessage] = useState('');
+  const [discoveredToken, setDiscoveredToken] = useState('');
+  const [loadingWhatsapp, setLoadingWhatsapp] = useState(false);
 
   // Twilio
-  const [twilioSettings, setTwilioSettings]         = useState(null);
-  const [isSavingTwilio, setIsSavingTwilio]         = useState(false);
-  const [twilioFields, setTwilioFields]             = useState({ account_sid: '', auth_token: '', phone_number: '', messaging_service_sid: '' });
-  const [twilioLogs, setTwilioLogs]                 = useState([]);
-  const [twilioLoadingLogs, setTwilioLoadingLogs]   = useState(false);
-  const [twilioTabType, setTwilioTabType]           = useState('all');
-  const [twilioSmsTo, setTwilioSmsTo]               = useState('');
-  const [twilioSmsBody, setTwilioSmsBody]           = useState('');
-  const [isSendingSms, setIsSendingSms]             = useState(false);
-  const [twilioCallTo, setTwilioCallTo]             = useState('');
-  const [isDialingTwilio, setIsDialingTwilio]       = useState(false);
+  const [twilioSettings, setTwilioSettings] = useState(null);
+  const [isSavingTwilio, setIsSavingTwilio] = useState(false);
+  const [twilioFields, setTwilioFields] = useState({ account_sid: '', auth_token: '', phone_number: '', messaging_service_sid: '' });
+  const [twilioLogs, setTwilioLogs] = useState([]);
+  const [twilioLoadingLogs, setTwilioLoadingLogs] = useState(false);
+  const [twilioTabType, setTwilioTabType] = useState('all');
+  const [twilioSmsTo, setTwilioSmsTo] = useState('');
+  const [twilioSmsBody, setTwilioSmsBody] = useState('');
+  const [isSendingSms, setIsSendingSms] = useState(false);
+  const [twilioCallTo, setTwilioCallTo] = useState('');
+  const [isDialingTwilio, setIsDialingTwilio] = useState(false);
   const [twilioActionResult, setTwilioActionResult] = useState(null);
 
   // Email
-  const [emailSettings, setEmailSettings]         = useState(null);
-  const [isSavingEmail, setIsSavingEmail]         = useState(false);
-  const [isTestingEmail, setIsTestingEmail]       = useState(false);
-  const [emailTestResult, setEmailTestResult]     = useState(null);
-  const [emailFields, setEmailFields]             = useState({
+  const [emailSettings, setEmailSettings] = useState(null);
+  const [isSavingEmail, setIsSavingEmail] = useState(false);
+  const [isTestingEmail, setIsTestingEmail] = useState(false);
+  const [emailTestResult, setEmailTestResult] = useState(null);
+  const [emailFields, setEmailFields] = useState({
     display_name: '', email_address: '',
     smtp_host: '', smtp_port: '587', smtp_secure: false, smtp_user: '', smtp_pass: '',
-    imap_host: '', imap_port: '993', imap_secure: true,  imap_user: '', imap_pass: '',
+    imap_host: '', imap_port: '993', imap_secure: true, imap_user: '', imap_pass: '',
   });
 
   // Telegram
   const [telegramSettings, setTelegramSettings] = useState([]);
-  const [savingTelegram, setSavingTelegram]     = useState(false);
-  const [botTokenInput, setBotTokenInput]       = useState('');
-  const [botDisplayName, setBotDisplayName]     = useState('');
+  const [savingTelegram, setSavingTelegram] = useState(false);
+  const [botTokenInput, setBotTokenInput] = useState('');
+  const [botDisplayName, setBotDisplayName] = useState('');
 
   // Instagram
   const [instagramStatus, setInstagramStatus] = useState({ connected: false, channels: [] });
@@ -525,10 +525,10 @@ export default function SettingsPage({ currentUser }) {
           getTwilioSettings(teamId),
           getEmailSettings(teamId)
         ]);
-        if (wa?.settings)    setWhatsappSettings(wa.settings);
+        if (wa?.settings) setWhatsappSettings(wa.settings);
         if (wa?.allSettings) setAllWhatsappSettings(wa.allSettings);
-        if (tg?.settings)    setTelegramSettings(tg.settings);
-        if (ig)              setInstagramStatus(ig);
+        if (tg?.settings) setTelegramSettings(tg.settings);
+        if (ig) setInstagramStatus(ig);
         if (rzp?.settings) {
           setRazorpaySettings(rzp.settings);
           setFieldValues(prev => ({
@@ -562,18 +562,18 @@ export default function SettingsPage({ currentUser }) {
         if (eml?.settings) {
           setEmailSettings(eml.settings);
           setEmailFields({
-            display_name:  eml.settings.display_name  || '',
+            display_name: eml.settings.display_name || '',
             email_address: eml.settings.email_address || '',
-            smtp_host:     eml.settings.smtp_host     || '',
-            smtp_port:     String(eml.settings.smtp_port || '587'),
-            smtp_secure:   !!eml.settings.smtp_secure,
-            smtp_user:     eml.settings.smtp_user     || '',
-            smtp_pass:     eml.settings.smtp_pass     || '',
-            imap_host:     eml.settings.imap_host     || '',
-            imap_port:     String(eml.settings.imap_port || '993'),
-            imap_secure:   eml.settings.imap_secure !== false,
-            imap_user:     eml.settings.imap_user     || '',
-            imap_pass:     eml.settings.imap_pass     || '',
+            smtp_host: eml.settings.smtp_host || '',
+            smtp_port: String(eml.settings.smtp_port || '587'),
+            smtp_secure: !!eml.settings.smtp_secure,
+            smtp_user: eml.settings.smtp_user || '',
+            smtp_pass: eml.settings.smtp_pass || '',
+            imap_host: eml.settings.imap_host || '',
+            imap_port: String(eml.settings.imap_port || '993'),
+            imap_secure: eml.settings.imap_secure !== false,
+            imap_user: eml.settings.imap_user || '',
+            imap_pass: eml.settings.imap_pass || '',
           });
         }
       } catch (err) { console.error('Error loading integrations', err); }
@@ -598,10 +598,10 @@ export default function SettingsPage({ currentUser }) {
   const handleConnectWhatsApp = () => {
     if (!window.FB) return alert('SDK loading...');
     setLoadingWhatsapp(true);
-    
+
     // Modern Embedded Signup configuration
     const loginOptions = {
-      config_id: '321531509460250', // Replace with your WhatsApp Configuration ID from App Dashboard
+      config_id: '926298566616073', // Replace with your WhatsApp Configuration ID from App Dashboard
       response_type: 'code',
       override_default_response_type: true,
       scope: 'whatsapp_business_management,whatsapp_business_messaging,business_management,public_profile'
@@ -609,8 +609,8 @@ export default function SettingsPage({ currentUser }) {
 
     window.FB.login((response) => {
       if (response.authResponse) {
-        const payload = response.authResponse.code 
-          ? { code: response.authResponse.code } 
+        const payload = response.authResponse.code
+          ? { code: response.authResponse.code }
           : { accessToken: response.authResponse.accessToken };
 
         onboardWhatsApp(payload, teamId).then(res => {
@@ -622,12 +622,12 @@ export default function SettingsPage({ currentUser }) {
               setIsPhoneSelectModalOpen(true);
             } else if (res.data.phones?.length === 1) {
               const p = res.data.phones[0];
-              const s = { 
-                phone_number_id: p.id, 
-                business_account_id: res.data.businessAccountId, 
-                display_phone_number: p.displayPhoneNumber, 
-                permanent_token: res.data.accessToken || response.authResponse.accessToken, 
-                is_active: true 
+              const s = {
+                phone_number_id: p.id,
+                business_account_id: res.data.businessAccountId,
+                display_phone_number: p.displayPhoneNumber,
+                permanent_token: res.data.accessToken || response.authResponse.accessToken,
+                is_active: true
               };
               setWhatsappSettings(s);
               setAllWhatsappSettings(prev => [...prev.filter(x => x.phone_number_id !== p.id), s]);
@@ -783,7 +783,7 @@ export default function SettingsPage({ currentUser }) {
       (item.id === 'razorpay' && !!razorpaySettings) ||
       (item.id === 'exotel' && !!exotelSettings) ||
       (item.id === 'twilio' && !!twilioSettings) ||
-      (item.id === 'email'  && !!emailSettings);
+      (item.id === 'email' && !!emailSettings);
     return (
       <div
         key={item.id}
@@ -799,7 +799,7 @@ export default function SettingsPage({ currentUser }) {
               <img
                 src={item.logo} alt={item.name}
                 className="w-full h-full object-contain"
-                onError={(e) => { e.target.style.display='none'; e.target.parentNode.innerHTML = `<span style="font-size:18px">🔌</span>`; }}
+                onError={(e) => { e.target.style.display = 'none'; e.target.parentNode.innerHTML = `<span style="font-size:18px">🔌</span>`; }}
               />
             )}
           </div>
@@ -868,7 +868,7 @@ export default function SettingsPage({ currentUser }) {
       (intg.id === 'instagram' && instagramStatus.connected) ||
       (intg.id === 'exotel' && !!exotelSettings) ||
       (intg.id === 'twilio' && !!twilioSettings) ||
-      (intg.id === 'email'  && !!emailSettings);
+      (intg.id === 'email' && !!emailSettings);
     const webhookUrl = `${window.location.origin}/webhooks/${intg.id}`;
 
     return (
@@ -1007,8 +1007,8 @@ export default function SettingsPage({ currentUser }) {
         <div className="grid grid-cols-3 gap-3">
           {[
             { icon: ExternalLink, title: 'Developer Console', desc: `Open ${intg.name} dashboard to create API credentials.` },
-            { icon: Globe2,        title: 'Help Docs',         desc: `Step-by-step setup guide for this integration.` },
-            { icon: Code2,         title: 'API Reference',     desc: `Explore the ${intg.name} API schema and endpoints.` },
+            { icon: Globe2, title: 'Help Docs', desc: `Step-by-step setup guide for this integration.` },
+            { icon: Code2, title: 'API Reference', desc: `Explore the ${intg.name} API schema and endpoints.` },
           ].map((tile) => {
             const TIcon = tile.icon;
             return (
@@ -1218,9 +1218,9 @@ export default function SettingsPage({ currentUser }) {
                     <div>
                       <div className="flex items-center gap-2">
                         <p className="font-bold text-slate-900 leading-none">{ch.username || ch.name}</p>
-                        <a 
-                          href={`https://instagram.com/${(ch.username || ch.name)?.replace('@', '')}`} 
-                          target="_blank" 
+                        <a
+                          href={`https://instagram.com/${(ch.username || ch.name)?.replace('@', '')}`}
+                          target="_blank"
                           rel="noopener noreferrer"
                           className="text-[10px] text-pink-600 hover:text-pink-700 bg-pink-50 px-1.5 py-0.5 rounded font-medium border border-pink-100 transition-colors"
                         >
@@ -1634,11 +1634,10 @@ export default function SettingsPage({ currentUser }) {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
                             <span className="text-xs font-bold text-slate-800 truncate">{log.to_number || log.from_number}</span>
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold uppercase ${
-                              log.status === 'completed' ? 'bg-green-100 text-green-700'
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold uppercase ${log.status === 'completed' ? 'bg-green-100 text-green-700'
                               : log.status === 'failed' || log.status === 'busy' ? 'bg-red-100 text-red-700'
-                              : 'bg-slate-200 text-slate-600'
-                            }`}>{log.status}</span>
+                                : 'bg-slate-200 text-slate-600'
+                              }`}>{log.status}</span>
                             <span className="text-[10px] text-slate-400 uppercase">{log.direction}</span>
                           </div>
                           <div className="text-[10px] text-slate-400 mt-0.5">
@@ -2189,11 +2188,11 @@ export default function SettingsPage({ currentUser }) {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {[
-                  { p: 'Gmail',    imap: 'imap.gmail.com:993',              smtp: 'smtp.gmail.com:587',          auth: 'App Password' },
-                  { p: 'Outlook',  imap: 'outlook.office365.com:993',       smtp: 'smtp.office365.com:587',      auth: 'App Password' },
-                  { p: 'Yahoo',    imap: 'imap.mail.yahoo.com:993',         smtp: 'smtp.mail.yahoo.com:587',     auth: 'App Password' },
-                  { p: 'Zoho',     imap: 'imap.zoho.in:993',                smtp: 'smtp.zoho.in:587',            auth: 'Account Password' },
-                  { p: 'GoDaddy',  imap: 'imap.secureserver.net:993',       smtp: 'smtpout.secureserver.net:465', auth: 'Account Password' },
+                  { p: 'Gmail', imap: 'imap.gmail.com:993', smtp: 'smtp.gmail.com:587', auth: 'App Password' },
+                  { p: 'Outlook', imap: 'outlook.office365.com:993', smtp: 'smtp.office365.com:587', auth: 'App Password' },
+                  { p: 'Yahoo', imap: 'imap.mail.yahoo.com:993', smtp: 'smtp.mail.yahoo.com:587', auth: 'App Password' },
+                  { p: 'Zoho', imap: 'imap.zoho.in:993', smtp: 'smtp.zoho.in:587', auth: 'Account Password' },
+                  { p: 'GoDaddy', imap: 'imap.secureserver.net:993', smtp: 'smtpout.secureserver.net:465', auth: 'Account Password' },
                 ].map(r => (
                   <tr key={r.p} className="text-slate-700">
                     <td className="py-2 font-bold">{r.p}</td>
