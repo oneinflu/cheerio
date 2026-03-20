@@ -1948,6 +1948,17 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
     setSelectedNode(node);
   }, [setNodes]);
 
+  const handleAddNotificationAction = useCallback(() => {
+    const newNode = {
+      id: `notification_${Math.random().toString(36).substr(2, 9)}`,
+      type: 'notification',
+      position: { x: 500, y: 300 },
+      data: { message: 'Alert team!' },
+    };
+    setNodes((nds) => nds.concat(newNode));
+    setSelectedNode(newNode);
+  }, [setNodes]);
+
   const handleAddExotelCallAction = useCallback(() => {
     const nodeId = getId();
     const node = {
