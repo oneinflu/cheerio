@@ -1142,6 +1142,90 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
       document.head.appendChild(styleEl);
     }
   }, []);
+  
+  const syncGraphFromList = useCallback(() => {
+    setNodes((nds) => {
+      const sorted = [...nds].sort((a, b) => {
+         const ay = a.position && typeof a.position.y === 'number' ? a.position.y : 0;
+         const by = b.position && typeof b.position.y === 'number' ? b.position.y : 0;
+         return ay - by;
+      });
+      return sorted.map((node, index) => {
+        const x = node.position && typeof node.position.x === 'number' ? node.position.x : 0;
+        return {
+          ...node,
+          position: {
+            x,
+            y: index * 140,
+          },
+        };
+      });
+    });
+  }, [setNodes]);
+
+  React.useEffect(() => {
+    const s = connectSocket({ userId: null, teamIds: [] });
+    setSocket(s);
+    const wfId = initialWorkflow?.id;
+
+    const onStart = (ev) => {
+      if (ev.workflowId !== wfId) return;
+      setNodes((nds) => nds.map((n) => ({ ...n, data: { ...n.data, nodeStatus: undefined, nodeError: undefined } })));
+      setIsRunning(true);
+    };
+
+    const onStepStart = (ev) => {
+      if (ev.workflowId !== wfId) return;
+      setNodes((nds) =>
+        nds.map((n) =>
+          n.id === ev.nodeId
+            ? { ...n, data: { ...n.data, nodeStatus: 'running', nodeError: undefined } }
+            : n
+        )
+      );
+    };
+
+    const onStepComplete = (ev) => {
+      if (ev.workflowId !== wfId) return;
+      setNodes((nds) =>
+        nds.map((n) =>
+          n.id === ev.nodeId
+            ? { ...n, data: { ...n.data, nodeStatus: 'completed', nodeError: undefined } }
+            : n
+        )
+      );
+    };
+
+    const onStepError = (ev) => {
+      if (ev.workflowId !== wfId) return;
+      setNodes((nds) =>
+        nds.map((n) =>
+          n.id === ev.nodeId
+            ? { ...n, data: { ...n.data, nodeStatus: 'error', nodeError: ev.message || 'Step failed' } }
+            : n
+        )
+      );
+    };
+
+    const onComplete = (ev) => {
+      if (ev.workflowId === wfId) setIsRunning(false);
+    };
+
+    s.on('workflow:run:start', onStart);
+    s.on('workflow:step:start', onStepStart);
+    s.on('workflow:step:complete', onStepComplete);
+    s.on('workflow:step:error', onStepError);
+    s.on('workflow:run:complete', onComplete);
+
+    return () => {
+      s.off('workflow:run:start', onStart);
+      s.off('workflow:step:start', onStepStart);
+      s.off('workflow:step:complete', onStepComplete);
+      s.off('workflow:step:error', onStepError);
+      s.off('workflow:run:complete', onComplete);
+      s.disconnect();
+    };
+  }, [initialWorkflow, setNodes]);
 
   const downloadCSV = (rows, filename) => {
     if (!rows || rows.length === 0) {
