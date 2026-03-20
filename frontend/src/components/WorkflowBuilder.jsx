@@ -1089,10 +1089,36 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
   const [isCSVGuideOpen, setIsCSVGuideOpen] = useState(false);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
   const [csvBuilderRows, setCsvBuilderRows] = useState([
-    { step_id: 'trigger_1', type: 'trigger', content: 'hello', next_step_id: '' }
+    { step_id: 'START_0', category: 'trigger', type: 'trigger', content: 'hello, hi', next_step_id: '' }
   ]);
-  const cellRefs = useRef([]);
   const [pabblyJSON, setPabblyJSON] = useState('');
+
+  const CATEGORY_MAP = {
+    trigger: [
+      { value: 'trigger', label: 'WhatsApp Keyword', icon: MessageSquare, placeholder: 'e.g. hello, hi, help' },
+      { value: 'campaign_trigger', label: 'Campaign Sent', icon: Megaphone, placeholder: 'Triggered when campaign starts' },
+      { value: 'incoming_webhook', label: 'Incoming Webhook', icon: Globe, placeholder: 'Generates a POST URL' },
+      { value: 'new_contact', label: 'Person Added', icon: UserCheck, placeholder: 'Triggered for new leads' },
+      { value: 'start_workflow', label: 'Manual/API Start', icon: Zap, placeholder: 'Triggered via API call' },
+    ],
+    action: [
+      { value: 'send_template', label: 'Send WA Template', icon: MessageSquare, placeholder: 'Template name' },
+      { value: 'send_message', label: 'Send WA Message', icon: MessageCircle, placeholder: 'Your message text' },
+      { value: 'send_email', label: 'Send Email', icon: Mail, placeholder: 'Email template name' },
+      { value: 'send_sms_otp', label: 'Send SMS OTP', icon: Phone, placeholder: 'SMS text with %s' },
+      { value: 'razorpay_link', label: 'Generate Payment', icon: CreditCard, placeholder: 'Amount in INR' },
+      { value: 'update_lead_stage', label: 'Move CRM Stage', icon: Tag, placeholder: 'New stage name' },
+      { value: 'assign_agent', label: 'Assign Agent', icon: UserCheck, placeholder: 'Agent email or ID' },
+      { value: 'add_to_label', label: 'Add Label', icon: Tag, placeholder: 'Label name' },
+      { value: 'feedback', label: 'Collect Review', icon: Star, placeholder: 'Survey question' },
+      { value: 'xolox_event', label: 'Custom Xolox Event', icon: Zap, placeholder: 'Event key' },
+    ],
+    system: [
+      { value: 'delay', label: 'Wait / Delay', icon: Clock, placeholder: 'e.g. 15 minutes or 1 day' },
+      { value: 'condition', label: 'Logic Split', icon: GitBranch, placeholder: 'Condition (Simple branch)' },
+      { value: 'end', label: 'Terminate Flow', icon: StopCircle, placeholder: 'Cleanup actions' },
+    ]
+  };
   const recognitionRef = useRef(null);
   const hasIncomingWebhookTrigger = nodes.some((n) => n && n.type === 'incoming_webhook');
 
@@ -1117,694 +1143,15 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
     }
   }, []);
 
-  React.useEffect(() => {
-    const s = connectSocket({ userId: null, teamIds: [] });
-    setSocket(s);
-    const wfId = initialWorkflow?.id;
-    let edgeTimer = null;
-    const clearEdgeTimer = () => {
-      if (edgeTimer) {
-        clearTimeout(edgeTimer);
-        edgeTimer = null;
-      }
-    };
-    const onStart = (ev) => {
-      if (ev.workflowId !== wfId) return;
-      setNodes((nds) => nds.map((n) => ({ ...n, data: { ...n.data, nodeStatus: undefined, nodeError: undefined } })));
-      setSelectedNode((n) => (n ? { ...n, data: { ...n.data, nodeStatus: undefined, nodeError: undefined } } : n));
-      setEdges((eds) => eds.map((e) => ({ ...e, animated: false, style: undefined })));
-      setIsRunning(true);
-    };
-    const onStepStart = (ev) => {
-      if (ev.workflowId !== wfId) return;
-      setNodes((nds) =>
-        nds.map((n) =>
-          n.id === ev.nodeId
-            ? { ...n, data: { ...n.data, nodeStatus: 'running', nodeError: undefined, lastContextPreview: ev.contextPreview || n.data.lastContextPreview } }
-            : n
-        )
-      );
-      setSelectedNode((n) =>
-        n && n.id === ev.nodeId
-          ? { ...n, data: { ...n.data, nodeStatus: 'running', nodeError: undefined } }
-          : n
-      );
-    };
-    const onStepWait = (ev) => {
-      if (ev.workflowId !== wfId) return;
-      setNodes((nds) =>
-        nds.map((n) => (n.id === ev.nodeId ? { ...n, data: { ...n.data, nodeStatus: 'waiting' } } : n))
-      );
-      setSelectedNode((n) =>
-        n && n.id === ev.nodeId
-          ? { ...n, data: { ...n.data, nodeStatus: 'waiting' } }
-          : n
-      );
-    };
-    const onStepComplete = (ev) => {
-      if (ev.workflowId !== wfId) return;
-      setNodes((nds) =>
-        nds.map((n) =>
-          n.id === ev.nodeId
-            ? { ...n, data: { ...n.data, nodeStatus: 'completed', nodeError: undefined, lastContextPreview: ev.contextPreview || n.data.lastContextPreview } }
-            : n
-        )
-      );
-      setSelectedNode((n) =>
-        n && n.id === ev.nodeId
-          ? { ...n, data: { ...n.data, nodeStatus: 'completed', nodeError: undefined } }
-          : n
-      );
-    };
-    const onStepError = (ev) => {
-      if (ev.workflowId !== wfId) return;
-      setNodes((nds) =>
-        nds.map((n) =>
-          n.id === ev.nodeId
-            ? { ...n, data: { ...n.data, nodeStatus: 'error', nodeError: ev.message || 'Step failed', lastContextPreview: ev.contextPreview || n.data.lastContextPreview } }
-            : n
-        )
-      );
-      setSelectedNode((n) =>
-        n && n.id === ev.nodeId
-          ? { ...n, data: { ...n.data, nodeStatus: 'error', nodeError: ev.message || 'Step failed' } }
-          : n
-      );
-    };
-    const onTransition = (ev) => {
-      if (ev.workflowId !== wfId) return;
-      const fromId = ev.fromNodeId;
-      const toId = ev.toNodeId;
-      if (!fromId || !toId) return;
-      clearEdgeTimer();
-      setEdges((eds) => {
-        const hit = eds.find((e) => e.source === fromId && e.target === toId);
-        if (!hit) return eds;
-        return eds.map((e) =>
-          e.id === hit.id
-            ? { ...e, animated: true, style: { ...(e.style || {}), stroke: '#22c55e', strokeWidth: 2 } }
-            : { ...e, animated: false, style: e.style ? { ...e.style, strokeWidth: 1 } : e.style }
-        );
-      });
-      edgeTimer = setTimeout(() => {
-        setEdges((eds) => eds.map((e) => ({ ...e, animated: false, style: e.style ? { ...e.style, strokeWidth: 1 } : e.style })));
-      }, 2200);
-    };
-    const onComplete = (ev) => {
-      if (ev.workflowId !== wfId) return;
-      setIsRunning(false);
-      clearEdgeTimer();
-    };
-    s.on('workflow:run:start', onStart);
-    s.on('workflow:step:start', onStepStart);
-    s.on('workflow:step:wait', onStepWait);
-    s.on('workflow:step:complete', onStepComplete);
-    s.on('workflow:step:error', onStepError);
-    s.on('workflow:step:transition', onTransition);
-    s.on('workflow:run:complete', onComplete);
-    return () => {
-      try {
-        s.off('workflow:run:start', onStart);
-        s.off('workflow:step:start', onStepStart);
-        s.off('workflow:step:wait', onStepWait);
-        s.off('workflow:step:complete', onStepComplete);
-        s.off('workflow:step:error', onStepError);
-        s.off('workflow:step:transition', onTransition);
-        s.off('workflow:run:complete', onComplete);
-        clearEdgeTimer();
-        s.disconnect();
-      } catch { }
-    };
-  }, [initialWorkflow, setNodes, setEdges]);
-
-  React.useEffect(() => {
-    const fetchTemplates = async () => {
-      setLoadingTemplates(true);
-      try {
-        const res = await getTemplates();
-        if (res && res.data) {
-          const mapped = res.data
-            .filter((t) => t.status === 'APPROVED')
-            .map((t) => {
-              const bodyComp = t.components && t.components.find((c) => c.type === 'BODY');
-              const buttonsComp = t.components && t.components.find((c) => c.type === 'BUTTONS');
-              const headerComp = t.components && t.components.find((c) => c.type === 'HEADER');
-              const examples = {};
-              if (bodyComp && bodyComp.example) {
-                if (t.parameter_format === 'NAMED' && bodyComp.example.body_text_named_params) {
-                  bodyComp.example.body_text_named_params.forEach((p) => {
-                    examples[p.param_name] = p.example;
-                  });
-                } else if (bodyComp.example.body_text && Array.isArray(bodyComp.example.body_text[0])) {
-                  bodyComp.example.body_text[0].forEach((ex, i) => {
-                    examples[(i + 1).toString()] = ex;
-                  });
-                }
-              }
-              return {
-                id: t.id,
-                name: t.name,
-                language: t.language,
-                status: t.status,
-                category: t.category,
-                bodyText: bodyComp ? bodyComp.text : '',
-                buttons: buttonsComp ? buttonsComp.buttons : [],
-                parameterFormat: t.parameter_format || 'POSITIONAL',
-                headerFormat: headerComp ? (headerComp.format || 'NONE') : 'NONE',
-                headerText: headerComp && headerComp.text ? headerComp.text : '',
-                examples,
-              };
-            });
-          setTemplates(mapped);
-        }
-      } catch (err) {
-        console.error('Failed to load templates:', err);
-      } finally {
-        setLoadingTemplates(false);
-      }
-    };
-    fetchTemplates();
-  }, []);
-
-  React.useEffect(() => {
-    const fetchWorkflows = async () => {
-      setLoadingWorkflows(true);
-      try {
-        const res = await getWorkflows();
-        if (Array.isArray(res)) {
-          const filtered =
-            initialWorkflow && initialWorkflow.id
-              ? res.filter((w) => w.id !== initialWorkflow.id)
-              : res;
-          setAvailableWorkflows(filtered);
-        } else {
-          setAvailableWorkflows([]);
-        }
-      } catch (err) {
-        console.error('Failed to load workflows:', err);
-        setAvailableWorkflows([]);
-      } finally {
-        setLoadingWorkflows(false);
-      }
-    };
-    fetchWorkflows();
-  }, [initialWorkflow]);
-
-  React.useEffect(() => {
-    getCampaigns()
-      .then(res => { if (res.success) setAvailableCampaigns(res.campaigns || []); })
-      .catch(console.error);
-  }, []);
-
-  React.useEffect(() => {
-    const fetchLabels = async () => {
-      setLoadingLabels(true);
-      try {
-        const res = await getLabels();
-        if (res && res.success) setAvailableLabels(res.labels || []);
-        else setAvailableLabels([]);
-      } catch (e) {
-        console.error('Failed to load labels:', e);
-        setAvailableLabels([]);
-      } finally {
-        setLoadingLabels(false);
-      }
-    };
-    fetchLabels();
-  }, []);
-
-  React.useEffect(() => {
-    const fetchEmailTemplates = async () => {
-      setLoadingEmailTemplates(true);
-      try {
-        const res = await getEmailTemplates();
-        if (res && res.success) setEmailTemplates(res.templates || []);
-        else setEmailTemplates([]);
-      } catch (e) {
-        console.error('Failed to load email templates:', e);
-        setEmailTemplates([]);
-      } finally {
-        setLoadingEmailTemplates(false);
-      }
-    };
-    fetchEmailTemplates();
-  }, []);
-
-  const [availableLeadStages, setAvailableLeadStages] = useState([]);
-  const [loadingLeadStages, setLoadingLeadStages] = useState(false);
-  React.useEffect(() => {
-    const fetchLeadStages = async () => {
-      setLoadingLeadStages(true);
-      try {
-        const res = await getLeadStages();
-        if (res && Array.isArray(res.stages)) setAvailableLeadStages(res.stages);
-        else setAvailableLeadStages([]);
-      } catch (e) {
-        console.error('Failed to load lead stages:', e);
-        setAvailableLeadStages([]);
-      } finally {
-        setLoadingLeadStages(false);
-      }
-    };
-    fetchLeadStages();
-  }, []);
-  const handleAddNotificationAction = useCallback(() => {
-    const newNode = {
-      id: `notification_${Math.random().toString(36).substr(2, 9)}`,
-      type: 'notification',
-      position: { x: 500, y: 300 },
-      data: { message: 'Alert team!' },
-    };
-    setNodes((nds) => nds.concat(newNode));
-  }, [setNodes]);
-
-  const onConnect = useCallback(
-    (params) => setEdges((eds) => addEdge(params, eds)),
-    [setEdges]
-  );
-
-  const onDragOver = useCallback((event) => {
-    event.preventDefault();
-    event.dataTransfer.dropEffect = 'move';
-  }, []);
-
-  const onDrop = useCallback(
-    (event) => {
-      event.preventDefault();
-
-      const type = event.dataTransfer.getData('application/reactflow');
-      const actionType = event.dataTransfer.getData('application/actiontype');
-
-      // check if the dropped element is valid
-      if (typeof type === 'undefined' || !type) {
-        return;
-      }
-
-      const position = reactFlowInstance.screenToFlowPosition({
-        x: event.clientX,
-        y: event.clientY,
-      });
-
-      const newNode = {
-        id: getId(),
-        type,
-        position,
-        data: { label: `${type} node` },
-      };
-
-      if (type === 'action' && actionType) {
-        newNode.data.actionType = actionType;
-        if (actionType === 'update_chat_status') {
-          newNode.data.actionValue = 'open';
-        }
-        if (actionType === 'add_to_label') {
-          newNode.data.actionValue = '';
-        }
-        if (actionType === 'update_lead_stage') {
-          newNode.data.actionValue = '';
-          newNode.data.leadStageName = '';
-        }
-        if (actionType === 'start_workflow') {
-          newNode.data.actionValue = '';
-          newNode.data.targetWorkflowName = '';
-        }
-        if (actionType === 'send_email') {
-          newNode.data.actionValue = '';
-          newNode.data.emailTemplateId = '';
-          newNode.data.variableMapping = {};
-          newNode.data.toVarKey = 'email';
-        }
-        if (actionType === 'send_sms_otp') {
-          newNode.data.actionValue = '';
-          newNode.data.otpDigits = 6;
-          newNode.data.saveVariable = 'otp';
-        }
-      }
-      if (type === 'trigger') {
-        newNode.data = {
-          label: 'WhatsApp Incoming',
-          triggerType: 'incoming_whatsapp',
-          keywords: '',
-        };
-      }
-      if (type === 'campaign_trigger') {
-        newNode.data = {
-          label: 'Campaign Sent',
-          triggerType: 'campaign_sent',
-          campaignId: '',
-          campaignName: '',
-        };
-      }
-      if (type === 'incoming_webhook') {
-        newNode.data = {
-          label: 'Incoming Webhook',
-          triggerType: 'incoming_webhook',
-          paramMapping: {},
-          lastPayload: null,
-        };
-      }
-      if (type === 'new_contact') {
-        const defaultMapping = {};
-        NEW_CONTACT_FIELDS.forEach((f) => {
-          defaultMapping[f.key] = f.defaultVar;
-        });
-        newNode.data = {
-          label: 'New Contact Created',
-          triggerType: 'new_contact_created',
-          fieldMapping: defaultMapping,
-        };
-      }
-      if (type === 'send_template') {
-        newNode.data = {
-          label: 'Send Template',
-          template: '',
-          languageCode: 'en_US',
-          variables: {},
-          components: [],
-          buttons: [],
-          headerType: 'none',
-          headerUrl: '',
-          headerFileName: '',
-        };
-      }
-      if (type === 'send_message') {
-        newNode.data = {
-          label: 'Send Message',
-          message: '',
-        };
-      }
-      if (type === 'response_message') {
-        newNode.data = {
-          label: 'Response Message',
-          message: '',
-          buttons: [],
-          skipReply: false,
-          saveVariable: '',
-          headerType: 'none',
-          headerUrl: '',
-          headerFileName: '',
-        };
-      }
-      if (type === 'feedback') {
-        newNode.data = {
-          label: 'Feedback Collection',
-          question: 'Your feedback matters! Please rate this chat on scale of 1-5',
-          buttonStyle: 'numbers',
-        };
-      }
-      if (type === 'xolox_event') {
-        newNode.data = {
-          label: 'XOLOX Event',
-          eventName: 'Lead Create',
-          webhookUrl: '',
-          method: 'POST',
-          payloadFields: [
-            { field: 'name', variable: '{{name}}' },
-            { field: 'phone', variable: '{{phone}}' },
-            { field: 'email', variable: '{{email}}' },
-            { field: 'source', variable: '{{source}}' },
-          ],
-          successCondition: 'status_2xx',
-          successField: '',
-          successValue: 'true',
-        };
-      }
-      if (type === 'notification') {
-        newNode.data = { message: 'Alert team!' };
-      }
-      if (type === 'payment_request' || type === 'razorpay_link') {
-        newNode.data = {
-          label: type === 'razorpay_link' ? 'Razorpay Link' : 'Payment Request',
-          requestType: 'course',
-          amount: '15000',
-          course: 'CPA US',
-          papers: ['FAR'],
-          packageName: 'Full Course',
-          validityTerms: '12 Months',
-          paymentSummary: 'Standard course enrollment fee',
-          headerText: '💳 Secure Payment Request',
-          buttonText: 'Pay Now',
-          footerText: 'Official Razorpay link',
-        };
-      }
-      if (type === 'payment_reminder' || type === 'razorpay_status') {
-        newNode.data = {
-          label: type === 'razorpay_status' ? 'Razorpay Status' : 'Payment Reminder',
-          duration: '24',
-          unit: 'hours'
-        };
-      }
-      if (type === 'twilio_sms') {
-        newNode.data = { label: 'Send SMS', toNumber: '{{contact.phone}}', message: '' };
-      }
-      if (type === 'twilio_call') {
-        newNode.data = { label: 'Voice Call', toNumber: '{{contact.phone}}', fromNumber: '', record: false };
-      }
-      if (type === 'exotel_call') {
-        newNode.data = {
-          label: 'Initiate Call',
-          toNumber: '{{contact.phone}}',
-          callerId: '',
-          record: false,
-        };
-      }
-      if (type === 'delay') {
-        newNode.data.label = 'Time Delay';
-        newNode.data.delayMode = 'relative';
-        newNode.data.days = 0;
-        newNode.data.hours = 0;
-        newNode.data.minutes = 0;
-        newNode.data.targetAt = null;
-      }
-      if (type === 'attribute_condition') {
-        newNode.data = {
-          label: 'Custom Attributes',
-          groups: [
-            {
-              id: 'g1',
-              clauses: [
-                { key: '', op: 'eq', value: '', join: 'AND' }
-              ]
-            }
-          ]
-        };
-      }
-
-      setNodes((nds) => nds.concat(newNode));
-    },
-    [reactFlowInstance, setNodes]
-  );
-
-  const onNodeClick = useCallback((event, node) => {
-    setSelectedNode(node);
-  }, []);
-
-  const onPaneClick = useCallback(() => {
-    setSelectedNode(null);
-  }, []);
-
-  const syncGraphFromList = useCallback(() => {
-    setNodes((nds) => {
-      const sorted = [...nds].sort((a, b) => {
-        const ay = a.position && typeof a.position.y === 'number' ? a.position.y : 0;
-        const by = b.position && typeof b.position.y === 'number' ? b.position.y : 0;
-        return ay - by;
-      });
-
-      const messageTypes = ['send_template', 'send_message'];
-
-      const newNodes = [];
-
-      for (let i = 0; i < sorted.length; i++) {
-        const node = sorted[i];
-        newNodes.push(node);
-
-        if (messageTypes.includes(node.type) && !(node.data && node.data.branchConditionId)) {
-          const data = node.data || {};
-          const scheduleType = data.scheduleType || 'immediate';
-          const delayValue = data.delayValue ?? null;
-
-          if (scheduleType === 'delay' && delayValue && delayValue > 0) {
-            const prevNode = i > 0 ? sorted[i - 1] : null;
-            if (!prevNode) continue;
-
-            const delayId = `delay_${node.id}`;
-            let delayNode = sorted.find((n) => n.id === delayId);
-
-            if (!delayNode) {
-              const baseY =
-                prevNode.position && typeof prevNode.position.y === 'number'
-                  ? prevNode.position.y
-                  : 0;
-              delayNode = {
-                id: delayId,
-                type: 'delay',
-                position: {
-                  x:
-                    prevNode.position && typeof prevNode.position.x === 'number'
-                      ? prevNode.position.x
-                      : 0,
-                  y: baseY + 60,
-                },
-                data: {
-                  label: 'Delay',
-                  duration: data.delayValue,
-                  unit: data.delayUnit || 'minutes',
-                },
-              };
-            } else {
-              delayNode = {
-                ...delayNode,
-                data: {
-                  ...(delayNode.data || {}),
-                  duration: data.delayValue,
-                  unit: data.delayUnit || delayNode.data?.unit || 'minutes',
-                },
-              };
-            }
-
-            newNodes.push(delayNode);
-          }
-        }
-      }
-
-      const finalNodes = newNodes.filter((n) => {
-        if (n.type !== 'delay') return true;
-        if (!n.id.startsWith('delay_')) return true;
-        const targetId = n.id.replace('delay_', '');
-        const targetNode = newNodes.find((nn) => nn.id === targetId);
-        const data = targetNode?.data || {};
-        return data.scheduleType === 'delay' && data.delayValue && data.delayValue > 0;
-      });
-
-      const linear = [...finalNodes].sort((a, b) => {
-        const ay = a.position && typeof a.position.y === 'number' ? a.position.y : 0;
-        const by = b.position && typeof b.position.y === 'number' ? b.position.y : 0;
-        return ay - by;
-      });
-
-      const positionedMap = {};
-      linear.forEach((node, index) => {
-        const x =
-          node.position && typeof node.position.x === 'number'
-            ? node.position.x
-            : 0;
-        positionedMap[node.id] = {
-          x,
-          y: index * 140,
-        };
-      });
-
-      const positionedNodes = finalNodes.map((node) => {
-        const pos = positionedMap[node.id];
-        if (!pos) return node;
-        return {
-          ...node,
-          position: pos,
-        };
-      });
-
-      const byId = {};
-      positionedNodes.forEach((n) => {
-        byId[n.id] = n;
-      });
-
-      const topLevel = positionedNodes.filter((n) => !(n.data && n.data.branchConditionId));
-
-      const nextEdges = [];
-
-      for (let i = 0; i < topLevel.length - 1; i++) {
-        const source = topLevel[i];
-        const target = topLevel[i + 1];
-        if (source.type === 'end') continue;
-        if (source.type === 'condition') continue;
-        nextEdges.push({
-          id: `e_${source.id}_${target.id}`,
-          source: source.id,
-          target: target.id,
-        });
-      }
-
-      const branchMap = {};
-      positionedNodes.forEach((n) => {
-        const data = n.data || {};
-        const condId = data.branchConditionId;
-        const side = data.branchSide;
-        if (condId && (side === 'yes' || side === 'no')) {
-          if (!branchMap[condId]) branchMap[condId] = { yes: [], no: [] };
-          branchMap[condId][side].push(n);
-        }
-      });
-
-      Object.keys(branchMap).forEach((condId) => {
-        const condNode = byId[condId];
-        if (!condNode) return;
-        const branches = branchMap[condId];
-        ['yes', 'no'].forEach((side) => {
-          const children = branches[side]
-            .slice()
-            .sort((a, b) => {
-              const ay = a.position && typeof a.position.y === 'number' ? a.position.y : 0;
-              const by = b.position && typeof b.position.y === 'number' ? b.position.y : 0;
-              return ay - by;
-            });
-          if (children.length === 0) return;
-          const first = children[0];
-          nextEdges.push({
-            id: `e_${condId}_${side}_${first.id}`,
-            source: condId,
-            sourceHandle: side,
-            target: first.id,
-          });
-          for (let i = 0; i < children.length - 1; i++) {
-            const s = children[i];
-            const t = children[i + 1];
-            nextEdges.push({
-              id: `e_${s.id}_${t.id}`,
-              source: s.id,
-              target: t.id,
-            });
-          }
-        });
-      });
-
-      const uniqueEdges = [];
-      const seenEdgeKey = new Set();
-
-      nextEdges.forEach((edge) => {
-        const srcNode = byId[edge.source];
-        const srcType = srcNode && srcNode.type;
-        const isCondition = srcType === 'condition';
-        const isTemplateWithButtons =
-          srcType === 'send_template' &&
-          srcNode &&
-          Array.isArray(srcNode.data?.buttons) &&
-          srcNode.data.buttons.length > 0;
-
-        const key = `${edge.source}-${edge.sourceHandle || ''}`;
-
-        if (isCondition || isTemplateWithButtons) {
-          uniqueEdges.push(edge);
-        } else {
-          if (seenEdgeKey.has(key)) {
-            return;
-          }
-          seenEdgeKey.add(key);
-          uniqueEdges.push(edge);
-        }
-      });
-
-      setEdges(uniqueEdges);
-      return positionedNodes;
-    });
-  }, [setNodes, setEdges]);
-
-  // --- CSV Helpers ---
   const downloadCSV = (rows, filename) => {
-    if (!rows.length) return;
+    if (!rows || rows.length === 0) {
+      alert("No data to download.");
+      return;
+    }
+
     const headers = Object.keys(rows[0]);
     const csvContent = [
-      headers.join(','),
+      headers.map(h => `"${h.replace(/"/g, '""')}"`).join(','),
       ...rows.map(row => headers.map(h => {
         let val = row[h] === undefined ? '' : row[h];
         if (typeof val === 'object') val = JSON.stringify(val);
@@ -1994,9 +1341,10 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
   };
 
   const handleAddBuilderRow = () => {
-    const lastId = csvBuilderRows.length ? csvBuilderRows[csvBuilderRows.length - 1].step_id : 'step_0';
+    const newId = `STEP_${csvBuilderRows.length}`;
     setCsvBuilderRows([...csvBuilderRows, {
-      step_id: `step_${csvBuilderRows.length + 1}`,
+      step_id: newId,
+      category: 'action',
       type: 'send_message',
       content: '',
       next_step_id: ''
@@ -2006,6 +1354,14 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
   const handleUpdateBuilderRow = (index, field, value) => {
     const nextArr = [...csvBuilderRows];
     nextArr[index][field] = value;
+    
+    // Auto-update type if category changes
+    if (field === 'category') {
+      const types = CATEGORY_MAP[value] || [];
+      if (types.length > 0) {
+        nextArr[index].type = types[0].value;
+      }
+    }
     setCsvBuilderRows(nextArr);
   };
 
@@ -2023,7 +1379,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
 
   const handleTableKeyDown = (e, rowIndex, colIndex) => {
     const totalRows = csvBuilderRows.length;
-    const totalCols = 4; // step_id, type, content, next_step_id
+    const totalCols = 5; // step_id, category, type, content, next_step_id
 
     const focusCell = (r, c) => {
       if (r >= 0 && r < totalRows && c >= 0 && c < totalCols) {
@@ -7043,22 +6399,304 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
         )}
 
         {/* ── Gallery Picker Modal ────────────────────────────────────── */}
-        <GallerySelectModal
-          isOpen={showGalleryModal}
-          onClose={() => setShowGalleryModal(false)}
-          onSelect={(url) => {
-            // Identify if it's image or video from url
-            const isVideo = /\.(mp4|mov|webm)$/i.test(url);
-            const isImage = /\.(png|jpg|jpeg|gif|webp)$/i.test(url);
-            updateNodeFields(selectedNode?.id, {
-              headerUrl: url,
-              headerFileName: url.split('/').pop(),
-              headerType: isVideo ? 'video' : isImage ? 'image' : 'document'
-            });
-            setShowGalleryModal(false);
-          }}
-          resourceType={selectedNode?.data?.headerType === 'video' ? 'video' : selectedNode?.data?.headerType === 'document' ? 'raw' : 'image'}
-        />
+        {/* ── FULL-SCREEN INTERACTIVE CSV BUILDER ────────────────────────── */}
+        {isCSVModalOpen && (
+          <div className="fixed inset-0 z-[100] bg-slate-900 flex flex-col overflow-hidden animate-in fade-in duration-300">
+            {/* Dark Mode Header */}
+            <div className="h-16 border-b border-slate-800 bg-slate-950 flex items-center justify-between px-8 text-white shadow-lg">
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                  <TableIcon size={20} className="text-white" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black tracking-tight uppercase">Interactive Planning Workspace</h3>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="text-[10px] font-bold text-slate-400">DRAFTING MODE • {csvBuilderRows.length} STEPS DEFINED</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setIsShortcutsOpen(!isShortcutsOpen)}
+                  className={`p-2 rounded-lg transition-all ${isShortcutsOpen ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-600/30' : 'bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700'}`}
+                  title="Keyboard Shortcuts"
+                >
+                  <Keyboard size={18} />
+                </button>
+                <div className="h-6 w-px bg-slate-800 mx-2" />
+                <button
+                  onClick={() => setIsCSVModalOpen(false)}
+                  className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-xs font-bold transition-all text-slate-300"
+                >
+                  <X size={16} /> EXIT BUILDER
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 flex overflow-hidden">
+              {/* Left Main Workspace */}
+              <div className="flex-1 overflow-auto bg-[#0a0a0f] relative custom-scrollbar">
+                {/* Visual grid background */}
+                <div className="absolute inset-0 opacity-[0.03] pointer-events-none" 
+                  style={{ backgroundImage: 'radial-gradient(#4f46e5 1px, transparent 1px)', backgroundSize: '30px 30px' }} 
+                />
+
+                <div className="p-12 relative z-10">
+                  <div className="max-w-[1200px] mx-auto space-y-8">
+                    {/* Workspace Controls */}
+                    <div className="flex items-center justify-between gap-4 bg-slate-900/50 p-6 rounded-2xl border border-slate-800 backdrop-blur-md shadow-2xl">
+                      <div className="space-y-1">
+                        <h4 className="text-white font-black text-lg">Step Sequence Editor</h4>
+                        <p className="text-slate-400 text-[11px] font-medium italic">Define your flow logic using the spreadsheet interface below. Download the CSV when ready to sync.</p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <Button
+                          onClick={downloadBuilderCSV}
+                          variant="outline"
+                          className="bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700 text-xs font-black h-10 px-6 gap-2"
+                        >
+                          <Download size={14} /> EXPORT CSV
+                        </Button>
+                        <Button
+                          onClick={handleAddBuilderRow}
+                          className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black h-10 px-6 shadow-lg shadow-indigo-600/20 gap-2 border-0"
+                        >
+                          <Plus size={16} /> ADD NEW STEP
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Table Container */}
+                    <div className="bg-slate-900/30 rounded-3xl border border-slate-800 overflow-hidden shadow-2xl backdrop-blur-xl">
+                      <table className="w-full text-left border-collapse min-w-[1000px]">
+                        <thead>
+                          <tr className="bg-slate-950/80 border-b border-slate-800">
+                            <th className="p-5 text-slate-500 text-[10px] font-black uppercase tracking-widest whitespace-nowrap w-20">#</th>
+                            <th className="p-5 text-slate-500 text-[10px] font-black uppercase tracking-widest whitespace-nowrap">Step Identity</th>
+                            <th className="p-5 text-slate-500 text-[10px] font-black uppercase tracking-widest whitespace-nowrap">Category</th>
+                            <th className="p-5 text-slate-500 text-[10px] font-black uppercase tracking-widest whitespace-nowrap">Module Type</th>
+                            <th className="p-5 text-slate-500 text-[10px] font-black uppercase tracking-widest whitespace-nowrap">Configuration Data</th>
+                            <th className="p-5 text-slate-500 text-[10px] font-black uppercase tracking-widest whitespace-nowrap">Routing</th>
+                            <th className="p-5 w-16"></th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/50">
+                          {csvBuilderRows.map((row, idx) => {
+                            const currentTypeConfig = (CATEGORY_MAP[row.category] || []).find(t => t.value === row.type);
+                            
+                            return (
+                              <tr key={idx} className="group hover:bg-indigo-600/5 transition-all duration-200">
+                                <td className="p-5 text-slate-600 font-mono text-xs">{idx + 1}</td>
+                                <td className="p-4 w-48">
+                                  <input
+                                    ref={el => cellRefs.current[idx * 5 + 0] = el}
+                                    className="w-full bg-slate-950/40 border border-slate-800 rounded-xl p-2.5 text-slate-200 text-xs font-bold outline-none ring-1 ring-transparent focus:ring-indigo-500/50 focus:border-indigo-500 transition-all shadow-inner"
+                                    value={row.step_id}
+                                    onKeyDown={(e) => handleTableKeyDown(e, idx, 0)}
+                                    onChange={(e) => handleUpdateBuilderRow(idx, 'step_id', e.target.value)}
+                                  />
+                                </td>
+                                <td className="p-4 w-40">
+                                  <select
+                                    ref={el => cellRefs.current[idx * 5 + 1] = el}
+                                    className="w-full bg-slate-950/40 border border-slate-800 rounded-xl p-2.5 text-slate-200 text-xs font-bold outline-none focus:ring-1 focus:ring-indigo-500 transition-all appearance-none cursor-pointer"
+                                    value={row.category}
+                                    onKeyDown={(e) => handleTableKeyDown(e, idx, 1)}
+                                    onChange={(e) => handleUpdateBuilderRow(idx, 'category', e.target.value)}
+                                  >
+                                    <option value="trigger">Trigger Node</option>
+                                    <option value="action">Action Node</option>
+                                    <option value="system">System Logic</option>
+                                  </select>
+                                </td>
+                                <td className="p-4 w-56">
+                                  <select
+                                    ref={el => cellRefs.current[idx * 5 + 2] = el}
+                                    className="w-full bg-slate-950/40 border border-slate-800 rounded-xl p-2.5 text-slate-300 text-xs font-bold outline-none focus:ring-1 focus:ring-indigo-500 transition-all appearance-none cursor-pointer"
+                                    value={row.type}
+                                    onKeyDown={(e) => handleTableKeyDown(e, idx, 2)}
+                                    onChange={(e) => handleUpdateBuilderRow(idx, 'type', e.target.value)}
+                                  >
+                                    {(CATEGORY_MAP[row.category] || []).map(t => (
+                                      <option key={t.value} value={t.value}>{t.label}</option>
+                                    ))}
+                                  </select>
+                                </td>
+                                <td className="p-4">
+                                  <input
+                                    ref={el => cellRefs.current[idx * 5 + 3] = el}
+                                    className="w-full bg-slate-950/40 border border-slate-800 rounded-xl p-2.5 text-slate-400 text-xs outline-none focus:ring-1 focus:ring-indigo-500 transition-all placeholder:text-slate-700 font-medium"
+                                    placeholder={currentTypeConfig?.placeholder || 'Config data...'}
+                                    value={row.content}
+                                    onKeyDown={(e) => handleTableKeyDown(e, idx, 3)}
+                                    onChange={(e) => handleUpdateBuilderRow(idx, 'content', e.target.value)}
+                                  />
+                                </td>
+                                <td className="p-4 w-48">
+                                  <select
+                                    ref={el => cellRefs.current[idx * 5 + 4] = el}
+                                    className="w-full bg-slate-950/40 border border-slate-800 rounded-xl p-2.5 text-slate-500 text-xs font-bold outline-none focus:ring-1 focus:ring-indigo-500 transition-all appearance-none cursor-pointer"
+                                    value={row.next_step_id}
+                                    onKeyDown={(e) => handleTableKeyDown(e, idx, 4)}
+                                    onChange={(e) => handleUpdateBuilderRow(idx, 'next_step_id', e.target.value)}
+                                  >
+                                    <option value="">(STOP FLOW)</option>
+                                    {csvBuilderRows.filter((_, i) => i !== idx).map(r => (
+                                      <option key={r.step_id} value={r.step_id}>{r.step_id}</option>
+                                    ))}
+                                  </select>
+                                </td>
+                                <td className="p-4 text-center">
+                                  <button
+                                    onClick={() => handleDeleteBuilderRow(idx)}
+                                    className="p-2 text-slate-700 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                                    title="Remove Step"
+                                  >
+                                    <Trash2 size={16} />
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Sidebar Guide */}
+              <div className="w-[360px] border-l border-slate-800 bg-slate-950 p-8 flex flex-col gap-8 custom-scrollbar overflow-y-auto">
+                <div className="space-y-4">
+                  <h4 className="text-white text-[10px] font-black flex items-center gap-2 tracking-widest text-slate-500">
+                      <Zap size={14} className="text-indigo-500" /> KEYBOARD ACCELERATORS
+                  </h4>
+                  <div className="space-y-3">
+                    {[
+                      { keys: ['↑', '↓'], desc: 'Navigate vertically' },
+                      { keys: ['Tab'], desc: 'Next cell / Next Row' },
+                      { keys: ['Enter'], desc: 'Commit & Jump Down' },
+                      { keys: ['Shift', 'Tab'], desc: 'Previous Cell' },
+                    ].map(s => (
+                      <div key={s.desc} className="flex items-center justify-between group">
+                        <span className="text-[10px] text-slate-500 font-bold group-hover:text-slate-400 transition-colors uppercase tracking-tight">{s.desc}</span>
+                        <div className="flex gap-1.5">
+                          {s.keys.map(k => (
+                            <kbd key={k} className="px-1.5 py-0.5 bg-slate-800 border-b-2 border-slate-600 rounded text-[9px] font-black text-slate-300 shadow-sm">{k}</kbd>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-6">
+                  <div className="p-6 bg-indigo-600/10 border border-indigo-600/20 rounded-2xl space-y-4 shadow-2xl">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-indigo-600 rounded-lg text-white">
+                        <Zap size={14} />
+                      </div>
+                      <h4 className="text-white text-xs font-black uppercase tracking-wider">Sync Logic</h4>
+                    </div>
+                    <p className="text-[11px] text-indigo-300 leading-relaxed font-medium">
+                      Blueprint your workflow in real-time. Export the CSV and upload it to the visual canvas to materialize the nodes and connections instantly.
+                    </p>
+                    <label className="flex-1 flex items-center justify-center gap-2 p-3 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-[11px] font-black text-white cursor-pointer transition-all shadow-lg ring-4 ring-indigo-600/10">
+                      <Upload size={14} /> IMPORT AS FLOW
+                      <input type="file" className="hidden" accept=".csv" onChange={handleUploadSimplified} />
+                    </label>
+                  </div>
+
+                  <div className="space-y-4 border-t border-slate-800 pt-6">
+                    <h4 className="text-white text-[10px] font-black flex items-center gap-2 tracking-widest text-slate-500 uppercase">
+                      <Code size={14} className="text-pink-500" /> Pabbly Migration
+                    </h4>
+                    <p className="text-[10px] text-slate-500 font-medium italic leading-relaxed">Paste Pabbly workflow JSON to auto-convert external logic into this builder format.</p>
+                    <textarea
+                      className="w-full h-32 p-4 bg-slate-900 border border-slate-800 rounded-2xl text-[10px] font-mono text-slate-400 focus:border-pink-500/50 outline-none transition-all resize-none shadow-inner"
+                      placeholder="Paste JSON..."
+                      value={pabblyJSON}
+                      onChange={(e) => setPabblyJSON(e.target.value)}
+                    />
+                    <Button
+                      onClick={handleMigratePabbly}
+                      className="w-full bg-pink-600/10 border border-pink-600/20 text-pink-400 hover:bg-pink-600 hover:text-white text-xs font-black h-11 transition-all rounded-xl"
+                    >
+                      MIGRATE STEPS
+                    </Button>
+                  </div>
+
+                  <div className="space-y-4 border-t border-slate-800 pt-6">
+                    <h4 className="text-white text-[10px] font-black flex items-center gap-2 tracking-widest text-slate-500 uppercase">
+                      <Info size={14} className="text-emerald-500" /> Module Guide
+                    </h4>
+                    <div className="space-y-4">
+                      {Object.keys(CATEGORY_MAP).map(cat => (
+                        <div key={cat} className="space-y-2">
+                           <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">{cat} Layer</p>
+                           <ul className="space-y-1.5">
+                              {CATEGORY_MAP[cat].slice(0, 3).map(m => (
+                                <li key={m.value} className="text-[10px] text-slate-400 flex items-center gap-2 font-medium">
+                                   <m.icon size={12} className="text-slate-700" /> {m.label}
+                                </li>
+                              ))}
+                              <li className="text-[9px] text-indigo-500 font-bold pl-5 cursor-pointer hover:underline" onClick={() => setIsCSVGuideOpen(true)}>+ View all modules</li>
+                           </ul>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {isCSVGuideOpen && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-8 bg-black/80 backdrop-blur-xl animate-in zoom-in-95 duration-300">
+            <div className="bg-slate-900 w-full max-w-4xl border border-slate-800 rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col">
+               <div className="p-10 border-b border-slate-800 flex items-center justify-between bg-slate-950/50">
+                  <div className="flex items-center gap-4">
+                     <div className="w-12 h-12 bg-emerald-600/20 text-emerald-400 rounded-2xl flex items-center justify-center border border-emerald-600/30">
+                        <Info size={24} />
+                     </div>
+                     <div>
+                        <h3 className="text-white text-xl font-black tracking-tight">Technical Reference</h3>
+                        <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Automation node dictionary & configuration rules</p>
+                     </div>
+                  </div>
+                  <button onClick={() => setIsCSVGuideOpen(false)} className="p-3 text-slate-500 hover:text-white transition-colors bg-slate-800 rounded-full hover:bg-slate-700">
+                     <X size={24} />
+                  </button>
+               </div>
+               <div className="p-10 overflow-y-auto grid grid-cols-3 gap-10 bg-[#0c0c12]">
+                  {Object.keys(CATEGORY_MAP).map(cat => (
+                    <div key={cat} className="space-y-6">
+                       <h4 className="text-indigo-400 text-xs font-black uppercase tracking-widest border-b border-indigo-500/20 pb-2">{cat} modules</h4>
+                       <div className="space-y-8">
+                          {CATEGORY_MAP[cat].map(m => (
+                             <div key={m.value} className="space-y-2 group">
+                                <div className="flex items-center gap-3 group-hover:translate-x-1 transition-transform">
+                                   <div className="p-1.5 bg-slate-800 rounded-lg text-slate-400 group-hover:text-indigo-400 group-hover:bg-indigo-400/10 transition-colors">
+                                      <m.icon size={14} />
+                                   </div>
+                                   <span className="text-xs font-black text-white">{m.label}</span>
+                                </div>
+                                <p className="text-[10px] text-slate-500 pl-9 leading-relaxed bg-slate-900/50 p-3 rounded-xl border border-slate-800/30 font-medium italic">Example content: {m.placeholder}</p>
+                             </div>
+                          ))}
+                       </div>
+                    </div>
+                  ))}
+               </div>
+               <div className="p-6 bg-slate-950/80 border-t border-slate-800 flex justify-center italic text-[10px] text-slate-500 font-bold tracking-wide uppercase">
+                  Select these types in the Step Type column to ensure valid automation builds.
+               </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
