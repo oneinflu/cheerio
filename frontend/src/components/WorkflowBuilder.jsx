@@ -387,9 +387,11 @@ const ActionNode = ({ data, selected }) => {
         {data.actionType === 'assign_agent'
           ? 'Assign Agent'
           : data.actionType === 'add_tag'
-            ? 'Add to Label'
+            ? 'Add Contact Tag'
             : data.actionType === 'remove_tag'
-              ? 'Remove Label'
+              ? 'Remove Contact Tag'
+            : data.actionType === 'add_to_label'
+              ? 'Add CRM Label'
               : data.actionType === 'set_variable'
                 ? 'Update Attribute'
                 : data.actionType === 'start_workflow'
@@ -1115,7 +1117,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
       { value: 'razorpay_link', label: 'Generate Payment', icon: CreditCard, placeholder: 'Amount in INR' },
       { value: 'update_lead_stage', label: 'Move CRM Stage', icon: Tag, placeholder: 'New stage name' },
       { value: 'assign_agent', label: 'Assign Agent', icon: UserCheck, placeholder: 'Agent email or ID' },
-      { value: 'add_to_label', label: 'Add Label', icon: Tag, placeholder: 'Label name' },
+      { value: 'add_to_label', label: 'Add CRM Label', icon: Tag, placeholder: 'Label ID' },
       { value: 'feedback', label: 'Collect Review', icon: Star, placeholder: 'Survey question' },
       { value: 'xolox_event', label: 'Custom Xolox Event', icon: Zap, placeholder: 'Event key' },
     ],
@@ -6237,12 +6239,12 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                           updateNodeFields(selectedNode.id, base);
                         }}
                       >
-                        <option value="add_tag">Add to Label</option>
-                        <option value="remove_tag">Remove Label</option>
+                        <option value="add_tag">Add Contact Tag</option>
+                        <option value="remove_tag">Remove Contact Tag</option>
                         <option value="assign_agent">Assign Agent</option>
                         <option value="set_variable">Update Attribute</option>
                         <option value="start_workflow">Start Workflow</option>
-                        <option value="add_to_label">Add To Label</option>
+                        <option value="add_to_label">Add CRM Label</option>
                         <option value="send_email">Send Email</option>
                         <option value="send_sms_otp">Send SMS OTP</option>
                         <option value="update_chat_status">Update Chat Status</option>
