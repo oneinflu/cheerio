@@ -964,7 +964,7 @@ const getUpstreamVariables = (targetNodeId, nodes, edges) => {
           if (v && !vars.includes(`{{${v}}}`)) vars.push(`{{${v}}}`);
         });
         // Core defaults
-        ['name', 'phone', 'email', 'tags', 'source', 'contact_id'].forEach(def => {
+        ['name', 'phone', 'email', 'course', 'tags', 'source', 'contact_id'].forEach(def => {
           if (!vars.includes(`{{${def}}}`)) vars.push(`{{${def}}}`);
         });
       } else if (srcNode.type === 'incoming_webhook') {
@@ -993,6 +993,9 @@ const getUpstreamVariables = (targetNodeId, nodes, edges) => {
         if (saveVar && !vars.includes(`{{${saveVar}}}`)) {
           vars.push(`{{${saveVar}}}`);
         }
+      } else if (srcNode.type === 'xolox_event') {
+        if (!vars.includes('{{xolox_response.assignedTo}}')) vars.push('{{xolox_response.assignedTo}}');
+        if (!vars.includes('{{xolox_success}}')) vars.push('{{xolox_success}}');
       }
 
       // Continue walking backward
@@ -1094,6 +1097,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
     { step_id: 'START_0', category: 'trigger', type: 'trigger', content: 'hello, hi', next_step_id: '' }
   ]);
   const [pabblyJSON, setPabblyJSON] = useState('');
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const CATEGORY_MAP = {
     trigger: [
@@ -1777,6 +1781,11 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
             data.actionValue = '';
             data.otpDigits = 6;
             data.saveVariable = 'otp';
+          }
+          if (actionType === 'assign_agent' || actionType === 'assign_agent_xolox') {
+            data.actionType = 'assign_agent';
+            data.assignMode = actionType === 'assign_agent_xolox' ? 'xolox_dynamic' : 'direct';
+            data.actionValue = actionType === 'assign_agent_xolox' ? '{{xolox_response.assignedTo}}' : '';
           }
         }
         if (type === 'delay') {
@@ -3638,6 +3647,27 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 className="flex items-center gap-3 p-3 rounded-md bg-orange-50 border border-orange-200 cursor-pointer hover:bg-orange-100 transition-colors"
                 draggable
                 onDragStart={(e) => {
+                  e.dataTransfer.setData('application/reactflow', 'action');
+                  e.dataTransfer.setData('application/actiontype', 'assign_agent_xolox');
+                  e.dataTransfer.effectAllowed = 'move';
+                }}
+                onClick={() => handleAddNodeFromPalette('action', 'assign_agent_xolox')}
+                title="Assign agent using the response from a previous XOLOX event"
+              >
+                <div className="w-9 h-9 rounded-md bg-orange-600 flex items-center justify-center shrink-0">
+                  <Globe size={16} className="text-white" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-orange-800">Assign from XOLOX</div>
+                  <div className="text-xs text-orange-600">Dynamic assignment</div>
+                </div>
+              </div>
+            )}
+            {viewMode === 'canvas' && (
+              <div
+                className="flex items-center gap-3 p-3 rounded-md bg-orange-50 border border-orange-200 cursor-pointer hover:bg-orange-100 transition-colors"
+                draggable
+                onDragStart={(e) => {
                   e.dataTransfer.setData('application/reactflow', 'delay');
                   e.dataTransfer.effectAllowed = 'move';
                 }}
@@ -4396,11 +4426,20 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                       return (
                         <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
                           <div className="flex items-center justify-between mb-1.5">
-                            <div className="text-[11px] font-semibold text-slate-600">
-                              Variables from upstream nodes
-                              <span className="ml-1 text-[10px] font-normal text-slate-400">
-                                ({upstreamVars.length} found)
-                              </span>
+                            <div className="flex items-center gap-1.5">
+                              <div className="text-[11px] font-semibold text-slate-600">Variables from upstream nodes</div>
+                              <span className="text-[10px] font-normal text-slate-400">({upstreamVars.length} found)</span>
+                              <button 
+                                type="button" 
+                                onClick={() => {
+                                  // This forces a re-render which re-calculates getUpstreamVariables
+                                  setRefreshKey(prev => prev + 1);
+                                }}
+                                className="p-1 hover:bg-slate-200 rounded text-slate-400 hover:text-slate-600 transition-colors group"
+                                title="Refresh variables from top"
+                              >
+                                <RefreshCw size={10} className="group-hover:rotate-180 transition-transform duration-500" />
+                              </button>
                             </div>
                             {focusedVarIdx !== null && (
                               <span className="text-[10px] text-orange-500 font-medium">
@@ -6226,6 +6265,8 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
 
                             if (mode === 'direct') {
                               newData.actionValue = '';
+                            } else if (mode === 'xolox_dynamic') {
+                              newData.actionValue = '{{xolox_response.assignedTo}}';
                             } else {
                               newData.actionValue = JSON.stringify({ course: '', language: '' });
                             }
@@ -6241,6 +6282,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                         >
                           <option value="direct">Direct Email</option>
                           <option value="round_robin">Round Robin (Conditions)</option>
+                          <option value="xolox_dynamic">From XOLOX Response</option>
                         </select>
                       </div>
 
@@ -6281,6 +6323,23 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                               </>
                             );
                           })()}
+                        </div>
+                      ) : selectedNode.data.assignMode === 'xolox_dynamic' ? (
+                        <div className="space-y-2 bg-orange-50 border border-orange-100 rounded-lg p-3">
+                           <div className="flex items-center gap-2 mb-1">
+                              <Globe size={14} className="text-orange-600" />
+                              <span className="text-[11px] font-bold text-orange-800 uppercase tracking-tight">Dynamic Assignment</span>
+                           </div>
+                           <label className="text-[10px] text-slate-500 font-bold uppercase">Response Path</label>
+                           <input
+                             className="w-full border border-orange-300 rounded px-2 py-1.5 text-xs font-mono focus:ring-1 focus:ring-orange-400 outline-none"
+                             value={selectedNode.data.actionValue || '{{xolox_response.assignedTo}}'}
+                             onChange={e => updateNodeData('actionValue', e.target.value)}
+                             placeholder="{{xolox_response.some_field}}"
+                           />
+                           <p className="text-[10px] text-orange-600 leading-tight">
+                              This will take the value from the successful XOLOX event response and use it to look up the agent (by ID or Email).
+                           </p>
                         </div>
                       ) : (
                         <div className="space-y-1">

@@ -19,7 +19,24 @@ function resolvePlaceholders(str, context) {
   if (!str || typeof str !== 'string') return str;
   return str.replace(/\{\{([^}]+)\}\}/g, (_, key) => {
     const k = key.trim();
-    return Object.prototype.hasOwnProperty.call(context, k) ? String(context[k]) : `{{${k}}}`;
+    if (Object.prototype.hasOwnProperty.call(context, k)) return String(context[k]);
+    
+    // Support dotted paths (e.g. xolox_response.assignedTo)
+    const segments = k.split('.');
+    if (segments.length > 1) {
+      let val = context;
+      for (const seg of segments) {
+        if (val && typeof val === 'object' && seg in val) {
+          val = val[seg];
+        } else {
+          val = undefined;
+          break;
+        }
+      }
+      if (val !== undefined) return String(val ?? '');
+    }
+    
+    return `{{${k}}}`;
   });
 }
 
