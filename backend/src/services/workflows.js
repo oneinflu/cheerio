@@ -529,6 +529,8 @@ async function runWorkflow(id, phoneNumber, context = {}) {
 
   while (currentNode && stepCount < MAX_STEPS) {
     stepCount++;
+    const edges = (steps && Array.isArray(steps.edges)) ? steps.edges : [];
+    
     executionLog.push({
       step: stepCount,
       nodeId: currentNode.id,
@@ -1303,8 +1305,24 @@ async function runWorkflow(id, phoneNumber, context = {}) {
           console.log(`[WorkflowRunner] XOLOX event result: ${xoloxSuccess ? 'SUCCESS' : 'FAIL'}`);
           context.xolox_success = xoloxSuccess ? 'true' : 'false';
 
-          // Route to onSuccess or onFail branch
-          const nextId = xoloxSuccess ? currentNode.onSuccess : currentNode.onFail;
+          // Emit transition event for UI tracking
+          let nextId = xoloxSuccess ? currentNode.onSuccess : currentNode.onFail;
+          if (!nextId) {
+              const h = xoloxSuccess ? 'success' : 'fail';
+              const edge = edges.find(e => e.source === currentNode.id && (e.sourceHandle === h || e.sourceHandle === `on${h.charAt(0).toUpperCase() + h.slice(1)}`));
+              if (edge) nextId = edge.target;
+          }
+
+          if (io && nextId) {
+            io.emit('workflow:step:transition', { 
+              workflowId: id, 
+              phoneNumber, 
+              fromNodeId: currentNode.id, 
+              toNodeId: nextId, 
+              contextPreview: buildContextPreview(context) 
+            });
+          }
+          
           currentNode = nextId ? nodes.find(n => n.id === nextId) : null;
           continue; // Skip the standard next-node logic below
         }
@@ -1312,6 +1330,7 @@ async function runWorkflow(id, phoneNumber, context = {}) {
 
       // 2. Move to Next Node
       let nextNodeId = null;
+
       if (currentNode.type === 'condition') {
         const conditionType = currentNode.data.conditionType || 'user_replied';
         console.log(`[WorkflowRunner] Evaluating condition type: ${conditionType}`);
@@ -1371,6 +1390,12 @@ async function runWorkflow(id, phoneNumber, context = {}) {
         console.log(`[WorkflowRunner] Condition result: ${result ? 'YES' : 'NO'}`);
 
         nextNodeId = result ? currentNode.yes : currentNode.no;
+        if (!nextNodeId) {
+            const h = result ? 'yes' : 'no';
+            const edge = edges.find(e => e.source === currentNode.id && e.sourceHandle === h);
+            if (edge) nextNodeId = edge.target;
+        }
+
         if (io && nextNodeId) {
           io.emit('workflow:step:transition', { workflowId: id, phoneNumber, fromNodeId: currentNode.id, toNodeId: nextNodeId, contextPreview: buildContextPreview(context) });
         }
@@ -1379,6 +1404,11 @@ async function runWorkflow(id, phoneNumber, context = {}) {
         currentNode = null;
       } else {
         nextNodeId = currentNode.next;
+        if (!nextNodeId) {
+            const edge = edges.find(e => e.source === currentNode.id && (!e.sourceHandle || e.sourceHandle === 'default' || e.sourceHandle === 'next'));
+            if (edge) nextNodeId = edge.target;
+        }
+
         if (io && nextNodeId) {
           io.emit('workflow:step:transition', { workflowId: id, phoneNumber, fromNodeId: currentNode.id, toNodeId: nextNodeId, contextPreview: buildContextPreview(context) });
         }

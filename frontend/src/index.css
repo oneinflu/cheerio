@@ -184,3 +184,14 @@
     background: #94a3b8;
   }
 }
+
+/* ─── Global Input/Select Overrides ───────────────────────────────────────── */
+/* Force text to black in inputs, selects, and textareas for visibility */
+input, select, textarea, .react-flow__node input, .react-flow__node select {
+  color: #000000 !important;
+}
+
+/* Ensure placeholder is also readable (dark gray) */
+input::placeholder, textarea::placeholder {
+  color: #4b5563 !important;
+}
