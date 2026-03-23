@@ -45,6 +45,7 @@ const labelsRouter = require('./src/routes/labels');
 const campaignsRouter = require('./src/routes/campaigns');
 const emailTemplatesRouter = require('./src/routes/emailTemplates');
 const aiAgentRouter = require('./src/routes/aiAgent');
+const reportsRouter = require('./src/routes/reports');
 const { publicRouter: webhookTriggerPublic, privateRouter: webhookTriggerPrivate } = require('./src/routes/webhookTriggers');
 const exotelWebhookRouter = require('./src/webhooks/exotel');
 const twilioWebhookRouter = require('./src/webhooks/twilio');
@@ -161,6 +162,7 @@ function createApp() {
   app.use('/api/campaigns', campaignsRouter);
   app.use('/api/email-templates', emailTemplatesRouter);
   app.use('/api/ai-agent', aiAgentRouter);
+  app.use('/api/reports', reportsRouter);
   app.use('/api/payments', require('./src/routes/payments'));
   app.use('/webhooks/workflow', webhookTriggerPublic);  // PUBLIC — no auth
   app.use('/api/workflow-webhooks', webhookTriggerPrivate); // PRIVATE — requires auth

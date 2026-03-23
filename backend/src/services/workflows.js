@@ -442,7 +442,7 @@ async function runWorkflow(id, phoneNumber, context = {}) {
   const { nodes } = steps;
 
   // Find trigger node
-  let currentNode = nodes.find(n => n.type === 'trigger' || n.type === 'incoming_webhook');
+  let currentNode = nodes.find(n => n.type === 'trigger' || n.type === 'incoming_webhook' || n.type === 'new_contact' || n.type === 'campaign_trigger');
   if (!currentNode) throw new Error('No trigger node found');
 
   // Ensure contact exists or update it with new info
@@ -504,9 +504,26 @@ async function runWorkflow(id, phoneNumber, context = {}) {
     if (!context['name'] && context['name']) context['name'] = context['name']; // already in context
     
     // Contact update already handled above
-  } else if (currentNode.type === 'trigger' && currentNode.data?.triggerType === 'new_contact') {
-      // Ensure contact attributes are in context
-      // (Already handled by triggerContactCreatedWorkflows but good for safety)
+  } else if (currentNode.type === 'new_contact' || (currentNode.type === 'trigger' && currentNode.data?.triggerType === 'new_contact')) {
+      const fieldMapping = currentNode.data?.fieldMapping || {};
+      // Map contact fields to variables based on mapping
+      // Standard fields: contact_name, contact_phone, contact_email, contact_course, contact_tags, contact_source, contact_id
+      const mappingTable = [
+        { key: 'contact_name', contextKey: 'name', defaultVar: 'name' },
+        { key: 'contact_phone', contextKey: 'phone', defaultVar: 'phone' },
+        { key: 'contact_email', contextKey: 'email', defaultVar: 'email' },
+        { key: 'contact_course', contextKey: 'course', defaultVar: 'course' },
+        { key: 'contact_tags', contextKey: 'tags', defaultVar: 'tags' },
+        { key: 'contact_source', contextKey: 'source', defaultVar: 'source' },
+        { key: 'contact_id', contextKey: 'contact_id', defaultVar: 'contact_id' }
+      ];
+
+      mappingTable.forEach(entry => {
+        const varName = fieldMapping[entry.key] || entry.defaultVar;
+        if (context[entry.contextKey] !== undefined) {
+           context[varName] = context[entry.contextKey];
+        }
+      });
   }
 
   const executionLog = [];
@@ -1164,14 +1181,19 @@ async function runWorkflow(id, phoneNumber, context = {}) {
             let assignedUserId = null;
             let teamId = null;
 
-            // Check if actionValue is a conditions object (Round Robin) or direct email assignment
+            // 1. Resolve potential dynamic variables (e.g. {{xolox_response.assignedTo}})
+            const resolvedValue = typeof actionValue === 'string' 
+              ? resolvePlaceholders(actionValue, context).trim() 
+              : actionValue;
+
+            console.log(`[WorkflowRunner] Assigning agent. Target: ${JSON.stringify(resolvedValue)}`);
+
+            // Check if actionValue is a conditions object (Round Robin) or direct email/id assignment
             let conditions = {};
-            if (typeof actionValue === 'object' && actionValue !== null) {
-                 conditions = actionValue;
-            } else if (typeof actionValue === 'string' && actionValue.trim().startsWith('{')) {
-                 try { conditions = JSON.parse(actionValue); } catch (e) {
-                   // Not JSON, assume email
-                 }
+            if (typeof resolvedValue === 'object' && resolvedValue !== null) {
+                 conditions = resolvedValue;
+            } else if (typeof resolvedValue === 'string' && resolvedValue.startsWith('{')) {
+                 try { conditions = JSON.parse(resolvedValue); } catch (e) {}
             }
 
             if (Object.keys(conditions).length > 0) {
@@ -1182,18 +1204,22 @@ async function runWorkflow(id, phoneNumber, context = {}) {
                      // Get team
                      const teamRes = await db.query('SELECT team_id FROM team_members WHERE user_id = $1 LIMIT 1', [assignedUserId]);
                      teamId = teamRes.rows[0]?.team_id;
-                } else {
-                     console.log(`[WorkflowRunner] No agent found matching conditions`);
                 }
-            } else {
-                // Direct Email Assignment (Legacy support)
-                const userRes = await db.query('SELECT id FROM users WHERE email = $1', [actionValue]);
+            } else if (resolvedValue) {
+                // Direct Email or ID Assignment
+                // Try looking up by ID (if UUID) or email
+                const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(resolvedValue);
+                const query = isUuid 
+                    ? 'SELECT id FROM users WHERE id = $1' 
+                    : 'SELECT id FROM users WHERE email = $1';
+                
+                const userRes = await db.query(query, [resolvedValue]);
                 if (userRes.rowCount > 0) {
                   assignedUserId = userRes.rows[0].id;
                   const teamRes = await db.query('SELECT team_id FROM team_members WHERE user_id = $1 LIMIT 1', [assignedUserId]);
                   teamId = teamRes.rows[0]?.team_id;
                 } else {
-                  console.log(`[WorkflowRunner] User ${actionValue} not found`);
+                  console.log(`[WorkflowRunner] User ${resolvedValue} not found in our database`);
                 }
             }
 
@@ -1439,10 +1465,32 @@ async function runWorkflow(id, phoneNumber, context = {}) {
     }
   }
 
-  if (io) {
-    io.emit('workflow:run:complete', { workflowId: id, phoneNumber, endedAt: new Date(), steps: executionLog.length });
+  const endedAt = new Date();
+  const durationMs = endedAt.getTime() - workflowStartTime.getTime();
+  const hasError = executionLog.some(l => l.error);
+  const status = hasError ? 'failed' : 'success';
+
+  // Persist run to database for reporting
+  try {
+    await db.query(`
+      INSERT INTO workflow_runs (
+        workflow_id, phone_number, status, execution_log, 
+        context_preview, error_message, started_at, ended_at, duration_ms
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    `, [
+      id, phoneNumber, status, JSON.stringify(executionLog),
+      JSON.stringify(buildContextPreview(context)), hasError ? executionLog.find(l => l.error)?.error : null,
+      workflowStartTime, endedAt, durationMs
+    ]);
+  } catch (dbErr) {
+    console.error('[WorkflowRunner] Failed to persist workflow run:', dbErr.message);
   }
-  return { success: true, log: executionLog };
+
+  if (io) {
+    io.emit('workflow:run:complete', { workflowId: id, phoneNumber, endedAt, steps: executionLog.length });
+  }
+  return { success: !hasError, log: executionLog };
 }
 
 async function getTemplateSummariesForAI() {

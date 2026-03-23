@@ -504,6 +504,7 @@ const NEW_CONTACT_FIELDS = [
   { key: 'contact_name', label: 'Name', defaultVar: 'name' },
   { key: 'contact_phone', label: 'Phone', defaultVar: 'phone' },
   { key: 'contact_email', label: 'Email', defaultVar: 'email' },
+  { key: 'contact_course', label: 'Course', defaultVar: 'course' },
   { key: 'contact_tags', label: 'Tags', defaultVar: 'tags' },
   { key: 'contact_source', label: 'Source', defaultVar: 'source' },
   { key: 'contact_id', label: 'Contact ID', defaultVar: 'contact_id' },

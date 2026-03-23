@@ -43,10 +43,11 @@ publicRouter.post('/:workflowId', async (req, res) => {
         });
 
         // Store event (ignore if workflow doesn't exist — don't error the caller)
+        let webhookEventId = null;
         try {
-            await db.query(
+            const insRes = await db.query(
                 `INSERT INTO webhook_events (workflow_id, payload, headers, source_ip)
-         VALUES ($1, $2, $3, $4)`,
+         VALUES ($1, $2, $3, $4) RETURNING id`,
                 [
                     workflowId,
                     JSON.stringify(payload),
@@ -54,6 +55,7 @@ publicRouter.post('/:workflowId', async (req, res) => {
                     req.ip || req.connection?.remoteAddress || null,
                 ]
             );
+            webhookEventId = insRes.rows[0]?.id;
         } catch (dbErr) {
             // Silently ignore — workflow might not exist, that's OK
             console.warn('[webhook] Could not store event:', dbErr.message);
@@ -75,6 +77,8 @@ publicRouter.post('/:workflowId', async (req, res) => {
                 if (name) context.name = name;
                 if (email) context.email = email;
                 if (normalizedPhone) context.phone = normalizedPhone;
+
+                if (webhookEventId) context.webhookEventId = webhookEventId;
 
                 if (normalizedPhone) {
                     workflows

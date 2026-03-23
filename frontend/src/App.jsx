@@ -102,9 +102,10 @@ import CallsPage from './components/CallsPage.jsx';
 import SmsPage from './components/SmsPage.jsx';
 import EmailPage from './components/EmailPage.jsx';
 import OnboardingTour from './components/OnboardingTour.jsx';
+import ReportsPage from './components/ReportsPage.jsx';
 import { connectSocket } from './socket.js';
 import { getInbox, getInboxCounts, getMessages, claimConversation, reassignConversation, forceReassignConversation, releaseConversation, markAsRead, resolveConversation, deleteConversation, blockConversation, unblockConversation, pinConversation, updateWorkflow, getTeamUser, getTeamUsers, reassignExternalLead, toggleAiForConversation, completeOnboarding } from './api.js';
-import { LayoutDashboard, MessageSquare, Users, Megaphone, Settings, LogOut, Search, Bell, FileText, Workflow, Shield, ChevronsUpDown, Check, Zap, GitBranch, Instagram, ChevronDown, ChevronRight, Mail, Bot, ArrowRight, PauseCircle, PlayCircle, Puzzle, Phone } from 'lucide-react';
+import { LayoutDashboard, MessageSquare, Users, Megaphone, Settings, LogOut, Search, Bell, FileText, Workflow, Shield, ChevronsUpDown, Check, Zap, GitBranch, Instagram, ChevronDown, ChevronRight, Mail, Bot, ArrowRight, PauseCircle, PlayCircle, Puzzle, Phone, BarChart3 } from 'lucide-react';
 import { Button } from './components/ui/Button';
 import { Badge } from './components/ui/Badge';
 import { Card, CardHeader, CardTitle, CardContent } from './components/ui/Card';
@@ -113,7 +114,7 @@ import { Toaster } from './components/ui/Toaster';
 // The full list of valid pages in the app
 const validPages = [
   'inbox', 'dashboard', 'contacts', 'labels', 'campaigns', 'templates', 
-  'workflows', 'settings', 'profile', 'flows', 'payments', 'ai-agent'
+  'workflows', 'settings', 'profile', 'flows', 'payments', 'ai-agent', 'reports'
 ];
 
 export default function App() {
@@ -216,6 +217,7 @@ export default function App() {
       sms:             'SMS — Twilio Messaging',
       email:           'Email — IMAP/SMTP Inbox',
       gallery:         'File Manager — Media Assets',
+      reports:         'Reports — Workflow Performance & Traces',
     };
     document.title = pageTitles[activePage] ? `${pageTitles[activePage]} | Greeto` : 'Greeto';
   }, [activePage, editingWorkflow, isLoggedIn, isLoginView]);
@@ -1017,6 +1019,10 @@ export default function App() {
                 <div style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><FileText size={18} /></div>
                 <span className="ml-2 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100 text-sm font-medium">File Manager</span>
               </button>
+              <button style={navBtn('reports')} onClick={() => setActivePage('reports')} title="Reports">
+                <div style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><BarChart3 size={18} /></div>
+                <span className="ml-2 whitespace-nowrap overflow-hidden transition-all duration-300 w-0 group-hover:w-auto opacity-0 group-hover:opacity-100 text-sm font-medium">Reports</span>
+              </button>
             </>
           )}
         </nav>
@@ -1098,6 +1104,7 @@ export default function App() {
 
         {activePage === 'team-members' && <TeamMembersPage />}
         {activePage === 'contacts' && <ContactsPage />}
+        {activePage === 'reports' && <ReportsPage />}
         {activePage === 'labels' && <LabelsPage />}
         {activePage === 'campaigns' && <CampaignsPage />}
 
