@@ -1101,6 +1101,46 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
   const [pabblyJSON, setPabblyJSON] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
 
+  useEffect(() => {
+    const loadResources = async () => {
+      setLoadingTemplates(true);
+      setLoadingEmailTemplates(true);
+      setLoadingWorkflows(true);
+      setLoadingLabels(true);
+
+      try {
+        const [tplRes, etplRes, wfRes, lbRes, stgRes] = await Promise.all([
+          getTemplates().catch(() => ({ data: [] })),
+          getEmailTemplates().catch(() => []),
+          getWorkflows().catch(() => []),
+          getLabels().catch(() => []),
+          getLeadStages().catch(() => [])
+        ]);
+
+        if (tplRes && tplRes.data) {
+          // Filter for only APPROVED templates as requested
+          const approved = tplRes.data.filter(t => (t.status === 'APPROVED' || t.status === 'LOCAL' || t.isLocal));
+          setTemplates(approved);
+        } else if (Array.isArray(tplRes)) {
+           setTemplates(tplRes);
+        }
+
+        setEmailTemplates(Array.isArray(etplRes) ? etplRes : etplRes.emailTemplates || []);
+        setAvailableWorkflows(Array.isArray(wfRes) ? wfRes : wfRes.workflows || []);
+        setAvailableLabels(Array.isArray(lbRes) ? lbRes : lbRes.labels || []);
+        // Process stages if needed
+      } catch (err) {
+        console.error('Error loading workflow resources:', err);
+      } finally {
+        setLoadingTemplates(false);
+        setLoadingEmailTemplates(false);
+        setLoadingWorkflows(false);
+        setLoadingLabels(false);
+      }
+    };
+    loadResources();
+  }, [refreshKey]);
+
   const CATEGORY_MAP = {
     trigger: [
       { value: 'trigger', label: 'WhatsApp Keyword', icon: MessageSquare, placeholder: 'e.g. hello, hi, help' },
