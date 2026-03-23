@@ -767,6 +767,15 @@ export async function getContacts(page = 1, limit = 10, search = "") {
   return res.json();
 }
 
+export async function deleteContact(id) {
+  const headers = getAuthHeaders();
+  const res = await fetch(`/api/contacts/${id}`, {
+    method: 'DELETE',
+    headers,
+  });
+  return res.json();
+}
+
 export async function getLabels() {
   const res = await fetch(`/api/labels`, { headers: getAuthHeaders() });
   return res.json();

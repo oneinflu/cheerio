@@ -125,4 +125,23 @@ router.get('/channels', auth.requireRole('admin', 'agent', 'supervisor'), async 
     }
 });
 
+/**
+ * DELETE /api/contacts/:id
+ * Removes a contact and all cascading data (conversations, messages).
+ */
+router.delete('/:id', auth.requireRole('admin', 'supervisor'), async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const result = await db.query('DELETE FROM contacts WHERE id = $1', [id]);
+        
+        if (result.rowCount === 0) {
+            return res.status(404).json({ success: false, message: 'Contact not found' });
+        }
+
+        return res.json({ success: true, message: 'Contact deleted successfully' });
+    } catch (err) {
+        next(err);
+    }
+});
+
 module.exports = router;

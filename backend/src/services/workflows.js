@@ -1327,6 +1327,44 @@ async function runWorkflow(id, phoneNumber, context = {}) {
                             `, [conversationId, teamId, assignedUserId]);
                 }
                 console.log(`[WorkflowRunner] Assigned conversation to user ${assignedUserId}`);
+            } else if (resolvedValue && context.xolox_response) {
+                // LAST CHANCE: If user not found in DB but we have their full info in the Xolox response, 
+                // we can auto-provision them so assignment succeeds.
+                const xr = context.xolox_response;
+                const leadData = xr.data || xr;
+                const assignedTo = leadData.assignedTo;
+
+                if (assignedTo && typeof assignedTo === 'object' && (assignedTo._id || assignedTo.id) === resolvedValue) {
+                    const userId = assignedTo._id || assignedTo.id;
+                    const email = assignedTo.email || '';
+                    const name = `${assignedTo.firstname || ''} ${assignedTo.lastname || ''}`.trim() || assignedTo.name || 'Unknown Agent';
+                    
+                    if (userId && email) {
+                        console.log(`[WorkflowRunner] Auto-provisioning agent ${name} (${userId}) from Starforze response...`);
+                        await db.query(`
+                            INSERT INTO users (id, email, name, role, active, created_at)
+                            VALUES ($1, $2, $3, 'agent', true, NOW())
+                            ON CONFLICT (id) DO UPDATE SET
+                                email = EXCLUDED.email,
+                                name = EXCLUDED.name
+                        `, [userId, email, name]);
+
+                        // Now retry assignment logic with the newly created user
+                        const retryTeamRes = await db.query('SELECT team_id FROM team_members WHERE user_id = $1 LIMIT 1', [userId]);
+                        const finalTeamId = teamId || retryTeamRes.rows[0]?.team_id || null;
+
+                        await db.query(`
+                            INSERT INTO conversation_assignments (conversation_id, team_id, assignee_user_id, claimed_at)
+                            VALUES ($1, $2, $3, NOW())
+                            ON CONFLICT (conversation_id) WHERE released_at IS NULL DO UPDATE SET
+                                assignee_user_id = EXCLUDED.assignee_user_id,
+                                team_id = EXCLUDED.team_id,
+                                claimed_at = NOW()
+                        `, [conversationId, finalTeamId, userId]);
+                        
+                        console.log(`[WorkflowRunner] Successfully auto-provisioned and assigned agent ${userId}`);
+                    }
+                }
             }
           } else if (actionType === 'update_chat_status') {
             const newStatus = actionValue; // 'closed', 'open', 'snoozed'

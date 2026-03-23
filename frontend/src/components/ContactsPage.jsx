@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Download, Upload, Plus, Search, MoreHorizontal, User, MessageCircle, Instagram, Database, X } from 'lucide-react';
+import { Download, Upload, Plus, Search, MoreHorizontal, User, MessageCircle, Instagram, Database, X, Trash2 } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Modal } from './ui/Modal';
-import { getContacts, getContactChannels, addContact } from '../api';
+import { getContacts, getContactChannels, addContact, deleteContact } from '../api';
 
 // Small helper to pick the right icon for a channel type
 function ChannelIcon({ type }) {
@@ -246,6 +246,25 @@ export default function ContactsPage() {
         setTotalContacts(prev => prev + 1);
     };
 
+    const handleDeleteContact = async (contact) => {
+        if (!window.confirm(`Are you sure you want to delete ${contact.display_name || contact.external_id}? This will remove all message history.`)) {
+            return;
+        }
+
+        try {
+            const res = await deleteContact(contact.id);
+            if (res.success) {
+                setContacts(prev => prev.filter(c => c.id !== contact.id));
+                setTotalContacts(prev => prev - 1);
+            } else {
+                alert(res.message || 'Failed to delete contact');
+            }
+        } catch (err) {
+            console.error('Error deleting contact:', err);
+            alert('A network error occurred');
+        }
+    };
+
     return (
         <div className="flex-1 flex flex-col h-full bg-slate-50">
 
@@ -346,9 +365,20 @@ export default function ContactsPage() {
                                                 </td>
                                                 <td className="px-6 py-4 text-slate-500">{new Date(contact.created_at).toLocaleDateString()}</td>
                                                 <td className="px-6 py-4 text-right">
-                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-slate-900">
-                                                        <MoreHorizontal size={16} />
-                                                    </Button>
+                                                    <div className="flex justify-end gap-2">
+                                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-slate-900">
+                                                            <MoreHorizontal size={16} />
+                                                        </Button>
+                                                        <Button 
+                                                            variant="ghost" 
+                                                            size="icon" 
+                                                            className="h-8 w-8 text-red-400 hover:text-red-700 hover:bg-red-50"
+                                                            onClick={() => handleDeleteContact(contact)}
+                                                            title="Delete Contact"
+                                                        >
+                                                            <Trash2 size={16} />
+                                                        </Button>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         ))
