@@ -1,4 +1,5 @@
 'use strict';
+require('dotenv').config();
 /**
  * src/integrations/meta/whatsappClient.js
  *
@@ -39,7 +40,7 @@ function delayUntilAvailable() {
  * Avoids adding external dependencies. Handles basic errors and JSON parsing.
  */
 async function postJSON(url, body, customConfig = null) {
-  const token = customConfig ? customConfig.token : null;
+  const token = (customConfig ? customConfig.token : null) || process.env.WHATSAPP_TOKEN;
   if (USE_MOCK) {
     console.log('[Mock WhatsApp Client] Skipping real API call. Payload:', JSON.stringify(body, null, 2));
     await new Promise(r => setTimeout(r, 500)); // simulate network delay

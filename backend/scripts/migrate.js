@@ -557,6 +557,45 @@ async function runMigrations() {
           console.log('[migrate] email_settings table already exists.');
         }
 
+        // --- NEW REPAIRS FOR WORKFLOWS AND TEMPLATES ---
+        console.log('[migrate] Running automated repairs for messages extra columns/enums...');
+        
+        // 1. Add 'template' to the enum
+        try {
+          await client.query("ALTER TYPE message_content_type ADD VALUE IF NOT EXISTS 'template'");
+          console.log('[migrate] ✅ Added "template" to message_content_type enum');
+        } catch (e) {
+          // Ignore if it fails because it's already there (Postgres doesn't support IF NOT EXISTS in all versions)
+        }
+
+        // 2. Ensure template_name column exists
+        const msgColsRes = await client.query("SELECT column_name FROM information_schema.columns WHERE table_name = 'messages'");
+        const msgCols = msgColsRes.rows.map(r => r.column_name);
+
+        if (!msgCols.includes('template_name')) {
+          console.log('[migrate] Adding template_name column to messages...');
+          await client.query("ALTER TABLE messages ADD COLUMN template_name TEXT");
+        }
+
+        // 3. Rename/Add status and external_id if needed
+        if (!msgCols.includes('external_message_id')) {
+          if (msgCols.includes('external_id')) {
+            await client.query("ALTER TABLE messages RENAME COLUMN external_id TO external_message_id");
+            console.log('[migrate] Renamed external_id to external_message_id');
+          } else {
+            await client.query("ALTER TABLE messages ADD COLUMN external_message_id TEXT");
+          }
+        }
+
+        if (!msgCols.includes('delivery_status')) {
+          if (msgCols.includes('status')) {
+            await client.query("ALTER TABLE messages RENAME COLUMN status TO delivery_status");
+            console.log('[migrate] Renamed status to delivery_status');
+          } else {
+            await client.query("ALTER TABLE messages ADD COLUMN delivery_status TEXT DEFAULT 'accepted'");
+          }
+        }
+
         return;
 
 
