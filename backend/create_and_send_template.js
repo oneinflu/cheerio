@@ -47,7 +47,7 @@ async function run() {
     });
 
     const uploadId = startRes.data.id;
-    
+
     // Binary upload for the media handle
     const uploadRes = await axios.post(`${GRAPH_BASE}/${uploadId}`, buffer, {
       headers: {
@@ -59,9 +59,26 @@ async function run() {
 
     const handle = uploadRes.data.h;
     if (!handle) throw new Error('Failed to obtain media handle from Meta.');
-    console.log('✅ Image uploaded. Media Handle obtained.');
+    console.log('✅ Image handle obtained for creation.');
 
-    // --- STEP 2: Create Marketing Template ---
+    // --- STEP 2: Upload to Meta Media Store (for Sending) ---
+    console.log('📤 Uploading image to Media Store (for sending)...');
+    const FormData = require('form-data');
+    const form = new FormData();
+    form.append('messaging_product', 'whatsapp');
+    form.append('file', buffer, { filename: 'promo.png', contentType: 'image/png' });
+    form.append('type', 'image/png');
+
+    const mediaStoreRes = await axios.post(`${GRAPH_BASE}/${PHONE_ID}/media`, form, {
+      headers: {
+        ...form.getHeaders(),
+        'Authorization': `Bearer ${TOKEN}`
+      }
+    });
+    const mediaId = mediaStoreRes.data.id;
+    console.log('✅ Media ID obtained:', mediaId);
+
+    // --- STEP 3: Create Marketing Template ---
     const templateName = 'marketing_image_promo_' + Math.floor(Date.now() / 1000);
     console.log(`📝 Creating marketing template: ${templateName}...`);
 
@@ -93,48 +110,53 @@ async function run() {
       ]
     };
 
-    const createRes = await axios.post(`${GRAPH_BASE}/${WABA_ID}/message_templates`, templateData, {
+    await axios.post(`${GRAPH_BASE}/${WABA_ID}/message_templates`, templateData, {
       headers: { Authorization: `Bearer ${TOKEN}` }
     });
-    console.log('✅ Template created successfully. Status:', createRes.data.status);
+    console.log('✅ Template created successfully.');
 
-    // --- STEP 3: Poll for Approval ---
-    console.log('⏳ Waiting for Meta Approval (polling every 20s)...');
+    // --- STEP 4: Poll for Approval ---
+    console.log('⏳ Waiting for Meta Approval (polling every 15s)...');
     let status = 'PENDING';
     let attempts = 0;
-    const maxAttempts = 12; // 4 minutes max
 
-    while (status === 'PENDING' && attempts < maxAttempts) {
-      console.log(`...Checking status (Attempt ${attempts + 1}/${maxAttempts})`);
-      await new Promise(r => setTimeout(r, 20000));
-      
+    while (status === 'PENDING' && attempts < 10) {
+      await new Promise(r => setTimeout(r, 15000));
       const statusRes = await axios.get(`${GRAPH_BASE}/${WABA_ID}/message_templates`, {
         headers: { Authorization: `Bearer ${TOKEN}` },
-        params: { limit: 10 }
+        params: { name: templateName }
       });
-      
+
       const tpl = statusRes.data.data.find(t => t.name === templateName);
-      if (tpl) {
-        status = tpl.status;
-      }
+      status = tpl ? tpl.status : 'NOT_FOUND';
       attempts++;
+      console.log(`Current Status: ${status} (Attempt ${attempts}/10)`);
     }
 
-    console.log(`Final Status: ${status}`);
-
-    if (status !== 'APPROVED' && status !== 'PENDING') {
-      throw new Error(`Template rejected or failed. Status: ${status}`);
+    if (status !== 'APPROVED') {
+      console.log('Status is not APPROVED, but trying to send anyway as test number might work...');
     }
 
-    // --- STEP 4: Send to Recipient ---
-    console.log(`📲 Sending approved template to ${RECIPIENT}...`);
+    // --- STEP 5: Send to Recipient WITH Component Parameters ---
+    console.log(`📲 Sending message with Image Component to ${RECIPIENT}...`);
     const sendRes = await axios.post(`${GRAPH_BASE}/${PHONE_ID}/messages`, {
       messaging_product: 'whatsapp',
       to: RECIPIENT,
       type: 'template',
       template: {
         name: templateName,
-        language: { code: 'en_US' }
+        language: { code: 'en_US' },
+        components: [
+          {
+            type: 'header',
+            parameters: [
+              {
+                type: 'image',
+                image: { id: mediaId }
+              }
+            ]
+          }
+        ]
       }
     }, {
       headers: { Authorization: `Bearer ${TOKEN}` }
