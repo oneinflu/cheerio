@@ -385,7 +385,7 @@ const ActionNode = ({ data, selected }) => {
     >
       <div className="text-xs text-slate-600 font-medium mb-1">
         {data.actionType === 'assign_agent'
-          ? 'Assign Agent'
+          ? (data.assignMode === 'xolox_dynamic' ? 'Assign from Xolox' : 'Assign Agent')
           : data.actionType === 'add_tag'
             ? 'Add Contact Tag'
             : data.actionType === 'remove_tag'
@@ -6202,7 +6202,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                         {selectedNode.data.actionType === 'start_workflow' && <WorkflowIcon size={16} className="text-indigo-600" />}
                         {selectedNode.data.actionType === 'update_lead_stage' && <ListChecks size={16} className="text-slate-700" />}
                         {selectedNode.data.actionType === 'assign_agent'
-                          ? 'Assign Agent'
+                          ? (data.assignMode === 'xolox_dynamic' ? 'Assign from Xolox' : 'Assign Agent')
                           : selectedNode.data.actionType === 'update_chat_status'
                             ? 'Update Chat Status'
                             : selectedNode.data.actionType === 'add_to_label'

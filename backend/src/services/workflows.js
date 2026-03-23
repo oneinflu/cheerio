@@ -1224,11 +1224,16 @@ async function runWorkflow(id, phoneNumber, context = {}) {
                 }
             } else if (resolvedValue) {
                 // Direct Email or ID Assignment
-                // Try looking up by ID (if UUID) or email
-                const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(resolvedValue);
-                const query = isUuid 
-                    ? 'SELECT id FROM users WHERE id = $1' 
-                    : 'SELECT id FROM users WHERE email = $1';
+                // Try looking up by ID, email, or a potential custom agent_id in attributes
+                const query = `
+                  SELECT id FROM users 
+                  WHERE id::text = $1 
+                     OR email = $1 
+                     OR attributes->>'agent_id' = $1 
+                     OR attributes->>'starforze_id' = $1
+                     OR attributes->>'external_id' = $1
+                  LIMIT 1
+                `;
                 
                 const userRes = await db.query(query, [resolvedValue]);
                 if (userRes.rowCount > 0) {
