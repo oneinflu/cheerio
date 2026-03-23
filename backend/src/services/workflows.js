@@ -1203,9 +1203,37 @@ async function runWorkflow(id, phoneNumber, context = {}) {
             let teamId = null;
 
             // 1. Resolve potential dynamic variables (e.g. {{xolox_response.assignedTo}})
-            const resolvedValue = typeof actionValue === 'string' 
+            let resolvedValue = typeof actionValue === 'string' 
               ? resolvePlaceholders(actionValue, context).trim() 
               : actionValue;
+
+            // 2. Smart Fallback: If no explicit value provided, try to extract assigned agent from Xolox response
+            if ((!resolvedValue || resolvedValue === 'null' || resolvedValue === 'undefined') && context.xolox_response) {
+                const xr = context.xolox_response;
+                const leadData = xr.data || xr; // Handle both {data: {assignedTo}} and {assignedTo}
+                const assignedTo = leadData.assignedTo || leadData.assignedId || leadData.counselorId || leadData.assigned_id;
+                
+                if (assignedTo) {
+                    if (typeof assignedTo === 'object') {
+                        resolvedValue = assignedTo.id || assignedTo._id || assignedTo.value;
+                    } else {
+                        resolvedValue = assignedTo;
+                    }
+                    console.log(`[WorkflowRunner] Auto-resolving agent from Starforze/Xolox response: ${resolvedValue}`);
+                }
+
+                // Also try to capture teamId from response if available
+                if (!teamId) {
+                    teamId = leadData.teamId || leadData.team_id || null;
+                }
+
+                // Linking: Use lead ID from response if available
+                const leadId = leadData.leadId || leadData.lead_id || (leadData.lead && (leadData.lead._id || leadData.lead.id));
+                if (leadId) {
+                    await db.query('UPDATE conversations SET lead_id = $1 WHERE id = $2', [leadId, conversationId]);
+                    console.log(`[WorkflowRunner] Linked lead ${leadId} from Starforze response to conversation ${conversationId}`);
+                }
+            }
 
             console.log(`[WorkflowRunner] Assigning agent. Target: ${JSON.stringify(resolvedValue)}`);
 
