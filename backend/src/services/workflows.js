@@ -313,6 +313,7 @@ async function triggerContactCreatedWorkflows(contactData) {
     email: contactData.email || '',
     tags: Array.isArray(contactData.tags) ? contactData.tags.join(',') : (contactData.tags || ''),
     source: contactData.source || '',
+    course: contactData.course || '',
     contact_id: contactData.id || contactData.contact_id || '',
   };
   console.log(`[WorkflowEvents] New contact created: ${phoneNumber}. Context:`, context);
@@ -1286,20 +1287,27 @@ async function runWorkflow(id, phoneNumber, context = {}) {
             }
             const xoloxRes = await axios(axiosConfig);
             console.log(`[WorkflowRunner] XOLOX response status: ${xoloxRes.status}`);
+            const responseBody = xoloxRes.data || {};
 
             if (successCondition === 'status_2xx') {
               xoloxSuccess = xoloxRes.status >= 200 && xoloxRes.status < 300;
             } else if (successCondition === 'field_true') {
               const fieldKey = xd.successField || '';
               const expectedValue = String(xd.successValue || 'true');
-              const responseBody = xoloxRes.data || {};
               const actualValue = String(responseBody[fieldKey] ?? '');
               xoloxSuccess = actualValue === expectedValue;
               console.log(`[WorkflowRunner] XOLOX field check: ${fieldKey}=${actualValue} vs expected=${expectedValue} => ${xoloxSuccess}`);
             }
+            
+            // Store response in context so user can see it or use it
+            context.xolox_response = responseBody;
           } catch (xoloxErr) {
             console.error(`[WorkflowRunner] XOLOX webhook call failed: ${xoloxErr.message}`);
             xoloxSuccess = false;
+            context.xolox_error = xoloxErr.message;
+            if (xoloxErr.response) {
+               context.xolox_response = xoloxErr.response.data;
+            }
           }
 
           console.log(`[WorkflowRunner] XOLOX event result: ${xoloxSuccess ? 'SUCCESS' : 'FAIL'}`);
@@ -1319,7 +1327,8 @@ async function runWorkflow(id, phoneNumber, context = {}) {
               phoneNumber, 
               fromNodeId: currentNode.id, 
               toNodeId: nextId, 
-              contextPreview: buildContextPreview(context) 
+              contextPreview: buildContextPreview(context),
+              xoloxResponse: context.xolox_response // Add explicit response for UI
             });
           }
           

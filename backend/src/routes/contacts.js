@@ -98,6 +98,7 @@ router.post('/', auth.requireRole('admin', 'super_admin', 'quality_manager', 'ag
             email: (newContact.profile && newContact.profile.email) || '',
             tags: (newContact.profile && newContact.profile.tags) || [],
             source: (newContact.profile && newContact.profile.source) || '',
+            course: (newContact.profile && (newContact.profile.course || newContact.profile.courseName)) || '',
         }).catch(err => console.error('[ContactsRoute] Failed to trigger new_contact workflows:', err.message));
 
         return res.json({ success: true, contact: newContact });
