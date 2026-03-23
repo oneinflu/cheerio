@@ -127,7 +127,7 @@ async function sendTemplateMessage(to, templateName, languageCode = 'en_US', com
  * GET JSON helper to Graph API.
  */
 async function getJSON(url, customConfig = null) {
-  const token = customConfig ? customConfig.token : null;
+  const token = (customConfig ? customConfig.token : null) || process.env.WHATSAPP_TOKEN;
   if (USE_MOCK) {
     console.log('[Mock WhatsApp Client] Skipping real API call. GET', url);
     await new Promise(r => setTimeout(r, 500)); 
@@ -257,7 +257,8 @@ async function sendTemplate(phoneNumberId, toWaId, name, languageCode, component
  * Get templates for a WABA.
  */
 async function getTemplates(wabaId, limit = 100, customConfig = null) {
-  const url = `${GRAPH_BASE}/${wabaId}/message_templates?limit=${limit}`;
+  const wid = wabaId || (customConfig && customConfig.businessAccountId) || process.env.WHATSAPP_BUSINESS_ACCOUNT_ID;
+  const url = `${GRAPH_BASE}/${wid}/message_templates?limit=${limit}`;
   return getJSON(url, customConfig);
 }
 
@@ -267,14 +268,16 @@ async function getTemplates(wabaId, limit = 100, customConfig = null) {
  * "socket hang up" network errors and to surface Graph API errors clearly.
  */
 async function createTemplate(wabaId, templateData, customConfig = null) {
-  const token = customConfig ? customConfig.token : null;
+  const token = (customConfig ? customConfig.token : null) || process.env.WHATSAPP_TOKEN;
+  const wid = wabaId || (customConfig && customConfig.businessAccountId) || process.env.WHATSAPP_BUSINESS_ACCOUNT_ID;
   if (USE_MOCK) {
     console.log('[Mock WhatsApp Client] Skipping real template creation.');
     return { status: 200, data: { success: true, id: 'mock_template_' + Date.now() } };
   }
   if (!token) throw new Error('WhatsApp Token required');
+  if (!wid) throw new Error('WhatsApp Business Account ID required (not found in config or env)');
 
-  const url = `${GRAPH_BASE}/${wabaId}/message_templates`;
+  const url = `${GRAPH_BASE}/${wid}/message_templates`;
 
   await delayUntilAvailable();
 
@@ -313,7 +316,7 @@ async function getMedia(mediaId, customConfig = null) {
  * @param {string} filename
  */
 async function uploadMedia(phoneNumberId, fileBuffer, mimeType, filename, customConfig = null) {
-  const token = customConfig ? customConfig.token : null;
+  const token = (customConfig ? customConfig.token : null) || process.env.WHATSAPP_TOKEN;
   if (USE_MOCK) {
     console.log('[Mock WhatsApp Client] Skipping real upload.');
     return { id: 'mock_media_' + Date.now() };
@@ -347,7 +350,7 @@ async function uploadMedia(phoneNumberId, fileBuffer, mimeType, filename, custom
  * @param {string} filename
  */
 async function uploadMessageTemplateMedia(wabaId, fileBuffer, mimeType, filename, customConfig = null) {
-  const token = customConfig ? customConfig.token : null;
+  const token = (customConfig ? customConfig.token : null) || process.env.WHATSAPP_TOKEN;
   if (USE_MOCK) {
     console.log('[Mock WhatsApp Client] Skipping real template media upload.');
     return { h: 'mock_handle_' + Date.now() };
@@ -405,16 +408,18 @@ async function uploadMessageTemplateMedia(wabaId, fileBuffer, mimeType, filename
  * @param {string} hsmId - Optional: Template ID to delete specific version
  */
 async function deleteTemplate(wabaId, name, hsmId, customConfig = null) {
-  const token = customConfig ? customConfig.token : null;
+  const token = (customConfig ? customConfig.token : null) || process.env.WHATSAPP_TOKEN;
+  const wid = wabaId || (customConfig && customConfig.businessAccountId) || process.env.WHATSAPP_BUSINESS_ACCOUNT_ID;
   if (USE_MOCK) {
     console.log('[Mock WhatsApp Client] Deleting template:', name, hsmId);
     return { success: true };
   }
   if (!token) throw new Error('WhatsApp Token required');
+  if (!wid) throw new Error('WhatsApp Business Account ID required (not found in config or env)');
 
   await delayUntilAvailable();
   
-  const u = new URL(`${GRAPH_BASE}/${wabaId}/message_templates`);
+  const u = new URL(`${GRAPH_BASE}/${wid}/message_templates`);
   u.searchParams.append('name', name);
   if (hsmId) {
     u.searchParams.append('hsm_id', hsmId);
@@ -456,8 +461,8 @@ async function deleteTemplate(wabaId, name, hsmId, customConfig = null) {
 
 
 async function createFlow({ name, categories, flowJson, publish = true, cloneFlowId, endpointUri }, customConfig = null) {
-  const token = customConfig ? customConfig.token : null;
-  const wabaId = (customConfig && customConfig.businessAccountId);
+  const token = (customConfig ? customConfig.token : null) || process.env.WHATSAPP_TOKEN;
+  const wabaId = (customConfig && customConfig.businessAccountId) || process.env.WHATSAPP_BUSINESS_ACCOUNT_ID;
   if (USE_MOCK) {
     console.log('[Mock WhatsApp Client] Skipping real flow creation.');
     return { id: 'mock_flow_' + Date.now(), success: true, validation_errors: [] };
@@ -508,7 +513,7 @@ async function createFlow({ name, categories, flowJson, publish = true, cloneFlo
 }
 
 async function updateFlowMetadata(flowId, data, customConfig = null) {
-  const token = customConfig ? customConfig.token : null;
+  const token = (customConfig ? customConfig.token : null) || process.env.WHATSAPP_TOKEN;
   if (USE_MOCK) {
     console.log('[Mock WhatsApp Client] Skipping real flow metadata update.', flowId, data);
     return { success: true };
@@ -542,7 +547,7 @@ async function updateFlowMetadata(flowId, data, customConfig = null) {
 }
 
 async function updateFlowJson(flowId, flowJson, customConfig = null) {
-  const token = customConfig ? customConfig.token : null;
+  const token = (customConfig ? customConfig.token : null) || process.env.WHATSAPP_TOKEN;
   if (USE_MOCK) {
     console.log('[Mock WhatsApp Client] Skipping real flow JSON update.');
     return { success: true, validation_errors: [] };
@@ -585,11 +590,12 @@ async function updateFlowJson(flowId, flowJson, customConfig = null) {
 }
 
 async function getFlows(wabaId, limit = 100, customConfig = null) {
+  const wid = wabaId || (customConfig && customConfig.businessAccountId) || process.env.WHATSAPP_BUSINESS_ACCOUNT_ID;
   if (USE_MOCK) {
     console.log('[Mock WhatsApp Client] Skipping real flow fetch.');
     return { status: 200, data: { data: [] } };
   }
-  const url = `${GRAPH_BASE}/${wabaId}/flows?limit=${limit}&fields=id,name,status,categories,validation_errors`;
+  const url = `${GRAPH_BASE}/${wid}/flows?limit=${limit}&fields=id,name,status,categories,validation_errors`;
   return getJSON(url, customConfig);
 }
 
