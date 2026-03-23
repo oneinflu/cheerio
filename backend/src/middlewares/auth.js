@@ -41,10 +41,11 @@ function requireAuth(req, res, next) {
 
         // Normalize role
         if (typeof role === 'string') {
-          const r = role.toLowerCase().replace(/[\s-]/g, '_');
-          if (r === 'super_admin' || r === 'superadmin') role = 'super_admin';
-          if (r === 'team_lead' || r === 'teamlead') role = 'supervisor';
-          if (r === 'quality_manager' || r === 'qualitymanager') role = 'quality_manager';
+          let r = role.toLowerCase().replace(/[\s-]/g, '_');
+          if (r === 'superadmin') r = 'super_admin';
+          if (r === 'team_lead' || r === 'teamlead') r = 'supervisor';
+          if (r === 'qualitymanager') r = 'quality_manager';
+          role = r;
         }
 
         // Handle teamIds

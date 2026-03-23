@@ -106,8 +106,8 @@ async function postJSON(url, body, customConfig = null) {
  * @param {string} phoneId - Optional: Phone number ID to send from
  */
 async function sendTemplateMessage(to, templateName, languageCode = 'en_US', components = [], phoneId, customConfig = null) {
-  const pid = phoneId || (customConfig && customConfig.phoneNumberId);
-  if (!pid) throw new Error('Phone Number ID required (not found in config)');
+  const pid = phoneId || (customConfig && customConfig.phoneNumberId) || process.env.WHATSAPP_PHONE_NUMBER_ID;
+  if (!pid) throw new Error('Phone Number ID required (not found in config or env)');
 
   const url = `${GRAPH_BASE}/${pid}/messages`;
   const body = {
