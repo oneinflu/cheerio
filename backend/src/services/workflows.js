@@ -484,6 +484,11 @@ async function runWorkflow(id, phoneNumber, context = {}) {
   let status = 'started';
   let hasError = false;
 
+  // Add standardized variables to context
+  context.phone = phoneNumber;
+  context.mobile = phoneNumber; // Alias for mobile
+  if (!context.name) context.name = 'User';
+
   try {
     const workflow = await getWorkflow(id);
     if (!workflow) throw new Error('Workflow not found');
@@ -500,12 +505,19 @@ async function runWorkflow(id, phoneNumber, context = {}) {
   // Ensure contact exists or update it with new info
   try {
       // If we don't have a name in context (e.g. inbound message trigger), try to fetch it from DB
-      if (!context.name) {
-          const contactRes = await db.query('SELECT display_name, profile FROM contacts WHERE external_id = $1', [phoneNumber]);
+          const contactRes = await db.query('SELECT id, display_name, profile FROM contacts WHERE external_id = $1', [phoneNumber]);
           if (contactRes.rowCount > 0) {
               const row = contactRes.rows[0];
+              context.contact_id = row.id;
               context.name = row.display_name || row.profile?.name || 'User';
-              console.log(`[WorkflowRunner] Fetched name from contact DB: ${context.name}`);
+              
+              // Load attributes into context for {{variable}} resolution
+              const attributes = row.profile?.attributes || {};
+              if (typeof attributes === 'object') {
+                Object.assign(context, attributes);
+              }
+
+              console.log(`[WorkflowRunner] Fetched contact ${context.name}. Loaded attributes: ${Object.keys(attributes).join(', ')}`);
           } else {
               // Contact doesn't exist (e.g. manual run without prior inbound msg). Create it.
               console.log(`[WorkflowRunner] Contact ${phoneNumber} not found. Creating placeholder.`);
@@ -524,6 +536,8 @@ async function runWorkflow(id, phoneNumber, context = {}) {
                   context.name = 'User';
               }
           }
+      } catch (err) {
+          console.error(`[WorkflowRunner] Failed to ensure/fetch contact for ${phoneNumber}:`, err);
       }
 
       // If incoming_webhook has name/email, we update the contact
@@ -536,9 +550,6 @@ async function runWorkflow(id, phoneNumber, context = {}) {
           });
           context.contact_id = contactId;
       }
-  } catch (err) {
-      console.error(`[WorkflowRunner] Failed to ensure/fetch contact for ${phoneNumber}:`, err);
-  }
 
   // If trigger is incoming_webhook, map payload to variables
   if (currentNode.type === 'incoming_webhook') {
@@ -1226,7 +1237,7 @@ async function runWorkflow(id, phoneNumber, context = {}) {
                         `, [varName, varValue, contactId]);
               }
             }
-          } else if (actionType === 'assign_agent') {
+          } else if (actionType === 'assign_agent' || actionType === 'assign_agent_xolox') {
             let assignedUserId = null;
             let teamId = null;
 
@@ -1236,30 +1247,32 @@ async function runWorkflow(id, phoneNumber, context = {}) {
               : actionValue;
 
             // 2. Smart Fallback: If no explicit value provided, try to extract assigned agent from Xolox response
-            if ((!resolvedValue || resolvedValue === 'null' || resolvedValue === 'undefined') && context.xolox_response) {
-                const xr = context.xolox_response;
-                const leadData = xr.data || xr; // Handle both {data: {assignedTo}} and {assignedTo}
-                const assignedTo = leadData.assignedTo || leadData.assignedId || leadData.counselorId || leadData.assigned_id;
-                
-                if (assignedTo) {
-                    if (typeof assignedTo === 'object') {
-                        resolvedValue = assignedTo.id || assignedTo._id || assignedTo.value;
-                    } else {
-                        resolvedValue = assignedTo;
-                    }
-                    console.log(`[WorkflowRunner] Auto-resolving agent from Starforze/Xolox response: ${resolvedValue}`);
-                }
+            if ((!resolvedValue || resolvedValue === 'null' || resolvedValue === 'undefined' || resolvedValue === null)) {
+                const xr = context.xolox_response || context.xolox_event_response; // check both potential keys
+                if (xr) {
+                  const leadData = xr.data || xr; // Handle both {data: {assignedTo}} and {assignedTo}
+                  const assignedTo = leadData.assignedTo || leadData.assignedId || leadData.counselorId || leadData.assigned_id;
+                  
+                  if (assignedTo) {
+                      if (typeof assignedTo === 'object') {
+                          resolvedValue = assignedTo.id || assignedTo._id || assignedTo.value;
+                      } else {
+                          resolvedValue = assignedTo;
+                      }
+                      console.log(`[WorkflowRunner] Auto-resolving agent from Starforze/Xolox response: ${resolvedValue}`);
+                  }
 
-                // Also try to capture teamId from response if available
-                if (!teamId) {
-                    teamId = leadData.teamId || leadData.team_id || null;
-                }
+                  // Also try to capture teamId from response if available
+                  if (!teamId) {
+                      teamId = leadData.teamId || leadData.team_id || null;
+                  }
 
-                // Linking: Use lead ID from response if available
-                const leadId = leadData.leadId || leadData.lead_id || (leadData.lead && (leadData.lead._id || leadData.lead.id));
-                if (leadId) {
-                    await db.query('UPDATE conversations SET lead_id = $1 WHERE id = $2', [leadId, conversationId]);
-                    console.log(`[WorkflowRunner] Linked lead ${leadId} from Starforze response to conversation ${conversationId}`);
+                  // Linking: Use lead ID from response if available
+                  const leadId = leadData.leadId || leadData.lead_id || (leadData.lead && (leadData.lead._id || leadData.lead.id));
+                  if (leadId) {
+                      await db.query('UPDATE conversations SET lead_id = $1 WHERE id = $2', [leadId, conversationId]);
+                      console.log(`[WorkflowRunner] Linked lead ${leadId} from Starforze response to conversation ${conversationId}`);
+                  }
                 }
             }
 

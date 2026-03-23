@@ -190,13 +190,16 @@ async function run() {
       }
 
       // 2. Insert message with template_name so it shows in template report
+      const channelRes = await pool.query('SELECT channel_id FROM conversations WHERE id = $1', [conversationId]);
+      const channelId = channelRes.rows[0]?.channel_id;
+
       await pool.query(`
         INSERT INTO messages (
-          conversation_id, direction, content_type, text_body, 
-          external_id, template_name, status, sent_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+          conversation_id, channel_id, direction, content_type, text_body, 
+          external_message_id, template_name, delivery_status, sent_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
       `, [
-        conversationId, 'outbound', 'template', 
+        conversationId, channelId, 'outbound', 'template', 
         'Marketing offer sent via script',
         sendRes.data.messages[0].id, templateName, 'sent'
       ]);

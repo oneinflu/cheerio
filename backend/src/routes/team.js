@@ -46,6 +46,9 @@ router.get('/:id', auth.requireAuth, async (req, res, next) => {
     const headers = {};
     if (apiKey) {
         headers['Authorization'] = `Bearer ${apiKey}`;
+    } else if (req.headers.authorization) {
+        // Forward the current user's token if we don't have a master key
+        headers['Authorization'] = req.headers.authorization;
     }
 
     const response = await axios.get(`https://api.starforze.com/api/team-users/${id}`, {
