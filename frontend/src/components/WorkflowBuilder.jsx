@@ -6236,6 +6236,10 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                             toVarKey: 'email',
                           };
                           if (type === 'update_chat_status') base.actionValue = 'open';
+                          if (type === 'assign_agent') {
+                            base.assignMode = 'xolox_dynamic';
+                            base.actionValue = '{{xolox_response.assignedTo}}';
+                          }
                           updateNodeFields(selectedNode.id, base);
                         }}
                       >

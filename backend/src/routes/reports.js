@@ -20,9 +20,9 @@ router.get('/workflow-runs', auth.requireRole('admin', 'supervisor'), async (req
                 r.id, r.workflow_id, r.phone_number, r.status, 
                 r.execution_log, r.context_preview, r.error_message, 
                 r.started_at, r.ended_at, r.duration_ms,
-                w.name as workflow_name
+                COALESCE(w.name, 'Deleted Workflow') as workflow_name
             FROM workflow_runs r
-            JOIN workflows w ON r.workflow_id = w.id
+            LEFT JOIN workflows w ON r.workflow_id = w.id
         `;
         const params = [];
 
@@ -45,6 +45,46 @@ router.get('/workflow-runs', auth.requireRole('admin', 'supervisor'), async (req
 
         const result = await db.query(query, params);
         res.json({ success: true, runs: result.rows });
+    } catch (err) {
+        next(err);
+    }
+});
+
+/**
+ * GET /api/reports/templates
+ * Track delivery status for all outbound template messages (sent via API, Campaign, or Workflow)
+ */
+router.get('/templates', auth.requireRole('admin', 'supervisor'), async (req, res, next) => {
+    try {
+        const { limit = 100, templateName } = req.query;
+        let query = `
+            SELECT 
+                m.id, m.conversation_id, m.external_message_id, 
+                m.text_body, m.delivery_status, m.created_at,
+                m.sent_at, m.delivered_at, m.read_at,
+                m.raw_payload->>'name' as template_name,
+                c.display_name as contact_name,
+                con.phone_number_id as phone_id,
+                ch.display_name as contact_phone
+            FROM messages m
+            JOIN conversations con ON m.conversation_id = con.id
+            JOIN contacts ch ON con.contact_id = ch.id
+            LEFT JOIN contacts c ON con.contact_id = c.id
+            WHERE m.direction = 'outbound' 
+              AND (m.raw_payload->>'type' = 'template' OR m.text_body LIKE 'Template: %')
+        `;
+        const params = [];
+
+        if (templateName) {
+            query += ` AND (m.raw_payload->>'name' = $1 OR m.text_body = $1) `;
+            params.push(templateName);
+        }
+
+        query += ` ORDER BY m.created_at DESC LIMIT $${params.length + 1}`;
+        params.push(limit);
+
+        const result = await db.query(query, params);
+        res.json({ success: true, messages: result.rows });
     } catch (err) {
         next(err);
     }
