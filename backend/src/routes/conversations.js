@@ -237,46 +237,7 @@ router.put('/:conversationId/contact', auth.requireRole('admin', 'super_admin', 
       }
     }
 
-    if (!effectiveLeadId) {
-      const ctRes = await db.query('SELECT external_id, display_name FROM contacts WHERE id = $1', [contactId]);
-      if (ctRes.rows.length > 0) {
-        let mobile = ctRes.rows[0].external_id;
-        let displayName = ctRes.rows[0].display_name;
-        if (mobile.startsWith('91') && mobile.length > 10) mobile = mobile.slice(2);
 
-        console.log(`[ContactUpdate] lead_id missing. Attempting to fetch via webhook for mobile: ${mobile}`);
-
-        try {
-          // Call the webhook endpoint to get/create lead
-          const res = await axios.post('https://api.starforze.com/api/webhook/whatsapp-lead', {
-            mobile: mobile,
-            name: displayName || 'Unknown',
-            course: '' // Just fetching
-          });
-
-          if (res.data && res.data.data && res.data.data.lead && res.data.data.lead._id) {
-            effectiveLeadId = res.data.data.lead._id;
-            console.log(`[ContactUpdate] Successfully fetched lead_id: ${effectiveLeadId}`);
-
-            // Persist the fetched leadId immediately
-            await db.query('UPDATE conversations SET lead_id = $1 WHERE id = $2', [effectiveLeadId, conversationId]);
-            await db.query(`
-                        UPDATE contacts 
-                        SET profile = jsonb_set(COALESCE(profile, '{}'), '{leadId}', to_jsonb($1::text), true)
-                        WHERE id = $2
-                     `, [effectiveLeadId, contactId]);
-          } else {
-            console.warn(`[ContactUpdate] Webhook response did not contain lead._id`);
-          }
-        } catch (fetchErr) {
-          console.error(`[ContactUpdate] Failed to fetch lead via webhook:`, fetchErr.message);
-        }
-      }
-    }
-
-    if (!effectiveLeadId) {
-      console.warn(`[ContactUpdate] Warning: No lead_id found even after fallback fetch. External sync will fail.`);
-    }
 
     await db.query(
       `UPDATE contacts 
@@ -286,83 +247,7 @@ router.put('/:conversationId/contact', auth.requireRole('admin', 'super_admin', 
       [name, course, contactId]
     );
 
-    if (course) {
-      if (effectiveLeadId) {
-        console.log(`[ContactUpdate] Syncing course '${course}' to Starforze Lead ${effectiveLeadId}...`);
-        try {
-          // Retrieve token if available (using a global or fetched token)
-          // Since we don't have the user's external token stored, we might need a system token or API key.
-          // The error "Authentication required" suggests we need a Bearer token.
-          // We can check if 'req.headers.authorization' is passed from frontend (which has the user's token).
 
-          const headers = {};
-          // Pass through the user's token from the frontend request if present
-          if (req.headers.authorization) {
-            headers['Authorization'] = req.headers.authorization;
-          } else if (process.env.STARFORZE_API_KEY) {
-            // Fallback to system key if available
-            headers['Authorization'] = `Bearer ${process.env.STARFORZE_API_KEY}`;
-          }
-
-          // The user reported "Cannot POST /api/leads/:id/course", implying 404 or method not allowed.
-          // Usually updates to a resource use PUT.
-          // Let's try PUT instead of POST for the course update endpoint.
-          // Reverting to POST as user says "Cannot PUT /api/leads/.../course" which means PUT is also wrong.
-          // Maybe the endpoint is wrong?
-          // Let's try PUT /api/leads/:id instead of /course suffix, passing course in body.
-          // Common REST pattern: PUT /resource/:id { field: value }
-
-          console.log(`[ContactUpdate] Trying PATCH /api/leads/${effectiveLeadId} with courseName...`);
-          const resp = await axios.patch(`https://api.starforze.com/api/leads/${effectiveLeadId}`, {
-            courseName: course
-          }, { headers });
-
-          console.log(`[ContactUpdate] Sync success. Response status: ${resp.status}`);
-
-          // Update lead_id in conversation if it was missing and now we used one
-          if (!leadId) {
-            await db.query('UPDATE conversations SET lead_id = $1 WHERE id = $2', [effectiveLeadId, conversationId]);
-          }
-
-          const leadData = resp.data && resp.data.data ? resp.data.data : null;
-          const assignedTo = leadData && leadData.assignedTo ? leadData.assignedTo : null;
-          const io = require('../realtime/io').getIO();
-
-          if (assignedTo && (assignedTo._id || assignedTo.id || assignedTo.email)) {
-            const userId = assignedTo._id || assignedTo.id;
-            const teamId = leadData.teamId || null;
-
-            if (userId) {
-              const checkRes = await db.query(
-                'SELECT 1 FROM conversation_assignments WHERE conversation_id = $1 AND released_at IS NULL',
-                [conversationId]
-              );
-
-              if (checkRes.rowCount === 0) {
-                await db.query(
-                  `INSERT INTO conversation_assignments (id, conversation_id, team_id, assignee_user_id, claimed_at)
-                      VALUES (gen_random_uuid(), $1, $2, $3, NOW())`,
-                  [conversationId, teamId, userId]
-                );
-                console.log(`[ContactUpdate] Auto-assigned conversation to ${userId}`);
-
-                if (io) {
-                  io.to(`conversation:${conversationId}`).emit('assignment:claimed', { conversationId, userId });
-                  io.emit('assignment:claimed', { conversationId, userId });
-                }
-              }
-            }
-          }
-        } catch (e) {
-          console.error('[ContactUpdate] Failed to sync course/assignment with Starforze:', e.message);
-          if (e.response) {
-            console.error('[ContactUpdate] Response data:', e.response.data);
-          }
-        }
-      } else {
-        console.warn('[ContactUpdate] Skipping external sync: lead_id is missing.');
-      }
-    }
 
     res.json({ success: true });
   } catch (err) {
