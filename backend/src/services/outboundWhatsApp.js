@@ -117,22 +117,22 @@ async function enforce24hWindow(clientConn, conversationId, isTemplate) {
   }
 }
 
-async function insertOutboundMessage(clientConn, conversationId, channelId, contentType, textBody, rawPayload) {
+async function insertOutboundMessage(clientConn, conversationId, channelId, contentType, textBody, rawPayload, templateName = null) {
   const res = await clientConn.query(
     `
     INSERT INTO messages (
       id, conversation_id, channel_id, direction, content_type,
       external_message_id, text_body, delivery_status, author_user_id,
-      raw_payload, is_deleted, created_at, sent_at
+      raw_payload, is_deleted, created_at, sent_at, template_name
     )
     VALUES (
       gen_random_uuid(), $1, $2, 'outbound', $3,
       NULL, $4, 'sending', NULL,
-      $5::jsonb, FALSE, NOW(), NULL
+      $5::jsonb, FALSE, NOW(), NULL, $6
     )
     RETURNING id
     `,
-    [conversationId, channelId, contentType, textBody || null, JSON.stringify(rawPayload || {})]
+    [conversationId, channelId, contentType, textBody || null, JSON.stringify(rawPayload || {}), templateName]
   );
   return res.rows[0].id;
 }
@@ -402,9 +402,10 @@ async function sendTemplate(conversationId, name, languageCode, components) {
       clientConn,
       details.conversationId,
       details.channelId,
-      'text',
+      'template',
       `Template: ${name}`,
-      rawPayload
+      rawPayload,
+      name
     );
     emitMessage(details.conversationId, messageId, 'text', `Template: ${name}`, rawPayload);
     emitStatus(details.conversationId, messageId, 'sending');

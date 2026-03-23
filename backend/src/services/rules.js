@@ -135,17 +135,20 @@ async function evaluateMessageRules(phoneNumber, textBody, channelId) {
   const lowerText = textBody.toLowerCase();
 
   for (const rule of rules) {
-    const raw = (rule.match_value || '').toLowerCase();
-    if (!raw) continue;
+    const raw = (rule.match_value || '').toLowerCase().trim();
+    let hit = false;
+    
+    if (!raw) {
+      // Catch-all: blank match_value matches EVERYTHING
+      hit = true;
+      console.log(`[Rules] Catch-all rule matched for rule ${rule.id}`);
+    } else {
+      const tokens = raw.split(',').map((v) => v.trim()).filter(Boolean);
+      if (tokens.length > 0) {
+        hit = tokens.some((token) => lowerText.includes(token));
+      }
+    }
 
-    const tokens = raw
-      .split(',')
-      .map((v) => v.trim())
-      .filter(Boolean);
-
-    if (!tokens.length) continue;
-
-    const hit = tokens.some((token) => lowerText.includes(token));
     if (hit) {
       matched.push(rule);
       await performRuleAction(rule, phoneNumber, channelId);
