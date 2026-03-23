@@ -241,8 +241,16 @@ async function performRuleAction(rule, phoneNumber, channelId) {
       console.error('[Rules] Failed to send message for rule', rule.id, err);
     }
   } else if (actionType === 'start_workflow') {
-    const workflowId = cfg.workflow_id;
-    if (!workflowId) return;
+    let workflowId = cfg.workflow_id || cfg.workflowId;
+    // Handle potential object format { value, label } from GreetUI
+    if (workflowId && typeof workflowId === 'object') {
+      workflowId = workflowId.value || workflowId.id;
+    }
+    
+    if (!workflowId) {
+      console.warn('[Rules] Rule', rule.id, 'has start_workflow action but no workflowId in config');
+      return;
+    }
 
     try {
       await runWorkflow(workflowId, phoneNumber, { channelId });

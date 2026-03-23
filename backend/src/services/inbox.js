@@ -179,6 +179,7 @@ async function listConversations(teamId, userId, userRole, filter = 'open', phon
 
 async function getInboxCounts(teamId, userId, userRole) {
   try {
+    const envPhoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
     const isPrivileged = PRIVILEGED_ROLES.has(userRole);
     const params = [];
     
@@ -200,6 +201,12 @@ async function getInboxCounts(teamId, userId, userRole) {
       visibilityFilterSub = ` AND (ca2.assignee_user_id = $${userIdx} OR ca2.assignee_user_id IS NULL) `;
     }
 
+    let phoneFilter = '';
+    if (envPhoneId) {
+      params.push(envPhoneId);
+      phoneFilter = ` AND ch.external_id = $${params.length} `;
+    }
+
     const query = `
       SELECT 
         COUNT(DISTINCT c.id)::int as all,
@@ -215,8 +222,7 @@ async function getInboxCounts(teamId, userId, userRole) {
       LEFT JOIN whatsapp_settings ws ON ws.phone_number_id = ch.external_id AND ch.type = 'whatsapp'
       LEFT JOIN conversation_assignments ca ON ca.conversation_id = c.id AND ca.released_at IS NULL
       LEFT JOIN pinned_conversations pc ON pc.conversation_id = c.id AND pc.user_id = $${userIdx}
-      WHERE 1=1 ${teamFilter} ${visibilityFilter}
-      ${envPhoneId ? ` AND ch.external_id = '${envPhoneId}' ` : ''}
+      WHERE 1=1 ${teamFilter} ${visibilityFilter} ${phoneFilter}
     `;
 
     const res = await db.query(query, params);

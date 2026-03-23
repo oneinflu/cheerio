@@ -450,10 +450,17 @@ async function triggerWebhookWorkflows(payload) {
 }
 
 async function runWorkflow(id, phoneNumber, context = {}) {
-  const workflow = await getWorkflow(id);
-  if (!workflow) throw new Error('Workflow not found');
+  const workflowStartTime = new Date();
+  const executionLog = [];
+  let io = null;
+  let status = 'started';
+  let hasError = false;
 
-  const { steps } = workflow;
+  try {
+    const workflow = await getWorkflow(id);
+    if (!workflow) throw new Error('Workflow not found');
+
+    const { steps } = workflow;
   if (!steps || !steps.nodes) throw new Error('Invalid workflow definition: no steps found');
 
   const { nodes } = steps;
@@ -543,17 +550,14 @@ async function runWorkflow(id, phoneNumber, context = {}) {
       });
   }
 
-  const executionLog = [];
-  const MAX_STEPS = 50;
-  let stepCount = 0;
-
   // Context state
   let lastTemplateSentAt = null;
-  const workflowStartTime = new Date();
 
   console.log(`[WorkflowRunner] Starting workflow ${id} for ${phoneNumber}`);
   console.log(`[WorkflowRunner] Context variables:`, JSON.stringify(context));
-  let io = null;
+  const MAX_STEPS = 50;
+  let stepCount = 0;
+
   try {
     const { getIO } = require('../realtime/io');
     io = getIO();
@@ -1487,31 +1491,40 @@ async function runWorkflow(id, phoneNumber, context = {}) {
     }
   }
 
-  const endedAt = new Date();
-  const durationMs = endedAt.getTime() - workflowStartTime.getTime();
-  const hasError = executionLog.some(l => l.error);
-  const status = hasError ? 'failed' : 'success';
+  } catch (err) {
+    console.error(`[WorkflowRunner] Fatal error in workflow ${id}:`, err);
+    executionLog.push({ error: err.message || 'Fatal error' });
+    if (io) {
+      io.emit('workflow:step:error', { workflowId: id, phoneNumber, message: err.message || 'Workflow crashed' });
+    }
+  } finally {
+    const endedAt = new Date();
+    const durationMs = endedAt.getTime() - workflowStartTime.getTime();
+    hasError = executionLog.some(l => l.error);
+    status = hasError ? 'failed' : 'success';
 
-  // Persist run to database for reporting
-  try {
-    await db.query(`
-      INSERT INTO workflow_runs (
-        workflow_id, phone_number, status, execution_log, 
-        context_preview, error_message, started_at, ended_at, duration_ms
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-    `, [
-      id, phoneNumber, status, JSON.stringify(executionLog),
-      JSON.stringify(buildContextPreview(context)), hasError ? executionLog.find(l => l.error)?.error : null,
-      workflowStartTime, endedAt, durationMs
-    ]);
-  } catch (dbErr) {
-    console.error('[WorkflowRunner] Failed to persist workflow run:', dbErr.message);
+    // Persist run to database for reporting
+    try {
+      await db.query(`
+        INSERT INTO workflow_runs (
+          workflow_id, phone_number, status, execution_log, 
+          context_preview, error_message, started_at, ended_at, duration_ms
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      `, [
+        id, phoneNumber, status, JSON.stringify(executionLog),
+        JSON.stringify(buildContextPreview(context)), hasError ? executionLog.find(l => l.error)?.error : null,
+        workflowStartTime, endedAt, durationMs
+      ]);
+    } catch (dbErr) {
+      console.error('[WorkflowRunner] Failed to persist workflow run:', dbErr.message);
+    }
+
+    if (io) {
+      io.emit('workflow:run:complete', { workflowId: id, phoneNumber, endedAt, steps: executionLog.length });
+    }
   }
 
-  if (io) {
-    io.emit('workflow:run:complete', { workflowId: id, phoneNumber, endedAt, steps: executionLog.length });
-  }
   return { success: !hasError, log: executionLog };
 }
 
