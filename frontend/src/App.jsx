@@ -873,7 +873,7 @@ export default function App() {
         background: '#08080f',
         borderRight: '1px solid rgba(255,255,255,0.05)',
         display: 'flex', flexDirection: 'column', paddingTop: 16, paddingBottom: 16,
-        position: 'relative', zIndex: 50, overflow: 'hidden',
+        position: 'relative', zIndex: 50, overflow: 'visible',
         transition: 'width 0.3s ease',
       }}
       onMouseEnter={e => e.currentTarget.style.width = '240px'}
@@ -902,7 +902,7 @@ export default function App() {
           </span>
         </div>
 
-        <nav style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4, width: '100%', padding: '0 10px', overflow: 'hidden' }}>
+        <nav className="no-scrollbar" style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4, width: '100%', padding: '0 10px', overflowY: 'auto', overflowX: 'hidden' }}>
           <button id="nav-dashboard" style={navBtn('dashboard')} onClick={() => setActivePage('dashboard')} title="Dashboard">
             <div style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
               <LayoutDashboard size={18} />
