@@ -12,7 +12,7 @@ const auth = require('../middlewares/auth');
  * - limit: Default 50
  * - status: Filter by success/failed
  */
-router.get('/workflow-runs', auth.requireRole('admin', 'super_admin', 'supervisor', 'quality_manager', 'admin_quality_manager', 'developer'), async (req, res, next) => {
+router.get('/workflow-runs', auth.requireRole('admin', 'super_admin', 'supervisor', 'quality_manager', 'admin_quality_manager', 'developer', 'partner'), async (req, res, next) => {
     try {
         const { workflowId, status, limit = 50 } = req.query;
         let query = `
@@ -54,7 +54,7 @@ router.get('/workflow-runs', auth.requireRole('admin', 'super_admin', 'superviso
  * GET /api/reports/templates
  * Track delivery status for all outbound template messages (sent via API, Campaign, or Workflow)
  */
-router.get('/templates', auth.requireRole('admin', 'super_admin', 'supervisor', 'quality_manager', 'admin_quality_manager', 'developer'), async (req, res, next) => {
+router.get('/templates', auth.requireRole('admin', 'super_admin', 'supervisor', 'quality_manager', 'admin_quality_manager', 'developer', 'partner'), async (req, res, next) => {
     try {
         const { limit = 100, templateName } = req.query;
         let query = `
@@ -62,21 +62,20 @@ router.get('/templates', auth.requireRole('admin', 'super_admin', 'supervisor', 
                 m.id, m.conversation_id, m.external_message_id, 
                 m.text_body, m.delivery_status, m.created_at,
                 m.sent_at, m.delivered_at, m.read_at,
-                m.raw_payload->>'name' as template_name,
+                COALESCE(m.template_name, m.raw_payload->>'name') as template_name,
                 c.display_name as contact_name,
-                con.phone_number_id as phone_id,
-                ch.display_name as contact_phone
+                ch.external_id as contact_phone
             FROM messages m
             JOIN conversations con ON m.conversation_id = con.id
             JOIN contacts ch ON con.contact_id = ch.id
             LEFT JOIN contacts c ON con.contact_id = c.id
             WHERE m.direction = 'outbound' 
-              AND (m.raw_payload->>'type' = 'template' OR m.text_body LIKE 'Template: %')
+              AND (m.template_name IS NOT NULL OR m.content_type = 'template' OR m.raw_payload->>'type' = 'template' OR m.text_body LIKE 'Template: %')
         `;
         const params = [];
 
         if (templateName) {
-            query += ` AND (m.raw_payload->>'name' = $1 OR m.text_body = $1) `;
+            query += ` AND (m.template_name = $1 OR m.raw_payload->>'name' = $1 OR m.text_body = $1) `;
             params.push(templateName);
         }
 
@@ -94,7 +93,7 @@ router.get('/templates', auth.requireRole('admin', 'super_admin', 'supervisor', 
  * GET /api/reports/workflow-runs/:id
  * Detailed trace of a single run including matched webhook data.
  */
-router.get('/workflow-runs/:id', auth.requireRole('admin', 'super_admin', 'supervisor', 'quality_manager', 'admin_quality_manager', 'developer'), async (req, res, next) => {
+router.get('/workflow-runs/:id', auth.requireRole('admin', 'super_admin', 'supervisor', 'quality_manager', 'admin_quality_manager', 'developer', 'partner'), async (req, res, next) => {
     try {
         const { id } = req.params;
         const runRes = await db.query(`
