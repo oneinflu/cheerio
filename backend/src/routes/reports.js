@@ -12,7 +12,7 @@ const auth = require('../middlewares/auth');
  * - limit: Default 50
  * - status: Filter by success/failed
  */
-router.get('/workflow-runs', auth.requireRole('admin', 'supervisor'), async (req, res, next) => {
+router.get('/workflow-runs', auth.requireRole('admin', 'super_admin', 'supervisor', 'quality_manager', 'admin_quality_manager', 'developer'), async (req, res, next) => {
     try {
         const { workflowId, status, limit = 50 } = req.query;
         let query = `
@@ -54,7 +54,7 @@ router.get('/workflow-runs', auth.requireRole('admin', 'supervisor'), async (req
  * GET /api/reports/templates
  * Track delivery status for all outbound template messages (sent via API, Campaign, or Workflow)
  */
-router.get('/templates', auth.requireRole('admin', 'supervisor'), async (req, res, next) => {
+router.get('/templates', auth.requireRole('admin', 'super_admin', 'supervisor', 'quality_manager', 'admin_quality_manager', 'developer'), async (req, res, next) => {
     try {
         const { limit = 100, templateName } = req.query;
         let query = `
@@ -94,7 +94,7 @@ router.get('/templates', auth.requireRole('admin', 'supervisor'), async (req, re
  * GET /api/reports/workflow-runs/:id
  * Detailed trace of a single run including matched webhook data.
  */
-router.get('/workflow-runs/:id', auth.requireRole('admin', 'supervisor'), async (req, res, next) => {
+router.get('/workflow-runs/:id', auth.requireRole('admin', 'super_admin', 'supervisor', 'quality_manager', 'admin_quality_manager', 'developer'), async (req, res, next) => {
     try {
         const { id } = req.params;
         const runRes = await db.query(`

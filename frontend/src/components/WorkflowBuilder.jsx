@@ -1117,17 +1117,25 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
           getLeadStages().catch(() => [])
         ]);
 
-        if (tplRes && tplRes.data) {
-          // Filter for only APPROVED templates as requested
-          const approved = tplRes.data.filter(t => (t.status === 'APPROVED' || t.status === 'LOCAL' || t.isLocal));
-          setTemplates(approved);
-        } else if (Array.isArray(tplRes)) {
-           setTemplates(tplRes);
+        if (tplRes) {
+          const rawList = Array.isArray(tplRes) ? tplRes : (tplRes.data || tplRes.templates || []);
+          // Filter for only APPROVED or LOCAL templates
+          const filtered = rawList.filter(t => {
+            if (t.isLocal || t.status === 'LOCAL' || t.status === 'approved_local') return true;
+            const s = String(t.status || '').toUpperCase();
+            return s === 'APPROVED';
+          });
+          setTemplates(filtered);
         }
 
-        setEmailTemplates(Array.isArray(etplRes) ? etplRes : etplRes.emailTemplates || []);
-        setAvailableWorkflows(Array.isArray(wfRes) ? wfRes : wfRes.workflows || []);
-        setAvailableLabels(Array.isArray(lbRes) ? lbRes : lbRes.labels || []);
+        const emailTplList = Array.isArray(etplRes) ? etplRes : (etplRes.data || etplRes.emailTemplates || []);
+        setEmailTemplates(emailTplList);
+        
+        const wfList = Array.isArray(wfRes) ? wfRes : (wfRes.data || wfRes.workflows || []);
+        setAvailableWorkflows(wfList);
+        
+        const lbList = Array.isArray(lbRes) ? lbRes : (lbRes.data || lbRes.labels || []);
+        setAvailableLabels(lbList);
         // Process stages if needed
       } catch (err) {
         console.error('Error loading workflow resources:', err);
