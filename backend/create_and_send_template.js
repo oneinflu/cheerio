@@ -164,6 +164,50 @@ async function run() {
 
     console.log('🎉 COMPLETED! Message ID:', sendRes.data.messages[0].id);
 
+    // --- STEP 6: Log to Local Database for Reporting ---
+    console.log('💾 Logging sent message to local database for reports...');
+    const { Pool } = require('pg');
+    const pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: { rejectUnauthorized: false }
+    });
+
+    try {
+      // 1. Ensure conversation exists
+      let convRes = await pool.query('SELECT id FROM conversations WHERE contact_id = (SELECT id FROM contacts WHERE external_id = $1 OR external_id = $2 LIMIT 1) LIMIT 1', [RECIPIENT, '+' + RECIPIENT]);
+      let conversationId;
+      
+      if (convRes.rowCount > 0) {
+        conversationId = convRes.rows[0].id;
+      } else {
+        // Create minimal contact/conversation if not found
+        const contactInsert = await pool.query('INSERT INTO contacts (external_id, display_name) VALUES ($1, $2) ON CONFLICT (external_id) DO UPDATE SET display_name = EXCLUDED.display_name RETURNING id', [RECIPIENT, 'Test Contact']);
+        const contactId = contactInsert.rows[0].id;
+        const channelRes = await pool.query('SELECT id FROM channels WHERE external_id = $1 LIMIT 1', [PHONE_ID]);
+        const channelId = channelRes.rows[0]?.id;
+        const convInsert = await pool.query('INSERT INTO conversations (contact_id, channel_id) VALUES ($1, $2) RETURNING id', [contactId, channelId]);
+        conversationId = convInsert.rows[0].id;
+      }
+
+      // 2. Insert message with template_name so it shows in template report
+      await pool.query(`
+        INSERT INTO messages (
+          conversation_id, direction, content_type, text_body, 
+          external_id, template_name, status, sent_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+      `, [
+        conversationId, 'outbound', 'template', 
+        'Marketing offer sent via script',
+        sendRes.data.messages[0].id, templateName, 'sent'
+      ]);
+
+      console.log('✅ Message logged to database. It will now show up in Reports!');
+    } catch (dbErr) {
+      console.warn('⚠️ Failed to log to local database (Reports might not show this run):', dbErr.message);
+    } finally {
+      await pool.end();
+    }
+
   } catch (err) {
     const apiMsg = err.response?.data?.error?.message || err.message;
     console.error('❌ Error occurred:', apiMsg);

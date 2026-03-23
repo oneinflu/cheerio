@@ -418,18 +418,34 @@ router.post('/', async (req, res, next) => {
 
             if (isFirstMessage) {
               try {
+                // Trigger 'First Message' workflows
                 await triggerWorkflowsForEvent('first_message', senderWaId, { conversationId, channelId });
+                
+                // Trigger 'Person Added' (new_contact) workflows as this is technically a new lead
+                await triggerWorkflowsForEvent('new_contact', senderWaId, { 
+                  name: profileName || 'User',
+                  phone: senderWaId,
+                  conversationId,
+                  channelId 
+                });
               } catch (e) {
-                console.error('[WorkflowEvents] Failed to trigger first_message workflows from webhook:', e);
+                console.error('[WorkflowEvents] Failed to trigger first_message/new_contact workflows from webhook:', e);
               }
             }
 
             try {
               if (textBody) {
                 await evaluateMessageRules(senderWaId, textBody, channelId);
+                // Also trigger workflows for general incoming messages (Keywords)
+                await triggerWorkflowsForEvent('incoming_whatsapp', senderWaId, { 
+                  conversationId, 
+                  channelId, 
+                  text: textBody,
+                  profileName
+                });
               }
             } catch (e) {
-              console.error('[Rules] Failed to evaluate message rules from webhook:', e);
+              console.error('[Automation] Failed to evaluate rules or workflows from webhook:', e);
             }
 
             // Emit realtime event to notify agents.

@@ -304,13 +304,41 @@ async function triggerWorkflowsForEvent(triggerType, phoneNumber, context = {}, 
       const steps = row.steps || {};
       // steps might be stored as { trigger: 'new_contact', nodes: [...], edges: [...] }
       const wfTrigger = steps.trigger || steps.event || null;
-      if (wfTrigger === triggerType) {
-        console.log(`[WorkflowEvents] Triggering workflow ${id} for event ${triggerType}`);
-        // For new_contact and incoming_webhook triggers, phone may be null; still execute
-        const phone = phoneNumber || 'unknown';
-        runWorkflow(id, phone, context).catch((err) => {
-          console.error(`[WorkflowEvents] Workflow ${id} failed for event ${triggerType}: ${err.message}`);
-        });
+      
+      // Basic event type match
+      let isMatch = (wfTrigger === triggerType);
+
+      // Enhanced Keyword matching for WhatsApp Incoming
+      if (triggerType === 'incoming_whatsapp' && !isMatch) {
+          // Check if this workflow intended to trigger on incoming_whatsapp
+          // Some legacies use 'trigger' or 'incoming_whatsapp'
+          const nodes = steps.nodes || [];
+          const triggerNode = nodes.find(n => n.type === 'trigger' || n.type === 'incoming_whatsapp');
+          
+          if (triggerNode) {
+              const keywords = triggerNode.data?.keywords || '';
+              const incomingText = (context.text || '').toLowerCase().trim();
+
+              if (!keywords.trim()) {
+                  // Catch-all: blank keywords match EVERYTHING
+                  isMatch = true;
+                  console.log(`[WorkflowEvents] Catch-all match for workflow ${id} (blank keywords)`);
+              } else {
+                  // Split by comma and match
+                  const tokens = keywords.split(',').map(v => v.trim().toLowerCase()).filter(Boolean);
+                  isMatch = tokens.some(t => incomingText.includes(t));
+                  if (isMatch) console.log(`[WorkflowEvents] Keyword match for workflow ${id}: "${incomingText}" in [${tokens}]`);
+              }
+          }
+      }
+
+      if (isMatch) {
+          console.log(`[WorkflowEvents] Triggering workflow ${id} for event ${triggerType}`);
+          // For new_contact and incoming_webhook triggers, phone may be null; still execute
+          const phone = phoneNumber || 'unknown';
+          runWorkflow(id, phone, context).catch((err) => {
+              console.error(`[WorkflowEvents] Workflow ${id} failed for event ${triggerType}: ${err.message}`);
+          });
       }
     }
   } catch (err) {
