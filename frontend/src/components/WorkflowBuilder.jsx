@@ -4943,9 +4943,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                                     const file = e.target.files && e.target.files[0];
                                     if (!file) return;
                                     try {
-                                      const formData = new FormData();
-                                      formData.append('file', file);
-                                      const res = await uploadFlowMedia(formData);
+                                      const res = await uploadFlowMedia(file);
                                       const url = res.url || res.link || res.data?.url || '';
                                       setHeader({ headerUrl: url, headerFileName: file.name });
                                     } catch (err) {
@@ -5126,8 +5124,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                                 <Upload size={12} /> Upload
                                 <input type="file" className="sr-only" onChange={async (e) => {
                                   const file = e.target.files?.[0]; if (!file) return;
-                                  const formData = new FormData(); formData.append('file', file);
-                                  const res = await uploadFlowMedia(formData);
+                                  const res = await uploadFlowMedia(file);
                                   updateNodeFields(selectedNode.id, { headerUrl: res.url || res.data?.url || '', headerFileName: file.name });
                                 }} />
                               </label>
