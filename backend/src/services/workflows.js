@@ -638,7 +638,24 @@ async function runWorkflow(id, phoneNumber, context = {}) {
                   if (param.parameter_name) next.parameter_name = param.parameter_name;
                   return next;
                 }
-                // Non-text media parameters (image/video/document) pass through
+                
+                // Ensure media parameters are wrapped correctly for Meta API if they're not already
+                // Meta Cloud API expects: { "type": "image", "image": { "link": "..." } }
+                if (['image', 'video', 'document'].includes(param.type)) {
+                    if (param[param.type]) return param; // Already correct
+                    
+                    const mediaPayload = {};
+                    if (param.link) mediaPayload.link = param.link;
+                    if (param.id) mediaPayload.id = param.id;
+                    
+                    if (Object.keys(mediaPayload).length > 0) {
+                        const next = { type: param.type };
+                        next[param.type] = mediaPayload;
+                        if (param.parameter_name) next.parameter_name = param.parameter_name;
+                        return next;
+                    }
+                }
+                
                 return param;
               });
             }
@@ -1589,7 +1606,28 @@ async function runWorkflow(id, phoneNumber, context = {}) {
 
     } catch (err) {
       console.error(`[WorkflowRunner] Error at node ${currentNode.id}:`, err);
-      executionLog.push({ error: err.message });
+      
+      // Update last execution log entry with error details
+      const lastIdx = executionLog.length - 1;
+      if (lastIdx >= 0 && executionLog[lastIdx].nodeId === currentNode.id) {
+          executionLog[lastIdx].status = 'failed';
+          executionLog[lastIdx].error = err.message;
+          
+          // Provide specialized hints for Meta API errors
+          if (err.message.includes('132012')) {
+              executionLog[lastIdx].details = "HINT: Template parameters didn't match. This often happens when the template expects a Header (Image/Doc/Video) which was missing or improperly formatted in the workflow step.";
+          } else if (err.message.includes('131030')) {
+              executionLog[lastIdx].details = "HINT: Out of 24h service window. You can only send basic text/media if the user replied in the last 24h. Use a Template instead.";
+          }
+      } else {
+          executionLog.push({ 
+            nodeId: currentNode.id, 
+            type: currentNode.type, 
+            status: 'failed',
+            error: err.message 
+          });
+      }
+
       if (io) {
         io.emit('workflow:step:error', { workflowId: id, phoneNumber, nodeId: currentNode.id, message: err.message || 'Node failed' });
       }
