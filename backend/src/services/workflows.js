@@ -546,9 +546,11 @@ async function runWorkflow(id, phoneNumber, context = {}) {
               external_id: phoneNumber,
               name: context.name || undefined,
               email: context.email || undefined,
-              attributes: context // Save full payload as attributes
+              attributes: context, // Save full payload as attributes
+              skipGlobalTriggers: true // CRITICAL: Avoid infinite loop or double-send if "New Contact" workflow is also active
           });
           context.contact_id = contactId;
+          console.log(`[WorkflowRunner] Webhook run context prepared for contact ${contactId}.`);
       }
 
   // If trigger is incoming_webhook, map payload to variables
@@ -702,10 +704,10 @@ async function runWorkflow(id, phoneNumber, context = {}) {
             await outboundWhatsApp.sendTemplate(conversationId, templateName, languageCode, components);
             lastTemplateSentAt = new Date();
           } catch (err) {
-            console.error(`[WorkflowRunner] Failed to send template via service: ${err.message}`);
-            // Fallback to direct client if DB fails (unlikely but safe)
-            await whatsappClient.sendTemplateMessage(phoneNumber, templateName, languageCode, components);
-            lastTemplateSentAt = new Date();
+            console.error(`[WorkflowRunner] Failed to send template ${templateName}: ${err.message}`);
+            // Do NOT fallback and retry via direct client if it's already sent or is a hard error
+            // Fallbacks often cause double-sends if the DB just failed but Meta succeeded.
+            throw err; 
           }
 
           // Handle Quick Reply Buttons (Branching)
