@@ -67,7 +67,7 @@ publicRouter.post('/:workflowId', async (req, res) => {
             const nodes = steps && Array.isArray(steps.nodes) ? steps.nodes : [];
             const hasIncomingWebhookNode = nodes.some((n) => n && n.type === 'incoming_webhook');
 
-            if (wf && hasIncomingWebhookNode) {
+            if (wf && hasIncomingWebhookNode && wf.status === 'active') {
                 const phoneRaw = payload.phone || payload.mobile || payload.whatsapp || payload.contact || '';
                 const name = payload.name || payload.full_name || payload.username || '';
                 const email = payload.email || payload.mail || '';
