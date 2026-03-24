@@ -632,37 +632,50 @@ async function runWorkflow(id, phoneNumber, context = {}) {
           components = components.map(comp => {
             if (comp.parameters && Array.isArray(comp.parameters)) {
               comp.parameters = comp.parameters.map(param => {
+                const next = { ...param };
+                
+                // 1. Resolve text parameters
                 if (param.type === 'text') {
-                  const resolvedText = param.text ? resolvePlaceholders(param.text, context) : '';
-                  const next = { type: 'text', text: resolvedText };
-                  if (param.parameter_name) next.parameter_name = param.parameter_name;
-                  return next;
+                  next.text = param.text ? resolvePlaceholders(param.text, context) : '';
                 }
                 
-                // Ensure media parameters are wrapped correctly for Meta API if they're not already
-                // Meta Cloud API expects: { "type": "image", "image": { "link": "..." } }
+                // 2. Resolve media parameters (image, video, document)
                 if (['image', 'video', 'document'].includes(param.type)) {
-                    if (param[param.type]) return param; // Already correct
-                    
+                  // If it's already wrapped in a sub-object (Meta format), resolve inside it
+                  if (param[param.type]) {
+                    const mediaSub = { ...param[param.type] };
+                    if (mediaSub.link) mediaSub.link = resolvePlaceholders(mediaSub.link, context);
+                    if (mediaSub.id) mediaSub.id = resolvePlaceholders(mediaSub.id, context);
+                    next[param.type] = mediaSub;
+                  } 
+                  // If it's flat (old format), resolve and then we'll wrap it below or just leave it for the wrapper to handle
+                  else {
+                    if (param.link) next.link = resolvePlaceholders(param.link, context);
+                    if (param.id) next.id = resolvePlaceholders(param.id, context);
+                  }
+                  
+                  // Wrap into Meta Cloud API format: { "type": "image", "image": { "link": "..." } }
+                  if (!next[param.type]) {
                     const mediaPayload = {};
-                    if (param.link) mediaPayload.link = param.link;
-                    if (param.id) mediaPayload.id = param.id;
+                    if (next.link) mediaPayload.link = next.link;
+                    if (next.id) mediaPayload.id = next.id;
                     
                     if (Object.keys(mediaPayload).length > 0) {
-                        const next = { type: param.type };
-                        next[param.type] = mediaPayload;
-                        if (param.parameter_name) next.parameter_name = param.parameter_name;
-                        return next;
+                      next[param.type] = mediaPayload;
+                      // Clean up flat fields to avoid confusion
+                      delete next.link;
+                      delete next.id;
                     }
+                  }
                 }
                 
-                return param;
+                return next;
               });
             }
             return comp;
           });
 
-          console.log(`[WorkflowRunner] Sending template ${templateName} to ${phoneNumber}. Components:`, JSON.stringify(components));
+          console.log(`[WorkflowRunner] Sending template ${templateName} to ${phoneNumber}. Resolved payload:`, JSON.stringify(components, null, 2));
           // Resolve conversation and send via outbound service (persists to DB)
           try {
             const conversationId = await ensureConversation(phoneNumber);
