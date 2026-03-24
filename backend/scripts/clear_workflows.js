@@ -14,8 +14,17 @@ async function clearAll() {
         const eventsRes = await client.query('DELETE FROM webhook_events');
         console.log(`[ClearWorkflows] Deleted ${eventsRes.rowCount} webhook events.`);
 
-        const reportsRes = await client.query('DELETE FROM workflow_execution_reports');
+        const csatRes = await client.query('DELETE FROM csat_scores');
+        console.log(`[ClearWorkflows] Deleted ${csatRes.rowCount} csat scores.`);
+
+        const paymentRes = await client.query('DELETE FROM payment_requests');
+        console.log(`[ClearWorkflows] Deleted ${paymentRes.rowCount} payment requests.`);
+
+        const reportsRes = await client.query('DELETE FROM workflow_runs');
         console.log(`[ClearWorkflows] Deleted ${reportsRes.rowCount} execution reports.`);
+
+        const stageRes = await client.query('DELETE FROM lead_stage_workflows');
+        console.log(`[ClearWorkflows] Deleted ${stageRes.rowCount} lead stage workflow links.`);
         
         // 2. Clear workflows
         const res = await client.query('DELETE FROM workflows');

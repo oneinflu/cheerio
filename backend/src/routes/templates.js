@@ -81,10 +81,9 @@ router.get('/', async (req, res, next) => {
     // Fetch local templates
     let localTemplates = [];
     const client = await db.getClient();
-    let starredMap = new Set();
+    let settingsMap = new Map();
     try {
       const settingsRes = await client.query('SELECT template_name, is_starred, course_group FROM template_settings');
-      const settingsMap = new Map();
       settingsRes.rows.forEach(r => settingsMap.set(r.template_name, r));
       
       const localRes = await client.query('SELECT * FROM whatsapp_templates');
