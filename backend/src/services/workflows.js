@@ -628,6 +628,22 @@ async function runWorkflow(id, phoneNumber, context = {}) {
           let components = Array.isArray(nodeData.components) ? JSON.parse(JSON.stringify(nodeData.components)) : [];
           const languageCode = nodeData.languageCode || 'en_US';
           
+          // 0. Auto-inject header component if missing but data exists in nodeData
+          const headerUrl = nodeData.headerUrl || '';
+          const headerType = nodeData.headerType || 'none';
+          const hasHeaderComp = components.some(c => c.type === 'header' || c.type === 'HEADER');
+          
+          if (!hasHeaderComp && ['image', 'video', 'document'].includes(headerType) && headerUrl) {
+              console.log(`[WorkflowRunner] Auto-injecting missing ${headerType} header. URL: ${headerUrl.slice(0, 30)}...`);
+              components.unshift({
+                  type: 'header',
+                  parameters: [{
+                      type: headerType,
+                      [headerType]: { link: headerUrl }
+                  }]
+              });
+          }
+
           // Resolve variables in components while preserving parameter_name for NAMED templates
           components = components.map(comp => {
             if (comp.parameters && Array.isArray(comp.parameters)) {
@@ -655,18 +671,22 @@ async function runWorkflow(id, phoneNumber, context = {}) {
                   }
                   
                   // Wrap into Meta Cloud API format: { "type": "image", "image": { "link": "..." } }
-                  if (!next[param.type]) {
+                  if (!param[param.type]) {
                     const mediaPayload = {};
                     if (next.link) mediaPayload.link = next.link;
                     if (next.id) mediaPayload.id = next.id;
                     
                     if (Object.keys(mediaPayload).length > 0) {
                       next[param.type] = mediaPayload;
-                      // Clean up flat fields to avoid confusion
                       delete next.link;
                       delete next.id;
                     }
                   }
+                }
+                
+                // 3. Resolve button payloads (payload type)
+                if (param.type === 'payload' && param.payload) {
+                   next.payload = resolvePlaceholders(param.payload, context);
                 }
                 
                 return next;
@@ -1628,7 +1648,7 @@ async function runWorkflow(id, phoneNumber, context = {}) {
           
           // Provide specialized hints for Meta API errors
           if (err.message.includes('132012')) {
-              executionLog[lastIdx].details = "HINT: Template parameters didn't match. This often happens when the template expects a Header (Image/Doc/Video) which was missing or improperly formatted in the workflow step.";
+              executionLog[lastIdx].details = "HINT: Template parameters didn't match. This often happens when (1) the template expects a Media Header (Image/Doc/Video) which was missing or improperly formatted, or (2) the number of variables mapped doesn't match the template's placeholders. ACTION: Try re-selecting the template in the workflow node to refresh the variable list, and ensure the 'Header' section is configured if your template has one.";
           } else if (err.message.includes('131030')) {
               executionLog[lastIdx].details = "HINT: Out of 24h service window. You can only send basic text/media if the user replied in the last 24h. Use a Template instead.";
           }
