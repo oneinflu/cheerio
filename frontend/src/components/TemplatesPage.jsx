@@ -337,7 +337,6 @@ export default function TemplatesPage() {
             </div>
         );
     }
-    return (
   React.useEffect(() => {
     // If we are creating but haven't selected a type yet, don't set formData
     if (isCreating && showTypeSelection) {
