@@ -4,11 +4,10 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Badge } from './ui/Badge';
-import { Plus, Search, Smartphone, Image as ImageIcon, CheckCircle, Clock, AlertCircle, ChevronRight, FileText, MoreVertical, RefreshCw, Send, Upload, Megaphone, Ticket, Timer, ShoppingBag, Bell, ShieldCheck, ArrowLeft, Video, Trash2, Star } from 'lucide-react';
+import { Plus, Search, Smartphone, Image as ImageIcon, CheckCircle, Clock, AlertCircle, ChevronRight, FileText, MoreVertical, RefreshCw, Send, Upload, Megaphone, Ticket, Timer, ShoppingBag, Bell, ShieldCheck, ArrowLeft, Video, Trash2, Star, LayoutGrid, List } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { getTemplates, createTemplate, sendTestTemplate, uploadTemplateExampleMedia, uploadTemplateTestMedia, deleteTemplate } from '../api';
 import { GallerySelectModal } from './GallerySelectModal';
-
 export default function TemplatesPage() {
   const [selectedId, setSelectedId] = useState(null);
   const [isCreating, setIsCreating] = useState(false);
@@ -35,6 +34,11 @@ export default function TemplatesPage() {
   const [linkedPhones, setLinkedPhones] = useState([]);
   const [selectedPhoneNumberId, setSelectedPhoneNumberId] = useState('ALL');
   const [creationStep, setCreationStep] = useState('MAIN_CATEGORY'); // MAIN_CATEGORY, SUB_CATEGORY, FORM
+  const [isGroupView, setIsGroupView] = useState(false);
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+  const [bulkFile, setBulkFile] = useState(null);
+  const [bulkStatus, setBulkStatus] = useState(null); // 'idle', 'uploading', 'processing', 'success', 'error'
+  const [bulkProgress, setBulkProgress] = useState([]);
 
   React.useEffect(() => {
     const fetchPhones = async () => {
@@ -582,6 +586,15 @@ Are you sure you want to delete '${template.name}'?`;
     }
   };
 
+  const getGroup = (name) => {
+    const n = (name || '').toLowerCase();
+    if (n.includes('cpa')) return 'CPA';
+    if (n.includes('cma')) return 'CMA US';
+    if (n.includes('acca')) return 'ACCA';
+    if (n.includes('ea')) return 'EA';
+    return 'General';
+  };
+
   const filteredTemplates = templates.filter(t => {
     if (t.status === 'PENDING_DELETION') return false;
     const matchesSearch = t.name.toLowerCase().includes(searchQuery.toLowerCase());
@@ -589,6 +602,87 @@ Are you sure you want to delete '${template.name}'?`;
     return matchesSearch && matchesCategory;
   });
 
+  const groupOrder = ['CPA', 'CMA US', 'ACCA', 'EA', 'General'];
+  const groupedTemplates = filteredTemplates.reduce((acc, t) => {
+    const group = getGroup(t.name);
+    if (!acc[group]) acc[group] = [];
+    acc[group].push(t);
+    return acc;
+  }, {});
+
+  const handleBulkFileChange = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      setBulkFile(e.target.files[0]);
+    }
+  };
+
+  const handleBulkUpload = async () => {
+    if (!bulkFile) return;
+    setBulkStatus('uploading');
+    setBulkProgress([]);
+
+    const fd = new FormData();
+    fd.append('file', bulkFile);
+    if (selectedPhoneNumberId !== 'ALL') {
+        fd.append('phoneNumberId', selectedPhoneNumberId);
+    }
+
+    try {
+      const response = await fetch('/api/templates/bulk-create', {
+        method: 'POST',
+        body: fd,
+      });
+      const data = await response.json();
+      if (data.success) {
+        setBulkStatus('success');
+        setBulkProgress(data.results || []);
+        await fetchTemplatesData();
+      } else {
+        setBulkStatus('error');
+        setError(data.message || 'Bulk creation failed');
+      }
+    } catch (err) {
+      setBulkStatus('error');
+      setError(err.message);
+    }
+  };
+
+  const TemplateItem = ({ t }) => (
+    <div
+      onClick={() => { setSelectedId(t.id); setIsCreating(false); }}
+      className={cn(
+        "p-4 border-b border-slate-50 cursor-pointer hover:bg-slate-50 transition-colors group relative",
+        selectedId === t.id && !isCreating ? "bg-blue-50/50 border-l-4 border-l-blue-600" : "border-l-4 border-l-transparent"
+      )}
+    >
+      <div className="flex justify-between items-start mb-1">
+        <span className="font-medium text-sm text-slate-900 truncate pr-2">{t.name}</span>
+        <div className="flex items-center gap-2">
+          {t.status === 'APPROVED' && <CheckCircle size={14} className="text-green-500 flex-shrink-0" />}
+          {t.status === 'PENDING' && <Clock size={14} className="text-amber-500 flex-shrink-0" />}
+          {t.status === 'REJECTED' && <AlertCircle size={14} className="text-red-500 flex-shrink-0" />}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDelete(t);
+            }}
+            className="text-slate-400 hover:text-red-600 transition-colors opacity-0 group-hover:opacity-100 p-0.5"
+            title="Delete Template"
+          >
+            <Trash2 size={14} />
+          </button>
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 mb-2">
+        <Badge variant="outline" className="text-[10px] h-5 px-1">{t.category}</Badge>
+        <span>{t.language}</span>
+        {t.isLocal && <Badge variant="secondary" className="text-[10px] h-5 px-1 bg-amber-50 text-amber-700 border-amber-100">Local</Badge>}
+      </div>
+      <p className="text-xs text-slate-400 line-clamp-2">
+        {t.bodyText}
+      </p>
+    </div>
+  );
   const handleTestSend = async () => {
     if (!testPhoneNumber || !testSelectedTemplate) {
       alert('Please enter a phone number and select a template.');
@@ -964,15 +1058,24 @@ Are you sure you want to delete '${template.name}'?`;
         <div className="p-4 border-b border-slate-100 space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="font-semibold text-slate-900">Templates</h2>
-            <div className="flex gap-1">
-              <Button size="icon" variant="ghost" onClick={() => setIsTestModalOpen(true)} title="Send Test Message">
-                <Send size={16} className="text-slate-500" />
+            <div className="flex gap-1 items-center">
+              <Button 
+                size="icon" 
+                variant="ghost" 
+                onClick={() => setIsGroupView(!isGroupView)} 
+                title={isGroupView ? "Switch to List View" : "Switch to Group View"}
+                className={cn(isGroupView && "bg-blue-50 text-blue-600")}
+              >
+                {isGroupView ? <List size={16} /> : <LayoutGrid size={16} />}
+              </Button>
+              <Button size="icon" variant="ghost" onClick={() => setIsBulkModalOpen(true)} title="Bulk Create from .md">
+                <Upload size={16} className="text-slate-500" />
               </Button>
               <Button size="icon" variant="ghost" onClick={fetchTemplatesData} title="Refresh Status">
                 <RefreshCw size={16} className={cn("text-slate-500", loading && "animate-spin")} />
               </Button>
               <Button size="sm" onClick={() => { setIsCreating(true); setShowTypeSelection(true); setSelectedId(null); setFormData(null); setCreationStep('MAIN_CATEGORY'); }}>
-                <Plus size={16} className="mr-1" /> New
+                <Plus size={16} className="mr-0.5" /> New
               </Button>
             </div>
           </div>
@@ -1030,48 +1133,29 @@ Are you sure you want to delete '${template.name}'?`;
         </div>
 
         <div className="flex-1 overflow-y-auto">
-          {filteredTemplates.map(t => (
-            <div
-              key={t.id}
-              onClick={() => { setSelectedId(t.id); setIsCreating(false); }}
-              className={cn(
-                "p-4 border-b border-slate-50 cursor-pointer hover:bg-slate-50 transition-colors group relative",
-                selectedId === t.id && !isCreating ? "bg-blue-50/50 border-l-4 border-l-blue-600" : "border-l-4 border-l-transparent"
-              )}
-            >
-              <div className="flex justify-between items-start mb-1">
-                <span className="font-medium text-sm text-slate-900 truncate pr-2">{t.name}</span>
-                <div className="flex items-center gap-2">
-                  {t.status === 'APPROVED' && <CheckCircle size={14} className="text-green-500 flex-shrink-0" />}
-                  {t.status === 'PENDING' && <Clock size={14} className="text-amber-500 flex-shrink-0" />}
-                  {t.status === 'REJECTED' && <AlertCircle size={14} className="text-red-500 flex-shrink-0" />}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDelete(t);
-                    }}
-                    className="text-slate-400 hover:text-red-600 transition-colors opacity-0 group-hover:opacity-100 p-0.5"
-                    title="Delete Template"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              </div>
-              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 mb-2">
-                <Badge variant="outline" className="text-[10px] h-5 px-1">{t.category}</Badge>
-                <span>{t.language}</span>
-                {t.displayPhoneNumber && (
-                  <span className="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-full font-medium">
-                    {t.displayPhoneNumber}
-                  </span>
-                )}
-                {t.isLocal && <Badge variant="secondary" className="text-[10px] h-5 px-1 bg-amber-50 text-amber-700 border-amber-100">Local</Badge>}
-              </div>
-              <p className="text-xs text-slate-400 line-clamp-2">
-                {t.bodyText}
-              </p>
+          {isGroupView ? (
+            <div className="space-y-4 py-2">
+              {groupOrder.map(group => {
+                const items = groupedTemplates[group] || [];
+                if (items.length === 0) return null;
+                return (
+                  <div key={group} className="space-y-1">
+                    <div className="px-4 py-1.5 bg-slate-50/80 border-y border-slate-100/50 flex items-center justify-between">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{group}</span>
+                      <span className="text-[10px] bg-slate-200 text-slate-600 px-1.5 rounded-full font-bold">{items.length}</span>
+                    </div>
+                    {items.map(t => (
+                      <TemplateItem key={t.id} t={t} />
+                    ))}
+                  </div>
+                );
+              })}
             </div>
-          ))}
+          ) : (
+            filteredTemplates.map(t => (
+              <TemplateItem key={t.id} t={t} />
+            ))
+          )}
           {filteredTemplates.length === 0 && (
             <div className="p-8 text-center text-slate-400 text-sm">
               No templates found
@@ -1834,6 +1918,107 @@ Are you sure you want to delete '${template.name}'?`;
         resourceType={galleryResourceType}
         onSelect={(url) => setTestHeaderMedia(url)}
       />
+
+      {/* Bulk Creation Modal */}
+      {isBulkModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600">
+                  <Upload size={20} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900">Bulk Create Templates</h3>
+                  <p className="text-xs text-slate-500">Upload a NorthStar campaign .md file</p>
+                </div>
+              </div>
+              <button onClick={() => { setIsBulkModalOpen(false); setBulkStatus(null); setBulkProgress([]); }} className="text-slate-400 hover:text-slate-600 p-2">
+                <Plus size={24} className="rotate-45" />
+              </button>
+            </div>
+
+            <div className="p-8 flex-1 overflow-y-auto">
+              {!bulkStatus ? (
+                <div className="space-y-6">
+                  <div className="border-2 border-dashed border-slate-200 rounded-2xl p-12 text-center hover:border-blue-400 hover:bg-blue-50/30 transition-all group relative">
+                    <input type="file" accept=".md" onChange={handleBulkFileChange} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                    <Upload className="w-12 h-12 text-slate-300 group-hover:text-blue-500 mx-auto mb-4 transition-colors" />
+                    <p className="font-semibold text-slate-900">{bulkFile ? bulkFile.name : 'Click or drag .md file here'}</p>
+                    <p className="text-xs text-slate-500 mt-2">Maximum file size 5MB</p>
+                  </div>
+                  <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100">
+                    <h4 className="text-xs font-bold text-blue-700 uppercase tracking-widest mb-2">Instructions</h4>
+                    <ul className="text-xs text-blue-600 space-y-2 list-disc pl-4">
+                      <li>Use the standard NorthStar drip campaign markdown format.</li>
+                      <li>Template names will be auto-generated from titles.</li>
+                      <li>Placeholders like <code className="bg-blue-100 px-1 rounded">{"{{Name}}"}</code> will be mapped to <code className="bg-blue-100 px-1 rounded">{"{{1}}"}</code>.</li>
+                    </ul>
+                  </div>
+                </div>
+              ) : bulkStatus === 'uploading' || bulkStatus === 'processing' ? (
+                <div className="py-12 text-center space-y-4">
+                  <RefreshCw className="w-16 h-16 text-blue-500 animate-spin mx-auto opacity-50" />
+                  <p className="font-medium text-slate-900">Processing campaign file...</p>
+                  <p className="text-xs text-slate-500">This may take a few moments per template.</p>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  <div className={cn(
+                    "p-4 rounded-xl flex items-center gap-3",
+                    bulkStatus === 'success' ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
+                  )}>
+                    {bulkStatus === 'success' ? <CheckCircle size={20} /> : <AlertCircle size={20} />}
+                    <span className="text-sm font-bold">
+                      {bulkStatus === 'success' ? `${bulkProgress.length} templates processed successfully!` : 'Creation failed'}
+                    </span>
+                  </div>
+                  
+                  <div className="border border-slate-100 rounded-xl overflow-hidden">
+                    <div className="max-h-64 overflow-y-auto">
+                      <table className="w-full text-xs">
+                        <thead className="bg-slate-50 sticky top-0">
+                          <tr className="border-b border-slate-100">
+                            <th className="text-left py-2 px-3 font-semibold text-slate-500">Name</th>
+                            <th className="text-left py-2 px-3 font-semibold text-slate-500">Status</th>
+                            <th className="text-left py-2 px-3 font-semibold text-slate-500">Info</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {bulkProgress.map((p, idx) => (
+                            <tr key={idx} className="border-b border-slate-50">
+                              <td className="py-2 px-3 font-medium text-slate-900">{p.name}</td>
+                              <td className="py-2 px-3">
+                                {p.status === 'SUCCESS' ? (
+                                  <Badge className="bg-green-100 text-green-700 border-none text-[10px]">Created</Badge>
+                                ) : (
+                                  <Badge className="bg-red-100 text-red-700 border-none text-[10px]">Failed</Badge>
+                                )}
+                              </td>
+                              <td className="py-2 px-3 text-slate-500">{p.id || p.error || '-'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
+              <Button variant="ghost" onClick={() => { setIsBulkModalOpen(false); setBulkStatus(null); setBulkProgress([]); }}>
+                Close
+              </Button>
+              {(!bulkStatus || bulkStatus === 'error') && (
+                <Button onClick={handleBulkUpload} disabled={!bulkFile}>
+                  Process File
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
