@@ -83,8 +83,9 @@ router.get('/', async (req, res, next) => {
     const client = await db.getClient();
     let starredMap = new Set();
     try {
-      const starredRes = await client.query('SELECT template_name FROM template_settings WHERE is_starred = TRUE');
-      starredRes.rows.forEach(r => starredMap.add(r.template_name));
+      const settingsRes = await client.query('SELECT template_name, is_starred, course_group FROM template_settings');
+      const settingsMap = new Map();
+      settingsRes.rows.forEach(r => settingsMap.set(r.template_name, r));
       
       const localRes = await client.query('SELECT * FROM whatsapp_templates');
       localTemplates = localRes.rows.map(t => ({
@@ -104,10 +105,14 @@ router.get('/', async (req, res, next) => {
     }
 
     const merged = [...allMetaTemplates, ...localTemplates];
-    const enriched = merged.map(t => ({
-      ...t,
-      is_starred: starredMap.has(t.name)
-    }));
+    const enriched = merged.map(t => {
+      const s = settingsMap.get(t.name) || {};
+      return {
+        ...t,
+        is_starred: !!s.is_starred,
+        course_group: s.course_group || null
+      };
+    });
 
     res.json({ data: enriched });
   } catch (err) {
@@ -154,6 +159,30 @@ router.delete('/:name/star', async (req, res, next) => {
       [name]
     );
     res.json({ success: true, name, is_starred: false });
+  } catch (err) {
+    next(err);
+  } finally {
+    client.release();
+  }
+});
+
+/**
+ * POST /api/templates/:name/group
+ * Move a template to a specific course group.
+ */
+router.post('/:name/group', async (req, res, next) => {
+  const { name } = req.params;
+  const { group } = req.body; // e.g. "CPA", "ACCA", "EA", "CMA US", or null/General
+  const client = await db.getClient();
+  try {
+    await client.query(
+      `INSERT INTO template_settings (template_name, course_group, updated_at)
+       VALUES ($1, $2, NOW())
+       ON CONFLICT (template_name) 
+       DO UPDATE SET course_group = EXCLUDED.course_group, updated_at = NOW()`,
+      [name, group]
+    );
+    res.json({ success: true, name, course_group: group });
   } catch (err) {
     next(err);
   } finally {

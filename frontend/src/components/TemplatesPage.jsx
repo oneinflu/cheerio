@@ -35,10 +35,13 @@ export default function TemplatesPage() {
   const [selectedPhoneNumberId, setSelectedPhoneNumberId] = useState('ALL');
   const [creationStep, setCreationStep] = useState('MAIN_CATEGORY'); // MAIN_CATEGORY, SUB_CATEGORY, FORM
   const [isGroupView, setIsGroupView] = useState(false);
+  const [viewMode, setViewMode] = useState('list'); // 'list' or 'course_dashboard'
+  const [selectedCourseGroup, setSelectedCourseGroup] = useState(null);
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const [bulkFile, setBulkFile] = useState(null);
   const [bulkStatus, setBulkStatus] = useState(null); // 'idle', 'uploading', 'processing', 'success', 'error'
   const [bulkProgress, setBulkProgress] = useState([]);
+  const [movingId, setMovingId] = useState(null); // ID of template being moved
 
   React.useEffect(() => {
     const fetchPhones = async () => {
@@ -139,7 +142,9 @@ export default function TemplatesPage() {
             examples,
             phoneNumberId: t.phoneNumberId,
             displayPhoneNumber: t.displayPhoneNumber,
-            isLocal: t.isLocal
+            isLocal: t.isLocal,
+            isStarred: t.is_starred,
+            courseGroup: t.course_group || null
           };
         });
         setTemplates(mapped);
@@ -163,12 +168,176 @@ export default function TemplatesPage() {
 
   const [formData, setFormData] = useState(null);
   const bodyTextareaRef = React.useRef(null);
-  const resolvedHeaderPreviewUrl =
-    formData &&
-    (formData.headerPreviewUrl ||
-      (formData.headerHandle && /^https?:\/\//i.test(formData.headerHandle) ? formData.headerHandle : null));
+    const fetchCourseList = () => {
+        const groups = ['CPA', 'CMA US', 'ACCA', 'EA'];
+        const counts = templates.reduce((acc, t) => {
+            const g = t.courseGroup || getGroup(t.name);
+            acc[g] = (acc[g] || 0) + 1;
+            return acc;
+        }, {});
+        return [...groups, 'General'].map(g => ({
+            name: g,
+            count: counts[g] || 0
+        }));
+    };
 
-  // Initialize editor when selection changes
+    const handleMoveGroup = async (templateName, newGroup) => {
+        setMovingId(templateName);
+        try {
+            const res = await fetch(`/api/templates/${templateName}/group`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ group: newGroup })
+            });
+            if (res.ok) {
+                await fetchTemplatesData();
+            }
+        } catch (e) {
+            console.error("Failed to move group", e);
+        } finally {
+            setMovingId(null);
+        }
+    };
+
+    if (viewMode === 'course_dashboard') {
+        const courses = fetchCourseList();
+        const filteredByCourse = selectedCourseGroup 
+            ? templates.filter(t => (t.courseGroup || getGroup(t.name)) === selectedCourseGroup)
+            : [];
+
+        return (
+            <div className="flex-1 flex flex-col h-full bg-slate-50 relative overflow-hidden">
+                {/* Header */}
+                <div className="h-16 border-b border-slate-200 bg-white px-8 flex items-center justify-between flex-shrink-0 z-20">
+                    <div className="flex items-center gap-4">
+                        {selectedCourseGroup && (
+                            <Button variant="ghost" size="icon" onClick={() => setSelectedCourseGroup(null)}>
+                                <ArrowLeft size={18} />
+                            </Button>
+                        )}
+                        <div>
+                            <h1 className="font-bold text-xl text-slate-900">
+                                {selectedCourseGroup ? `${selectedCourseGroup} Curriculum` : 'Course Management'}
+                            </h1>
+                            <p className="text-xs text-slate-500">
+                                {selectedCourseGroup ? `Managing ${filteredByCourse.length} templates in this program` : 'Organize your WhatsApp templates by academic program'}
+                            </p>
+                        </div>
+                    </div>
+                    <div className="flex gap-2">
+                        <Button variant="outline" size="sm" onClick={() => setViewMode('list')} className="gap-2">
+                            <List size={16} /> Standard View
+                        </Button>
+                        <Button size="sm" onClick={() => { setViewMode('list'); setIsCreating(true); setShowTypeSelection(true); }} className="gap-2">
+                            <Plus size={16} /> New Template
+                        </Button>
+                    </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-8">
+                    {!selectedCourseGroup ? (
+                        <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {courses.map(course => (
+                                <Card 
+                                    key={course.name} 
+                                    className="cursor-pointer group hover:border-blue-400 transition-all hover:shadow-md animate-in fade-in slide-in-from-bottom-2 duration-300"
+                                    onClick={() => setSelectedCourseGroup(course.name)}
+                                >
+                                    <CardContent className="p-0">
+                                        <div className="p-6">
+                                            <div className="flex justify-between items-start mb-4">
+                                                <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                                                    <LayoutGrid size={24} />
+                                                </div>
+                                                <Badge variant="secondary" className="bg-slate-100 text-slate-600">
+                                                    {course.count} Templates
+                                                </Badge>
+                                            </div>
+                                            <h3 className="text-lg font-bold text-slate-900 mb-1">{course.name}</h3>
+                                            <p className="text-sm text-slate-500 line-clamp-2">
+                                                Manage and deploy drip campaigns for the {course.name} program.
+                                            </p>
+                                        </div>
+                                        <div className="px-6 py-4 bg-slate-50/50 border-t border-slate-100 flex items-center justify-between group-hover:bg-blue-50 transition-colors">
+                                            <span className="text-xs font-semibold text-blue-600">View Program Content</span>
+                                            <ChevronRight size={14} className="text-blue-400" />
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="max-w-6xl mx-auto space-y-4">
+                            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+                                <table className="w-full text-sm text-left">
+                                    <thead className="bg-slate-50 text-slate-500 uppercase text-[10px] font-bold tracking-wider">
+                                        <tr>
+                                            <th className="px-6 py-4">Status</th>
+                                            <th className="px-6 py-4">Template Name</th>
+                                            <th className="px-6 py-4">Category</th>
+                                            <th className="px-6 py-4">Language</th>
+                                            <th className="px-6 py-4 text-right">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                        {filteredByCourse.map(tmpl => (
+                                            <tr key={tmpl.id} className="hover:bg-slate-50/50 transition-colors group">
+                                                <td className="px-6 py-4">
+                                                    {tmpl.status === 'APPROVED' ? <Badge className="bg-green-100 text-green-700 hover:bg-green-100 border-none">Approved</Badge> :
+                                                     tmpl.status === 'REJECTED' ? <Badge className="bg-red-100 text-red-700 hover:bg-red-100 border-none">Rejected</Badge> :
+                                                     <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 border-none">Pending</Badge>}
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <div className="flex flex-col">
+                                                        <span className="font-semibold text-slate-900">{tmpl.name}</span>
+                                                        <span className="text-[10px] text-slate-400 font-mono truncate max-w-[200px]">{tmpl.bodyText}</span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 text-slate-600">{tmpl.category}</td>
+                                                <td className="px-6 py-4 text-slate-600">{tmpl.language}</td>
+                                                <td className="px-6 py-4 text-right">
+                                                    <div className="flex items-center justify-end gap-2">
+                                                        <select
+                                                            className="text-[10px] bg-slate-100 border-none rounded px-2 py-1 outline-none focus:ring-1 focus:ring-blue-500"
+                                                            value={tmpl.courseGroup || getGroup(tmpl.name)}
+                                                            onChange={(e) => handleMoveGroup(tmpl.name, e.target.value)}
+                                                            disabled={movingId === tmpl.name}
+                                                        >
+                                                            {['CPA', 'CMA US', 'ACCA', 'EA', 'General'].map(g => (
+                                                                <option key={g} value={g}>Move to {g}</option>
+                                                            ))}
+                                                        </select>
+                                                        <Button 
+                                                            variant="ghost" 
+                                                            size="icon" 
+                                                            className="opacity-0 group-hover:opacity-100"
+                                                            onClick={() => { setViewMode('list'); setSelectedId(tmpl.id); }}
+                                                        >
+                                                            <ChevronRight size={16} />
+                                                        </Button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                                {filteredByCourse.length === 0 && (
+                                    <div className="p-12 text-center">
+                                        <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                                            <FileText className="text-slate-300" size={32} />
+                                        </div>
+                                        <p className="text-slate-500 font-medium">No templates assigned to this program yet.</p>
+                                        <Button variant="link" className="text-blue-600 mt-2" onClick={() => setViewMode('list')}>Go to standard view</Button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
+    }
+    return (
   React.useEffect(() => {
     // If we are creating but haven't selected a type yet, don't set formData
     if (isCreating && showTypeSelection) {
