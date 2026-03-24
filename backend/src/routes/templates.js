@@ -381,6 +381,106 @@ router.post('/send-test', async (req, res, next) => {
  * DELETE /api/templates
  * Delete a template by name (and optional hsm_id).
  */
+/**
+ * POST /api/templates/bulk-create
+ * Bulk create templates based on a .md file upload.
+ */
+router.post('/bulk-create', upload.single('file'), async (req, res, next) => {
+  try {
+    if (!req.file) throw new Error('MD file is required');
+    const content = req.file.buffer.toString('utf8');
+    const teamId = await resolveTeamId(req);
+    const { phoneNumberId } = req.body;
+    
+    let config;
+    if (phoneNumberId) {
+      config = await waConfig.getConfigByPhone(phoneNumberId);
+    } else {
+      config = await waConfig.getConfig(teamId);
+    }
+    const wabaId = config.businessAccountId;
+
+    if (!wabaId) throw new Error('WABA ID not configured');
+
+    // Simple parser for NorthStar .md format
+    const blocks = content.split(/---|\*WhatsApp \d+ –/).filter(b => b.trim().length > 10);
+    const templatesToCreate = blocks.map((block, idx) => {
+      const lines = block.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+      const title = lines[0] || `Bulk Template ${idx + 1}`;
+      const name = title.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_').substring(0, 512);
+      
+      const attachmentLines = lines.filter(l => l.includes('drive.google.com') || l.includes('http'));
+      const bodyLines = lines.filter(l => !l.startsWith('📎') && !l.includes('drive.google.com') && !l.includes('http') && !l.includes('WhatsApp'));
+      
+      const body = bodyLines.join('\n');
+      const attachments = attachmentLines.map(l => {
+        const m = l.match(/\[(.*?)\]\((.*?)\)/);
+        return m ? { label: m[1], url: m[2] } : { label: 'Link', url: l.replace(/📎|\*|Attached:|\(|\)/g, '').trim() };
+      });
+
+      return { name, title, body, attachments };
+    });
+
+    const results = [];
+    console.log(`[BulkCreate] Starting creation of ${templatesToCreate.length} templates...`);
+
+    for (const t of templatesToCreate) {
+      try {
+        const components = [];
+        
+        // 1. Process first attachment as Header if it looks like an image/doc
+        const first = t.attachments[0];
+        if (first && (first.url.includes('jpg') || first.url.includes('pdf') || first.url.includes('jpeg') || first.url.includes('png') || first.url.includes('drive.google.com/file'))) {
+            // We'll treat Google Drive file links as documents by default for drip camapaigns
+            const isImage = first.url.toLowerCase().match(/\.(jpg|jpeg|png)/);
+            const format = isImage ? 'IMAGE' : 'DOCUMENT';
+            
+            // To make it fully automated like the script, we would need to download and upload here.
+            // For now, we'll try to use the URL as a handle example if it's direct, 
+            // but since it's Drive, we usually need a handle.
+            // We'll skip headers in bulk for now unless we have a robust handle resolver here.
+            // Actually, I'll use a placeholder or skip to keep it reliable.
+        }
+
+        // 2. Body
+        const bodyText = t.body.replace(/\*{{Name}}\*/g, '{{1}}').replace(/{{Name}}/g, '{{1}}');
+        const bodyComp = { type: 'BODY', text: bodyText };
+        if (bodyText.includes('{{1}}')) {
+           bodyComp.example = { body_text: [['Student']] };
+        }
+        components.push(bodyComp);
+
+        // 3. Buttons
+        if (t.attachments.length > 0) {
+            components.push({
+                type: 'BUTTONS',
+                buttons: t.attachments.slice(0, 2).map(a => ({
+                    type: 'URL',
+                    text: a.label.substring(0, 25),
+                    url: a.url
+                }))
+            });
+        }
+
+        const resp = await whatsappClient.createTemplate(wabaId, {
+            name: t.name,
+            category: 'MARKETING',
+            language: 'en_US',
+            components
+        }, config);
+
+        results.push({ name: t.name, status: 'SUCCESS', id: resp.data.id });
+      } catch (err) {
+        results.push({ name: t.name, status: 'FAILED', error: err.message });
+      }
+    }
+
+    res.json({ success: true, results });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.delete('/', async (req, res, next) => {
   const { name, hsm_id, phoneNumberId } = req.query;
   if (!name) {

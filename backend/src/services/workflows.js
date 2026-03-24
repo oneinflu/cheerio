@@ -123,7 +123,7 @@ async function ensureConversation(phoneNumber) {
 }
 
 // Ensure a contact exists and update basic fields; returns contact_id
-async function ensureContact({ external_id, name, email, attributes }) {
+async function ensureContact({ external_id, name, email, attributes, skipGlobalTriggers = false }) {
   let contactRes = await db.query('SELECT id, channel_id, display_name, profile FROM contacts WHERE external_id = $1', [external_id]);
   if (contactRes.rowCount === 0) {
     const alt = external_id.startsWith('+') ? external_id.slice(1) : `+${external_id}`;
@@ -137,10 +137,23 @@ async function ensureContact({ external_id, name, email, attributes }) {
     const ins = await db.query(
       `INSERT INTO contacts (id, channel_id, external_id, display_name, profile)
        VALUES (gen_random_uuid(), $1, $2, $3, $4::jsonb)
-       RETURNING id`,
+       RETURNING *`,
       [channelId, external_id, name || 'User', JSON.stringify({ email: email || '', attributes: attributes || {} })]
     );
-    return ins.rows[0].id;
+    const newContact = ins.rows[0];
+
+    // Trigger NEW CONTACT workflows if not skipped
+    if (!skipGlobalTriggers) {
+      triggerContactCreatedWorkflows({
+        id: newContact.id,
+        external_id: newContact.external_id,
+        name: newContact.display_name,
+        email: newContact.profile?.email || '',
+        attributes: newContact.profile?.attributes || {}
+      }).catch(err => console.error('[ensureContact] Trigger failed:', err));
+    }
+
+    return newContact.id;
   }
 
   const contactId = contactRes.rows[0].id;
