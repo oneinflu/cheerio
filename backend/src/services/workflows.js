@@ -79,7 +79,18 @@ async function ensureConversation(phoneNumber) {
     // If contact doesn't exist, we can't create a conversation easily without knowing the channel.
     // However, if we assume a default channel exists, we could try.
     // For now, let's try to find ANY whatsapp channel to link to.
-    const channelRes = await db.query("SELECT id FROM channels WHERE type = 'whatsapp' LIMIT 1");
+    // Prefer the real configured channel (numeric external_id = Meta Phone Number ID), not the demo seed
+    const configuredPhoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+    let channelRes;
+    if (configuredPhoneId) {
+      channelRes = await db.query("SELECT id FROM channels WHERE type = 'whatsapp' AND external_id = $1 LIMIT 1", [configuredPhoneId]);
+    }
+    if (!channelRes || channelRes.rowCount === 0) {
+      channelRes = await db.query("SELECT id FROM channels WHERE type = 'whatsapp' AND external_id ~ '^[0-9]+$' ORDER BY created_at DESC LIMIT 1");
+    }
+    if (!channelRes || channelRes.rowCount === 0) {
+      channelRes = await db.query("SELECT id FROM channels WHERE type = 'whatsapp' LIMIT 1");
+    }
     if (channelRes.rowCount === 0) throw new Error('No WhatsApp channel configured');
     const channelId = channelRes.rows[0].id;
 
@@ -131,7 +142,18 @@ async function ensureContact({ external_id, name, email, attributes, skipGlobalT
   }
 
   if (contactRes.rowCount === 0) {
-    const chanRes = await db.query("SELECT id FROM channels WHERE type='whatsapp' LIMIT 1");
+    // Prefer the real configured channel (numeric external_id = Meta Phone Number ID), not the demo seed
+    const configuredPhoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+    let chanRes;
+    if (configuredPhoneId) {
+      chanRes = await db.query("SELECT id FROM channels WHERE type='whatsapp' AND external_id = $1 LIMIT 1", [configuredPhoneId]);
+    }
+    if (!chanRes || chanRes.rowCount === 0) {
+      chanRes = await db.query("SELECT id FROM channels WHERE type='whatsapp' AND external_id ~ '^[0-9]+$' ORDER BY created_at DESC LIMIT 1");
+    }
+    if (!chanRes || chanRes.rowCount === 0) {
+      chanRes = await db.query("SELECT id FROM channels WHERE type='whatsapp' LIMIT 1");
+    }
     if (chanRes.rowCount === 0) throw new Error('No WhatsApp channel configured');
     const channelId = chanRes.rows[0].id;
     const ins = await db.query(

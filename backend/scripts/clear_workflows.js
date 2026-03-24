@@ -29,9 +29,25 @@ async function clearAll() {
         // 2. Clear workflows
         const res = await client.query('DELETE FROM workflows');
         console.log(`[ClearWorkflows] Deleted ${res.rowCount} workflows.`);
+
+        // 3. Remove demo seed data (channel +15559999999 and all linked records)
+        const demoChannelId = 'c0eebc99-9c0b-4ef8-bb6d-6bb9bd380c33';
+        // Delete messages for demo conversations
+        await client.query(`DELETE FROM messages WHERE channel_id = $1`, [demoChannelId]);
+        // Delete staff notes for demo conversations
+        await client.query(`DELETE FROM staff_notes WHERE conversation_id IN (SELECT id FROM conversations WHERE channel_id = $1)`, [demoChannelId]);
+        // Delete conversation assignments for demo conversations
+        await client.query(`DELETE FROM conversation_assignments WHERE conversation_id IN (SELECT id FROM conversations WHERE channel_id = $1)`, [demoChannelId]);
+        // Delete demo conversations
+        await client.query(`DELETE FROM conversations WHERE channel_id = $1`, [demoChannelId]);
+        // Delete demo contacts
+        await client.query(`DELETE FROM contacts WHERE channel_id = $1`, [demoChannelId]);
+        // Delete demo channel itself
+        const chRes = await client.query(`DELETE FROM channels WHERE id = $1`, [demoChannelId]);
+        console.log(`[ClearWorkflows] Removed demo channel + linked data: ${chRes.rowCount} channel(s) deleted.`);
         
         await client.query('COMMIT');
-        console.log('[ClearWorkflows] SUCCESS: Database is now clear of all workflows and related logs.');
+        console.log('[ClearWorkflows] SUCCESS: Database is now clear of all workflows, demo data, and related logs.');
     } catch (e) {
         await client.query('ROLLBACK');
         console.error('[ClearWorkflows] FAILED to delete workflows:', e.message);

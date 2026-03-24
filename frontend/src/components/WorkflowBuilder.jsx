@@ -1125,7 +1125,44 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
             const s = String(t.status || '').toUpperCase();
             return s === 'APPROVED';
           });
-          setTemplates(filtered);
+          // Map raw Meta components into flat fields (bodyText, headerFormat, parameterFormat, etc.)
+          const mapped = filtered.map(t => {
+            // If already mapped (has bodyText), skip
+            if (t.bodyText !== undefined) return t;
+            const comps = Array.isArray(t.components) ? t.components : [];
+            const bodyComp = comps.find(c => c.type === 'BODY');
+            const headerComp = comps.find(c => c.type === 'HEADER');
+            const footerComp = comps.find(c => c.type === 'FOOTER');
+            const buttonsComp = comps.find(c => c.type === 'BUTTONS');
+
+            let examples = {};
+            if (bodyComp && bodyComp.example) {
+              if (t.parameter_format === 'NAMED' && bodyComp.example.body_text_named_params) {
+                bodyComp.example.body_text_named_params.forEach(p => examples[p.param_name] = p.example);
+              } else if (bodyComp.example.body_text && Array.isArray(bodyComp.example.body_text[0])) {
+                bodyComp.example.body_text[0].forEach((ex, i) => examples[(i + 1).toString()] = ex);
+              }
+            }
+
+            let headerHandle = '';
+            if (headerComp && headerComp.example && Array.isArray(headerComp.example.header_handle) && headerComp.example.header_handle.length > 0) {
+              headerHandle = headerComp.example.header_handle[0];
+            }
+
+            return {
+              ...t,
+              bodyText: bodyComp ? bodyComp.text : '',
+              headerType: headerComp ? headerComp.format : 'NONE',
+              headerFormat: headerComp ? headerComp.format : 'NONE',
+              headerText: headerComp && headerComp.format === 'TEXT' ? headerComp.text : '',
+              headerHandle,
+              footerText: footerComp ? footerComp.text : '',
+              buttons: buttonsComp ? buttonsComp.buttons : [],
+              parameterFormat: t.parameter_format || 'POSITIONAL',
+              examples,
+            };
+          });
+          setTemplates(mapped);
         }
 
         const emailTplList = Array.isArray(etplRes) ? etplRes : (etplRes.data || etplRes.emailTemplates || []);
