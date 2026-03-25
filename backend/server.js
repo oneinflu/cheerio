@@ -1,5 +1,7 @@
 'use strict';
-require('dotenv').config(); // Load environment variables from .env
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
+
 /**
  * server.js
  *

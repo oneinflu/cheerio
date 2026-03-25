@@ -1,19 +1,21 @@
-import React, { useState, useEffect } from 'react';
-import { Download, Upload, Plus, Search, MoreHorizontal, User, MessageCircle, Instagram, Database, X, Trash2 } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Download, Upload, Plus, Search, MoreHorizontal, User, MessageCircle, Instagram, Database, X, Trash2, RefreshCcw, Filter, ChevronLeft, ChevronRight, ArrowRight, ExternalLink } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Modal } from './ui/Modal';
-import { getContacts, getContactChannels, addContact, deleteContact } from '../api';
+import { getContacts, getContactChannels, addContact, deleteContact, syncXoloxContacts } from '../api';
 
 // Small helper to pick the right icon for a channel type
 function ChannelIcon({ type }) {
     if (type === 'whatsapp') return <MessageCircle size={14} className="text-green-600" />;
     if (type === 'instagram') return <Instagram size={14} className="text-pink-600" />;
-    return <Database size={14} className="text-slate-500" />;
+    if (type === 'raw') return <Database size={14} className="text-slate-500" />;
+    return <User size={14} className="text-slate-500" />;
 }
 
 const CHANNEL_TYPE_LABELS = {
     whatsapp: 'WhatsApp',
     instagram: 'Instagram',
+    raw: 'System/API',
 };
 
 function channelLabel(ch) {
@@ -107,32 +109,17 @@ function AddContactModal({ isOpen, onClose, channels, onSuccess }) {
                             </svg>
                         </div>
                     </div>
-
-                    {/* Channel type badge */}
-                    {selectedChannel && (
-                        <div className="mt-2 flex items-center gap-1.5">
-                            <ChannelIcon type={selectedChannel.type} />
-                            <span className="text-xs text-slate-500 capitalize">
-                                {CHANNEL_TYPE_LABELS[selectedChannel.type] || selectedChannel.type} channel
-                            </span>
-                        </div>
-                    )}
                 </div>
 
                 {/* External ID / Phone */}
                 <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                        {selectedChannel?.type === 'whatsapp' ? 'Phone Number' :
-                            selectedChannel?.type === 'instagram' ? 'Instagram User ID' : 'External ID'}
-                        {' '}<span className="text-red-500">*</span>
+                        External ID / Phone <span className="text-red-500">*</span>
                     </label>
                     <input
                         type="text"
                         className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                        placeholder={
-                            selectedChannel?.type === 'whatsapp' ? 'e.g. 919876543210 (with country code)' :
-                                selectedChannel?.type === 'instagram' ? 'e.g. 1234567890' : 'Unique external identifier'
-                        }
+                        placeholder="e.g. 919876543210"
                         value={form.external_id}
                         onChange={e => setForm(f => ({ ...f, external_id: e.target.value }))}
                     />
@@ -151,19 +138,6 @@ function AddContactModal({ isOpen, onClose, channels, onSuccess }) {
                         onChange={e => setForm(f => ({ ...f, display_name: e.target.value }))}
                     />
                 </div>
-
-                {/* Raw JSON profile data — show for raw/unknown channels */}
-                {isRaw && (
-                    <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1.5">Raw Profile Data (JSON)</label>
-                        <textarea
-                            rows={4}
-                            className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-mono outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                            value={rawJson}
-                            onChange={e => setRawJson(e.target.value)}
-                        />
-                    </div>
-                )}
 
                 {/* Error */}
                 {error && (
@@ -198,13 +172,16 @@ export default function ContactsPage() {
     const [totalPages, setTotalPages] = useState(1);
     const [totalContacts, setTotalContacts] = useState(0);
 
+    const [isSyncing, setIsSyncing] = useState(false);
+    const [syncProgress, setSyncProgress] = useState(null);
+
     const [channels, setChannels] = useState([]);
     const [showAddModal, setShowAddModal] = useState(false);
 
     const fetchContacts = async (pageNum, search) => {
         setIsLoading(true);
         try {
-            const res = await getContacts(pageNum, 10, search);
+            const res = await getContacts(pageNum, 15, search);
             if (res.success) {
                 setContacts(res.contacts);
                 setTotalPages(res.pagination.totalPages);
@@ -217,7 +194,33 @@ export default function ContactsPage() {
         }
     };
 
-    // Fetch channels once (for the Add Contact dropdown)
+    // Global Sync logic
+    const handleSyncXolox = async (pageNum = 1) => {
+        setIsSyncing(true);
+        setSyncProgress(`Syncing page ${pageNum}...`);
+        try {
+            const res = await syncXoloxContacts(pageNum, 100);
+            if (res.success) {
+                setSyncProgress(`Synced ${res.data.created + res.data.updated} contacts from page ${pageNum}.`);
+                // Refresh contacts list
+                fetchContacts(page, searchTerm);
+                
+                // Show a brief success message and clear after 3s
+                setTimeout(() => setSyncProgress(null), 3000);
+            } else {
+                alert(res.message || 'Sync failed');
+                setSyncProgress(null);
+            }
+        } catch (e) {
+            console.error('Sync Error:', e);
+            alert('A network error occurred during sync');
+            setSyncProgress(null);
+        } finally {
+            setIsSyncing(false);
+        }
+    };
+
+    // Fetch channels for modal
     useEffect(() => {
         getContactChannels()
             .then(res => { if (res.success) setChannels(res.channels); })
@@ -240,51 +243,58 @@ export default function ContactsPage() {
         }
     };
 
-    // After a contact is created successfully, prepend it and bump total count
     const handleContactAdded = (newContact) => {
         setContacts(prev => [newContact, ...prev]);
         setTotalContacts(prev => prev + 1);
     };
 
     const handleDeleteContact = async (contact) => {
-        if (!window.confirm(`Are you sure you want to delete ${contact.display_name || contact.external_id}? This will remove all message history.`)) {
-            return;
-        }
-
+        if (!window.confirm(`Are you sure? This will remove ${contact.display_name || contact.external_id}.`)) return;
         try {
             const res = await deleteContact(contact.id);
             if (res.success) {
                 setContacts(prev => prev.filter(c => c.id !== contact.id));
                 setTotalContacts(prev => prev - 1);
-            } else {
-                alert(res.message || 'Failed to delete contact');
             }
-        } catch (err) {
-            console.error('Error deleting contact:', err);
-            alert('A network error occurred');
-        }
+        } catch (err) { console.error(err); }
     };
 
     return (
         <div className="flex-1 flex flex-col h-full bg-slate-50">
 
             {/* Header */}
-            <div className="h-16 border-b border-slate-200 bg-white flex items-center justify-between px-6 shrink-0">
-                <div>
-                    <h1 className="font-semibold text-xl text-slate-800">All Contacts</h1>
-                    <p className="text-sm text-slate-500">{totalContacts} contacts total</p>
+            <div className="h-16 border-b border-slate-200 bg-white flex items-center justify-between px-6 shrink-0 z-10">
+                <div className="flex items-center gap-4">
+                    <h1 className="font-bold text-xl text-slate-900 tracking-tight">Contacts</h1>
+                    <div className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded text-[11px] font-bold uppercase tracking-wider border border-blue-100">
+                        {totalContacts} Total
+                    </div>
                 </div>
+
                 <div className="flex items-center space-x-3">
-                    <Button variant="outline" className="flex items-center gap-2">
-                        <Upload size={16} />
-                        <span className="hidden sm:inline">Upload CSV</span>
+                    {syncProgress && (
+                        <div className="text-xs font-semibold text-blue-600 animate-pulse hidden md:block mr-2 bg-blue-50 px-3 py-1.5 rounded-full border border-blue-100 italic">
+                            {syncProgress}
+                        </div>
+                    )}
+                    
+                    <Button 
+                        variant="outline" 
+                        className={`flex items-center gap-2 bg-white shadow-sm border-slate-200 text-slate-700 hover:bg-slate-50 relative overflow-hidden ${isSyncing ? 'pointer-events-none opacity-80' : ''}`}
+                        onClick={() => handleSyncXolox(1)}
+                    >
+                        <RefreshCcw size={16} className={isSyncing ? 'animate-spin' : ''} />
+                        <span className="font-semibold">{isSyncing ? 'Syncing...' : 'Sync With XOLOX'}</span>
                     </Button>
-                    <Button variant="outline" className="flex items-center gap-2">
-                        <Download size={16} />
-                        <span className="hidden sm:inline">Export</span>
+
+                    <div className="w-px h-6 bg-slate-200 mx-1 hidden sm:block"></div>
+
+                    <Button variant="outline" className="flex items-center gap-2 bg-white shadow-sm border-slate-200 text-slate-700 hover:bg-slate-50">
+                        <Upload size={16} />
+                        <span className="hidden sm:inline font-semibold">Import</span>
                     </Button>
                     <Button
-                        className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+                        className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-100 transition-all font-semibold"
                         onClick={() => setShowAddModal(true)}
                     >
                         <Plus size={16} />
@@ -298,90 +308,140 @@ export default function ContactsPage() {
                 <div className="max-w-7xl mx-auto space-y-4">
 
                     {/* Search */}
-                    <div className="flex items-center w-full max-w-md bg-white border border-slate-300 rounded-md px-3 py-2">
-                        <Search className="w-5 h-5 text-slate-400 mr-2" />
+                    <div className="relative max-w-md w-full">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                         <input
                             type="text"
-                            placeholder="Search contacts by name or external ID..."
-                            className="w-full text-sm outline-none bg-transparent placeholder-slate-400"
+                            placeholder="Search by name, phone, email or stage..."
+                            className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm shadow-sm outline-none focus:ring-4 focus:ring-blue-50 focus:border-blue-500 transition-all"
                             value={searchTerm}
                             onChange={e => setSearchTerm(e.target.value)}
                         />
                     </div>
 
                     {/* Table */}
-                    <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
+                    <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden border-separate">
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm text-left">
-                                <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-medium whitespace-nowrap">
+                                <thead className="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[10px] whitespace-nowrap">
                                     <tr>
-                                        <th className="px-6 py-4">Contact</th>
-                                        <th className="px-6 py-4">External ID</th>
-                                        <th className="px-6 py-4">Channel</th>
+                                        <th className="px-6 py-4">Identity</th>
+                                        <th className="px-6 py-4">Internal / Channel</th>
+                                        <th className="px-6 py-4">Status / Stage</th>
                                         <th className="px-6 py-4">Assigned To</th>
-                                        <th className="px-6 py-4">Created At</th>
+                                        <th className="px-6 py-4">Synced/Created</th>
                                         <th className="px-6 py-4"></th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-slate-200">
+                                <tbody className="divide-y divide-slate-100">
                                     {isLoading ? (
                                         <tr>
-                                            <td colSpan="6" className="px-6 py-12 text-center text-slate-500">Loading contacts...</td>
+                                            <td colSpan="6" className="px-6 py-20 text-center">
+                                                <div className="flex flex-col items-center justify-center space-y-3">
+                                                    <div className="w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                                                    <span className="text-slate-400 font-medium">Loading contacts...</span>
+                                                </div>
+                                            </td>
                                         </tr>
                                     ) : contacts.length === 0 ? (
                                         <tr>
-                                            <td colSpan="6" className="px-6 py-12 text-center text-slate-500">No contacts found.</td>
+                                            <td colSpan="6" className="px-6 py-20 text-center text-slate-400 font-medium italic">No contacts found. Try syncing with XOLOX.</td>
                                         </tr>
                                     ) : (
-                                        contacts.map(contact => (
-                                            <tr key={contact.id} className="hover:bg-slate-50/50 transition-colors">
-                                                <td className="px-6 py-4">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
-                                                            <User className="text-slate-400" size={18} />
+                                        contacts.map(contact => {
+                                            const p = contact.profile || {};
+                                            return (
+                                                <tr key={contact.id} className="hover:bg-slate-50/70 transition-all group">
+                                                    <td className="px-6 py-4">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 font-bold text-sm border-2 ${p.syncedAt ? 'bg-indigo-50 text-indigo-600 border-indigo-100' : 'bg-slate-50 text-slate-600 border-slate-100'}`}>
+                                                                {contact.display_name?.charAt(0).toUpperCase() || <User size={18} />}
+                                                            </div>
+                                                            <div className="flex flex-col min-w-0">
+                                                                <span className="font-bold text-slate-900 truncate max-w-[180px]">
+                                                                    {contact.display_name || 'Anonymous'}
+                                                                </span>
+                                                                <span className="text-[11px] text-slate-400 font-medium truncate max-w-[180px]">
+                                                                    {p.email || 'No email'}
+                                                                </span>
+                                                            </div>
                                                         </div>
-                                                        <span className="font-medium text-slate-900">
-                                                            {contact.display_name || 'Unknown Contact'}
-                                                        </span>
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4 text-slate-600 font-mono text-xs">{contact.external_id}</td>
-                                                <td className="px-6 py-4">
-                                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 capitalize border border-blue-100">
-                                                        <ChannelIcon type={contact.channel_type} />
-                                                        {CHANNEL_TYPE_LABELS[contact.channel_type] || contact.channel_type || 'Unknown'}
-                                                    </span>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    {contact.assignee_name ? (
-                                                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-purple-50 text-purple-700 border border-purple-100">
-                                                            {contact.assignee_name}
-                                                        </span>
-                                                    ) : (
-                                                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-500 border border-slate-200">
-                                                            Unassigned
-                                                        </span>
-                                                    )}
-                                                </td>
-                                                <td className="px-6 py-4 text-slate-500">{new Date(contact.created_at).toLocaleDateString()}</td>
-                                                <td className="px-6 py-4 text-right">
-                                                    <div className="flex justify-end gap-2">
-                                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-slate-900">
-                                                            <MoreHorizontal size={16} />
-                                                        </Button>
-                                                        <Button 
-                                                            variant="ghost" 
-                                                            size="icon" 
-                                                            className="h-8 w-8 text-red-400 hover:text-red-700 hover:bg-red-50"
-                                                            onClick={() => handleDeleteContact(contact)}
-                                                            title="Delete Contact"
-                                                        >
-                                                            <Trash2 size={16} />
-                                                        </Button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        ))
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        <div className="flex flex-col">
+                                                            <span className="text-xs font-bold text-slate-700">{contact.external_id}</span>
+                                                            <div className="flex items-center gap-1.5 mt-1">
+                                                                <ChannelIcon type={contact.channel_type} />
+                                                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
+                                                                    {CHANNEL_TYPE_LABELS[contact.channel_type] || contact.channel_type}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        <div className="flex flex-col gap-1.5">
+                                                            {p.leadStage ? (
+                                                                <span className="px-2 py-0.5 rounded bg-orange-50 text-orange-600 border border-orange-100 text-[10px] font-bold w-fit uppercase tabular-nums tracking-tight">
+                                                                    {p.leadStage}
+                                                                </span>
+                                                            ) : (
+                                                                <span className="text-[10px] text-slate-400 font-medium italic">General</span>
+                                                            )}
+                                                            {p.course && (
+                                                                <span className="text-[10px] text-blue-600 font-semibold bg-blue-50/50 px-2 py-0.5 rounded-sm border border-blue-100/50 w-fit">
+                                                                    {p.course}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        {contact.assignee_name || p.assignedTo ? (
+                                                            <div className="flex items-center gap-2">
+                                                                <div className="w-6 h-6 rounded-full bg-purple-100 text-purple-600 text-[9px] flex items-center justify-center font-bold ring-2 ring-purple-50 shadow-sm uppercase">
+                                                                    {(contact.assignee_name || p.assignedTo).charAt(0)}
+                                                                </div>
+                                                                <span className="text-xs font-bold text-slate-700 truncate max-w-[120px]">
+                                                                    {contact.assignee_name || p.assignedTo}
+                                                                </span>
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-[11px] font-medium text-slate-400 italic">Unassigned</span>
+                                                        )}
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        <div className="flex flex-col">
+                                                            <span className="text-[11px] font-bold text-slate-600">
+                                                                {new Date(contact.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                                                            </span>
+                                                            {p.syncedAt && (
+                                                                <span className="text-[9px] text-green-500 font-bold uppercase mt-0.5 flex items-center gap-1">
+                                                                    <RefreshCcw size={8} /> Synced
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-right">
+                                                        <div className="flex justify-end gap-1">
+                                                            <Button 
+                                                                variant="ghost" 
+                                                                size="icon" 
+                                                                className="h-8 w-8 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                                            >
+                                                                <ExternalLink size={16} />
+                                                            </Button>
+                                                            <Button 
+                                                                variant="ghost" 
+                                                                size="icon" 
+                                                                className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                                                onClick={() => handleDeleteContact(contact)}
+                                                            >
+                                                                <Trash2 size={16} />
+                                                            </Button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })
                                     )}
                                 </tbody>
                             </table>
@@ -389,13 +449,32 @@ export default function ContactsPage() {
 
                         {/* Pagination */}
                         {!isLoading && totalPages > 1 && (
-                            <div className="flex items-center justify-between px-6 py-3 border-t border-slate-200 bg-slate-50">
-                                <div className="text-sm text-slate-500">
-                                    Page <span className="font-medium text-slate-900">{page}</span> of <span className="font-medium text-slate-900">{totalPages}</span>
+                            <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50/50">
+                                <div className="text-xs text-slate-500 font-bold">
+                                    <span className="text-slate-900">{(page-1)*15 + 1}-{Math.min(page*15, totalContacts)}</span> OF {totalContacts}
                                 </div>
-                                <div className="flex items-center space-x-2">
-                                    <Button variant="outline" size="sm" disabled={page === 1} onClick={() => handlePageChange(page - 1)}>Previous</Button>
-                                    <Button variant="outline" size="sm" disabled={page === totalPages} onClick={() => handlePageChange(page + 1)}>Next</Button>
+                                <div className="flex items-center gap-2">
+                                    <Button 
+                                        variant="outline" 
+                                        size="sm" 
+                                        disabled={page === 1} 
+                                        onClick={() => handlePageChange(page - 1)}
+                                        className="h-8 px-3 text-[11px] font-bold bg-white"
+                                    >
+                                        <ChevronLeft size={14} className="mr-1" />
+                                        PREV
+                                    </Button>
+                                    <div className="w-8 h-8 flex items-center justify-center rounded bg-blue-600 text-white text-xs font-bold shadow-sm">{page}</div>
+                                    <Button 
+                                        variant="outline" 
+                                        size="sm" 
+                                        disabled={page === totalPages} 
+                                        onClick={() => handlePageChange(page + 1)}
+                                        className="h-8 px-3 text-[11px] font-bold bg-white"
+                                    >
+                                        NEXT
+                                        <ChevronRight size={14} className="ml-1" />
+                                    </Button>
                                 </div>
                             </div>
                         )}

@@ -1408,3 +1408,12 @@ export async function deleteEmailMessage(id, teamId) {
   const res = await fetch(`/api/settings/email/messages/${id}?${params.toString()}`, { method: 'DELETE', headers });
   return res.json();
 }
+export async function syncXoloxContacts(page = 1, limit = 100) {
+  const headers = getAuthHeaders();
+  const res = await fetch('/api/contacts/sync', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ page, limit })
+  });
+  return res.json();
+}

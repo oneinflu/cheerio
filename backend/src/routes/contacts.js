@@ -144,4 +144,125 @@ router.delete('/:id', auth.requireRole('admin', 'supervisor'), async (req, res, 
     }
 });
 
+const axios = require('axios');
+const crypto = require('crypto');
+
+/**
+ * POST /api/contacts/sync
+ * Syncs contacts from XOLOX API for a specific page and limit.
+ */
+router.post('/sync', auth.requireRole('admin', 'supervisor'), async (req, res, next) => {
+    try {
+        const page = parseInt(req.body.page) || 1;
+        const limit = parseInt(req.body.limit) || 100;
+
+        console.log(`[Sync] Starting sync for page ${page}, limit ${limit}`);
+
+        // 1. Get/Create XOLOX channel
+        let channelId;
+        const channelRes = await db.query("SELECT id FROM channels WHERE name = 'XOLOX' LIMIT 1");
+        if (channelRes.rowCount > 0) {
+            channelId = channelRes.rows[0].id;
+        } else {
+            console.log('[Sync] XOLOX channel not found, creating one...');
+            // Providing a UUID just in case the table doesn't have a default generator
+            const newChannelId = crypto.randomUUID();
+            const newChannelRes = await db.query(
+                "INSERT INTO channels (id, name, type, external_id, active) VALUES ($1, $2, $3, $4, $5) RETURNING id",
+                [newChannelId, 'XOLOX', 'raw', 'xolox_external', true]
+            );
+            channelId = newChannelRes.rows[0].id;
+        }
+
+        // 2. Fetch from XOLOX
+        const xoloxUrl = `https://api.starforze.com/api/leads?page=${page}&limit=${limit}`;
+        let xData;
+        try {
+            const xResponse = await axios.get(xoloxUrl, {
+                headers: { 'Content-Type': 'application/json' },
+                timeout: 10000 // 10s timeout
+            });
+            xData = xResponse.data;
+        } catch (fetchErr) {
+            console.error('[Sync] XOLOX API call failed:', fetchErr.message);
+            return res.status(502).json({
+                success: false,
+                message: 'Failed to reach XOLOX API',
+                error: fetchErr.message
+            });
+        }
+
+        if (!xData.success || !xData.data || !Array.isArray(xData.data.data)) {
+            console.error('[Sync] Invalid XOLOX response structure:', JSON.stringify(xData).substring(0, 200));
+            return res.status(502).json({ 
+                success: false, 
+                message: 'Invalid response structure from XOLOX',
+            });
+        }
+
+        const leads = xData.data.data;
+        console.log(`[Sync] Processing ${leads.length} leads...`);
+        const results = { updated: 0, created: 0, errors: 0 };
+
+        // 3. Upsert into contacts
+        for (const lead of leads) {
+            try {
+                const externalId = lead.mobile; 
+                if (!externalId) continue;
+
+                const displayName = lead.name || 'Unknown';
+                const profile = {
+                    email: lead.email,
+                    leadId: lead.leadId,
+                    leadStage: lead.leadStage,
+                    course: lead.courseId?.name,
+                    assignedTo: lead.assignedTo ? `${lead.assignedTo.firstname} ${lead.assignedTo.lastname}` : null,
+                    leadSource: lead.leadSource,
+                    leadSubSource: lead.leadSubSource,
+                    studyMode: lead.studyMode,
+                    syncedAt: new Date().toISOString(),
+                    xoloxData: lead
+                };
+
+                const upsertQuery = `
+                    INSERT INTO contacts (channel_id, external_id, display_name, profile, updated_at)
+                    VALUES ($1, $2, $3, $4, NOW())
+                    ON CONFLICT (channel_id, external_id) 
+                    DO UPDATE SET 
+                        display_name = EXCLUDED.display_name,
+                        profile = EXCLUDED.profile,
+                        updated_at = NOW()
+                    RETURNING (xmax = 0) AS inserted;
+                `;
+                const upsertRes = await db.query(upsertQuery, [channelId, externalId, displayName, profile]);
+                
+                if (upsertRes.rows[0]?.inserted) {
+                    results.created++;
+                } else {
+                    results.updated++;
+                }
+            } catch (err) {
+                results.errors++;
+            }
+        }
+
+        console.log(`[Sync] Sync completed: Created ${results.created}, Updated ${results.updated}, Errors ${results.errors}`);
+
+        return res.json({
+            success: true,
+            message: `Sync completed for page ${page}`,
+            data: {
+                totalInPage: leads.length,
+                ...results,
+                xoloxTotalCount: xData.data.count
+            }
+        });
+    } catch (err) {
+        console.error('[Sync] Fatal Error:', err);
+        next(err);
+    }
+});
+
 module.exports = router;
+
+

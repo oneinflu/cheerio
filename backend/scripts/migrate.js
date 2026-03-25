@@ -159,7 +159,7 @@ async function runMigrations() {
         } else {
           console.log('[migrate] automation_rules table already exists.');
         }
-        
+
         // Check for attributes column in users
         const attributesColRes = await client.query(`
           SELECT column_name FROM information_schema.columns
@@ -559,7 +559,7 @@ async function runMigrations() {
 
         // --- NEW REPAIRS FOR WORKFLOWS AND TEMPLATES ---
         console.log('[migrate] Running automated repairs for messages extra columns/enums...');
-        
+
         // 1. Add 'template' to the enum
         try {
           await client.query("ALTER TYPE message_content_type ADD VALUE IF NOT EXISTS 'template'");
