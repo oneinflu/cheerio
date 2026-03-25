@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Download, Upload, Plus, Search, MoreHorizontal, User, MessageCircle, Instagram, Database, X, Trash2, RefreshCcw, Filter, ChevronLeft, ChevronRight, ArrowRight, ExternalLink } from 'lucide-react';
+import { Download, Upload, Plus, Search, MoreHorizontal, User, MessageCircle, Instagram, Database, X, Trash2, RefreshCcw, Filter, ChevronLeft, ChevronRight, ChevronDown, ArrowRight, ExternalLink } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Modal } from './ui/Modal';
 import { getContacts, getContactChannels, addContact, deleteContact, syncXoloxContacts, getXoloxSyncStatus } from '../api';
@@ -247,6 +247,7 @@ export default function ContactsPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [page, setPage] = useState(1);
+    const [rowsPerPage, setRowsPerPage] = useState(15);
     const [totalPages, setTotalPages] = useState(1);
     const [totalContacts, setTotalContacts] = useState(0);
 
@@ -278,10 +279,10 @@ export default function ContactsPage() {
         actions: true
     });
 
-    const fetchContacts = async (pageNum, search, activeFilters = filters) => {
+    const fetchContacts = async (pageNum, search, activeFilters = filters, limit = rowsPerPage) => {
         setIsLoading(true);
         try {
-            const res = await getContacts(pageNum, 15, search, activeFilters);
+            const res = await getContacts(pageNum, limit, search, activeFilters);
             if (res.success) {
                 setContacts(res.contacts);
                 setTotalPages(res.pagination.totalPages);
@@ -659,34 +660,72 @@ export default function ContactsPage() {
                         </div>
 
                         {/* Pagination */}
-                        {!isLoading && totalPages > 1 && (
+                        {!isLoading && totalContacts > 0 && (
                             <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50/50">
-                                <div className="text-xs text-slate-500 font-bold">
-                                    <span className="text-slate-900">{(page-1)*15 + 1}-{Math.min(page*15, totalContacts)}</span> OF {totalContacts}
+                                <div className="flex items-center gap-6">
+                                    <div className="text-xs text-slate-500 font-bold uppercase tracking-wider">
+                                        <span className="text-slate-900">{(page-1)*rowsPerPage + 1}-{Math.min(page*rowsPerPage, totalContacts)}</span> OF {totalContacts}
+                                    </div>
+                                    
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Rows:</span>
+                                        <select 
+                                            value={rowsPerPage}
+                                            onChange={(e) => {
+                                                const newLimit = Number(e.target.value);
+                                                setRowsPerPage(newLimit);
+                                                setPage(1);
+                                                fetchContacts(1, searchTerm, filters, newLimit);
+                                            }}
+                                            className="bg-transparent text-[11px] font-bold text-slate-600 outline-none cursor-pointer border-b border-slate-300 focus:border-blue-500 pb-0.5"
+                                        >
+                                            <option value={10}>10</option>
+                                            <option value={15}>15</option>
+                                            <option value={25}>25</option>
+                                            <option value={50}>50</option>
+                                            <option value={100}>100</option>
+                                        </select>
+                                    </div>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                    <Button 
-                                        variant="outline" 
-                                        size="sm" 
-                                        disabled={page === 1} 
-                                        onClick={() => handlePageChange(page - 1)}
-                                        className="h-8 px-3 text-[11px] font-bold bg-white"
-                                    >
-                                        <ChevronLeft size={14} className="mr-1" />
-                                        PREV
-                                    </Button>
-                                    <div className="w-8 h-8 flex items-center justify-center rounded bg-blue-600 text-white text-xs font-bold shadow-sm">{page}</div>
-                                    <Button 
-                                        variant="outline" 
-                                        size="sm" 
-                                        disabled={page === totalPages} 
-                                        onClick={() => handlePageChange(page + 1)}
-                                        className="h-8 px-3 text-[11px] font-bold bg-white"
-                                    >
-                                        NEXT
-                                        <ChevronRight size={14} className="ml-1" />
-                                    </Button>
-                                </div>
+
+                                {totalPages > 1 && (
+                                    <div className="flex items-center gap-2">
+                                        <Button 
+                                            variant="outline" 
+                                            size="sm" 
+                                            disabled={page === 1} 
+                                            onClick={() => handlePageChange(page - 1)}
+                                            className="h-8 px-3 text-[11px] font-bold bg-white border-slate-200 hover:bg-slate-50 text-slate-600"
+                                        >
+                                            <ChevronLeft size={14} className="mr-1" />
+                                            PREV
+                                        </Button>
+                                        
+                                        <div className="relative group/page">
+                                            <select 
+                                                value={page}
+                                                onChange={(e) => handlePageChange(Number(e.target.value))}
+                                                className="h-8 pl-3 pr-8 bg-blue-600 text-white text-xs font-bold rounded shadow-sm appearance-none cursor-pointer outline-none hover:bg-blue-700 transition-colors border-none ring-offset-2 focus:ring-2 focus:ring-blue-500"
+                                            >
+                                                {Array.from({ length: Math.min(totalPages, 5000) }, (_, i) => i + 1).map(p => (
+                                                    <option key={p} value={p} className="bg-white text-slate-900 font-semibold">{p}</option>
+                                                ))}
+                                            </select>
+                                            <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-white/80 pointer-events-none group-hover/page:text-white transition-colors" />
+                                        </div>
+
+                                        <Button 
+                                            variant="outline" 
+                                            size="sm" 
+                                            disabled={page === totalPages} 
+                                            onClick={() => handlePageChange(page + 1)}
+                                            className="h-8 px-3 text-[11px] font-bold bg-white border-slate-200 hover:bg-slate-50 text-slate-600"
+                                        >
+                                            NEXT
+                                            <ChevronRight size={14} className="ml-1" />
+                                        </Button>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>
