@@ -179,8 +179,13 @@ router.post('/sync', auth.requireRole('admin', 'supervisor'), async (req, res, n
         const xoloxUrl = `https://api.starforze.com/api/leads?page=${page}&limit=${limit}`;
         let xData;
         try {
+            // Forward the Bearer token from the original request
+            const authHeader = req.headers.authorization;
             const xResponse = await axios.get(xoloxUrl, {
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': authHeader // Pass same token to XOLOX
+                },
                 timeout: 30000 // 30s timeout for large data
             });
             xData = xResponse.data;
