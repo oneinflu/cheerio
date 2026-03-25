@@ -241,7 +241,7 @@ async function updateWorkflow(id, data) {
 
 async function runStageWorkflows(stageId, phoneNumber) {
   const res = await db.query(
-    `SELECT lsw.workflow_id, lsw.delay_minutes, lsw.is_independent, w.steps
+    `SELECT lsw.workflow_id, lsw.delay_minutes, lsw.is_independent, lsw.target_time, w.steps
      FROM lead_stage_workflows lsw
      JOIN workflows w ON w.id = lsw.workflow_id
      WHERE lsw.stage_id = $1 AND w.status = 'active'
@@ -322,6 +322,27 @@ async function runStageWorkflows(stageId, phoneNumber) {
         console.log(`[runStageWorkflows] Delaying workflow ${wfId} for ${row.delay_minutes} mins for ${phoneNumber}`);
         await sleep(row.delay_minutes * 60 * 1000);
       }
+      
+      if (row.target_time) {
+        const [targetH, targetM] = row.target_time.split(':').map(Number);
+        if (!isNaN(targetH)) {
+          const now = new Date();
+          let targetDate = new Date(now);
+          targetDate.setHours(targetH, targetM || 0, 0, 0);
+          
+          if (targetDate < now) {
+            // If the time has already passed today, wait until tomorrow
+            targetDate.setDate(targetDate.getDate() + 1);
+          }
+          
+          const waitMs = targetDate.getTime() - now.getTime();
+          if (waitMs > 0) {
+            console.log(`[runStageWorkflows] Waiting ${Math.round(waitMs/1000)}s until ${row.target_time} for ${phoneNumber}`);
+            await sleep(waitMs);
+          }
+        }
+      }
+
       await runWorkflow(wfId, phoneNumber);
     } catch (e) {
       console.error(`[runStageWorkflows] Workflow ${wfId} failed: ${e.message}`);

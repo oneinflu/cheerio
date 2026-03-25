@@ -791,12 +791,12 @@ export async function putContact(id, data) {
   return res.json();
 }
 
-export async function updateWorkflowDelay(stageId, workflowId, delayMinutes, isIndependent) {
+export async function updateWorkflowDelay(stageId, workflowId, delayMinutes, isIndependent, targetTime) {
   const headers = getAuthHeaders();
   const res = await fetch(`/api/workflows/kanban/delay`, {
     method: "PUT",
     headers,
-    body: JSON.stringify({ stageId, workflowId, delayMinutes, isIndependent }),
+    body: JSON.stringify({ stageId, workflowId, delayMinutes, isIndependent, targetTime }),
   });
   return res.json();
 }

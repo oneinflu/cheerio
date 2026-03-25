@@ -31,11 +31,12 @@ const formatDelay = (mins) => {
   return parts.join(' ');
 };
 
-function DelayModal({ isOpen, onClose, onSubmit, currentDelay, isIndependent: initialIndependent }) {
+function DelayModal({ isOpen, onClose, onSubmit, currentDelay, isIndependent: initialIndependent, targetTime: initialTargetTime }) {
   const [d, setD] = useState(0);
   const [h, setH] = useState(0);
   const [m, setM] = useState(0);
   const [isIndependent, setIsIndependent] = useState(false);
+  const [targetTime, setTargetTime] = useState('');
 
   useEffect(() => {
     if (isOpen) {
@@ -43,8 +44,9 @@ function DelayModal({ isOpen, onClose, onSubmit, currentDelay, isIndependent: in
       setH(Math.floor(((currentDelay || 0) % (24 * 60)) / 60));
       setM((currentDelay || 0) % 60);
       setIsIndependent(!!initialIndependent);
+      setTargetTime(initialTargetTime || '');
     }
-  }, [isOpen, currentDelay, initialIndependent]);
+  }, [isOpen, currentDelay, initialIndependent, initialTargetTime]);
 
   return (
     <Modal
@@ -114,6 +116,29 @@ function DelayModal({ isOpen, onClose, onSubmit, currentDelay, isIndependent: in
                 />
               </div>
             </div>
+            
+            <div className="space-y-3 pt-4 border-t border-slate-100">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <div className="text-xs font-bold text-slate-800 uppercase tracking-tight">Daily Execution Window</div>
+                  <div className="text-[10px] text-slate-500 font-medium">Wait until this time of day (optional)</div>
+                </div>
+                {targetTime && (
+                  <button 
+                    onClick={() => setTargetTime('')}
+                    className="text-[10px] text-red-500 font-bold hover:underline"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+              <Input 
+                type="time" 
+                value={targetTime}
+                onChange={(e) => setTargetTime(e.target.value)}
+                className="bg-slate-50 border-slate-200 font-mono font-bold text-slate-700"
+              />
+            </div>
           </>
         ) : (
           <div className="p-4 bg-purple-50 border border-purple-100 rounded-lg text-xs text-purple-700 leading-relaxed italic text-center">
@@ -124,14 +149,17 @@ function DelayModal({ isOpen, onClose, onSubmit, currentDelay, isIndependent: in
         <div className="flex justify-between items-center py-2 px-1 border-t border-slate-100 pt-6">
           <div className="text-xs text-slate-400 font-medium italic">
             {!isIndependent ? (
-              <>Total wait: <span className="text-blue-600 font-bold not-italic">{formatDelay(d * 1440 + h * 60 + m)}</span></>
+              <div className="flex flex-col gap-0.5">
+                <div>Wait: <span className="text-blue-600 font-bold not-italic">{formatDelay(d * 1440 + h * 60 + m)}</span></div>
+                {targetTime && <div className="text-[10px] text-slate-400">Trigger at: <span className="text-slate-700 font-bold not-italic font-mono">{targetTime}</span></div>}
+              </div>
             ) : (
               <span className="text-purple-600 font-bold not-italic font-mono uppercase tracking-tighter">Unlinked From Sequence</span>
             )}
           </div>
           <div className="flex gap-2">
             <Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button>
-            <Button size="sm" onClick={() => onSubmit(d * 1440 + h * 60 + m, isIndependent)}>Save Orchestration</Button>
+            <Button size="sm" onClick={() => onSubmit(d * 1440 + h * 60 + m, isIndependent, targetTime || null)}>Save Orchestration</Button>
           </div>
         </div>
       </div>
@@ -464,7 +492,7 @@ export default function WorkflowsKanban({ currentUser, onOpenBuilder }) {
   const [openStageMenuId, setOpenStageMenuId] = useState(null);
   const [openWorkflowMenuId, setOpenWorkflowMenuId] = useState(null);
   const [editWorkflow, setEditWorkflow] = useState(null);
-  const [delayModal, setDelayModal] = useState({ isOpen: false, stageId: null, workflowId: null, currentDelay: 0, isIndependent: false });
+  const [delayModal, setDelayModal] = useState({ isOpen: false, stageId: null, workflowId: null, currentDelay: 0, isIndependent: false, targetTime: null });
   const [viewMode, setViewMode] = useState('kanban'); // 'kanban' or 'table'
   const [filterQuery, setFilterQuery] = useState('');
 
@@ -571,10 +599,10 @@ export default function WorkflowsKanban({ currentUser, onOpenBuilder }) {
     }
   };
 
-  const handleUpdateDelay = async (delayMinutes, isIndependent) => {
+  const handleUpdateDelay = async (delayMinutes, isIndependent, targetTime) => {
     try {
-      await updateWorkflowDelay(delayModal.stageId, delayModal.workflowId, delayMinutes, isIndependent);
-      setDelayModal({ isOpen: false, stageId: null, workflowId: null, currentDelay: 0, isIndependent: false });
+      await updateWorkflowDelay(delayModal.stageId, delayModal.workflowId, delayMinutes, isIndependent, targetTime);
+      setDelayModal({ isOpen: false, stageId: null, workflowId: null, currentDelay: 0, isIndependent: false, targetTime: null });
       await load();
     } catch (e) {
       console.error('Failed to update delay:', e);
@@ -1036,21 +1064,25 @@ export default function WorkflowsKanban({ currentUser, onOpenBuilder }) {
                               stageId: col.stage.id,
                               workflowId: col.workflows[idx + 1].id,
                               currentDelay: col.workflows[idx + 1].delayMinutes,
-                              isIndependent: col.workflows[idx + 1].isIndependent
+                              isIndependent: col.workflows[idx + 1].isIndependent,
+                              targetTime: col.workflows[idx + 1].targetTime
                             });
                           }}
                           className={cn(
                             "absolute flex items-center gap-1.5 px-3 py-1.5 rounded-full border shadow-sm transition-all z-10",
                             col.workflows[idx + 1].isIndependent 
                               ? "bg-slate-100 border-slate-200 text-slate-400 hover:bg-white hover:border-purple-300 hover:text-purple-600"
-                              : col.workflows[idx + 1].delayMinutes > 0 
+                              : (col.workflows[idx + 1].delayMinutes > 0 || col.workflows[idx + 1].targetTime)
                                 ? "bg-blue-600 border-blue-700 text-white hover:bg-blue-700"
                                 : "bg-white border-slate-200 text-slate-400 hover:border-blue-300 hover:text-blue-600 hover:scale-105"
                           )}
                         >
-                          <Clock size={12} className={(!col.workflows[idx + 1].isIndependent && col.workflows[idx + 1].delayMinutes > 0) ? "animate-pulse" : ""} />
+                          <Clock size={12} className={(!col.workflows[idx + 1].isIndependent && (col.workflows[idx + 1].delayMinutes > 0 || col.workflows[idx + 1].targetTime)) ? "animate-pulse" : ""} />
                           <span className="text-[10px] font-black uppercase tracking-widest leading-none">
-                            {col.workflows[idx + 1].isIndependent ? 'No Link' : formatDelay(col.workflows[idx + 1].delayMinutes)}
+                            {col.workflows[idx + 1].isIndependent 
+                              ? 'No Link' 
+                              : (col.workflows[idx + 1].delayMinutes > 0 ? formatDelay(col.workflows[idx + 1].delayMinutes) : '') + 
+                                (col.workflows[idx + 1].targetTime ? (col.workflows[idx + 1].delayMinutes > 0 ? ' @ ' : '@ ') + col.workflows[idx + 1].targetTime : (col.workflows[idx + 1].delayMinutes === 0 ? 'Instant' : ''))}
                           </span>
                         </button>
                       </div>
@@ -1113,6 +1145,7 @@ export default function WorkflowsKanban({ currentUser, onOpenBuilder }) {
         onSubmit={handleUpdateDelay}
         currentDelay={delayModal.currentDelay}
         isIndependent={delayModal.isIndependent}
+        targetTime={delayModal.targetTime}
       />
     </div>
   );

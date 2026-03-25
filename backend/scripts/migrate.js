@@ -682,6 +682,18 @@ async function runMigrations() {
           console.log('[migrate] Added is_independent.');
         }
 
+        // Ensure target_time column exists in lead_stage_workflows
+        const targetColRes = await client.query(`
+          SELECT column_name
+          FROM information_schema.columns
+          WHERE table_name='lead_stage_workflows' AND column_name='target_time'
+        `);
+        if (targetColRes.rowCount === 0) {
+          console.log('[migrate] Adding target_time to lead_stage_workflows...');
+          await client.query('ALTER TABLE lead_stage_workflows ADD COLUMN IF NOT EXISTS target_time TEXT');
+          console.log('[migrate] Added target_time.');
+        }
+
         return;
 
 
