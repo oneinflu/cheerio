@@ -165,11 +165,12 @@ router.post('/sync', auth.requireRole('admin', 'supervisor'), async (req, res, n
             channelId = channelRes.rows[0].id;
         } else {
             console.log('[Sync] XOLOX channel not found, creating one...');
-            // Providing a UUID just in case the table doesn't have a default generator
+            // The database only supports 'whatsapp' and 'instagram' for channel_type.
+            // Using 'whatsapp' ensures compatibility with the ENUM.
             const newChannelId = crypto.randomUUID();
             const newChannelRes = await db.query(
                 "INSERT INTO channels (id, name, type, external_id, active) VALUES ($1, $2, $3, $4, $5) RETURNING id",
-                [newChannelId, 'XOLOX', 'raw', 'xolox_external', true]
+                [newChannelId, 'XOLOX', 'whatsapp', 'xolox_external', true]
             );
             channelId = newChannelRes.rows[0].id;
         }
@@ -180,7 +181,7 @@ router.post('/sync', auth.requireRole('admin', 'supervisor'), async (req, res, n
         try {
             const xResponse = await axios.get(xoloxUrl, {
                 headers: { 'Content-Type': 'application/json' },
-                timeout: 10000 // 10s timeout
+                timeout: 30000 // 30s timeout for large data
             });
             xData = xResponse.data;
         } catch (fetchErr) {

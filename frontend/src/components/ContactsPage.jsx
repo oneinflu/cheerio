@@ -5,10 +5,10 @@ import { Modal } from './ui/Modal';
 import { getContacts, getContactChannels, addContact, deleteContact, syncXoloxContacts } from '../api';
 
 // Small helper to pick the right icon for a channel type
-function ChannelIcon({ type }) {
+function ChannelIcon({ type, name }) {
+    if (name === 'XOLOX') return <Database size={14} className="text-blue-500" />;
     if (type === 'whatsapp') return <MessageCircle size={14} className="text-green-600" />;
     if (type === 'instagram') return <Instagram size={14} className="text-pink-600" />;
-    if (type === 'raw') return <Database size={14} className="text-slate-500" />;
     return <User size={14} className="text-slate-500" />;
 }
 
@@ -19,6 +19,7 @@ const CHANNEL_TYPE_LABELS = {
 };
 
 function channelLabel(ch) {
+    if (ch.name === 'XOLOX') return 'XOLOX – API';
     return `${CHANNEL_TYPE_LABELS[ch.type] || ch.type} – ${ch.name}`;
 }
 
@@ -361,6 +362,9 @@ export default function ContactsPage() {
                                                                 <span className="font-bold text-slate-900 truncate max-w-[180px]">
                                                                     {contact.display_name || 'Anonymous'}
                                                                 </span>
+                                                                {p.leadId && (
+                                                                    <span className="text-[10px] text-blue-600 font-bold bg-blue-50 px-1 rounded-sm w-fit mb-0.5">ID: {p.leadId}</span>
+                                                                )}
                                                                 <span className="text-[11px] text-slate-400 font-medium truncate max-w-[180px]">
                                                                     {p.email || 'No email'}
                                                                 </span>
@@ -371,9 +375,9 @@ export default function ContactsPage() {
                                                         <div className="flex flex-col">
                                                             <span className="text-xs font-bold text-slate-700">{contact.external_id}</span>
                                                             <div className="flex items-center gap-1.5 mt-1">
-                                                                <ChannelIcon type={contact.channel_type} />
+                                                                <ChannelIcon type={contact.channel_type} name={contact.channel_name} />
                                                                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
-                                                                    {CHANNEL_TYPE_LABELS[contact.channel_type] || contact.channel_type}
+                                                                    {contact.channel_name === 'XOLOX' ? 'Synced (API)' : (CHANNEL_TYPE_LABELS[contact.channel_type] || contact.channel_type)}
                                                                 </span>
                                                             </div>
                                                         </div>
