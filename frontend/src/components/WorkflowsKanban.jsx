@@ -14,7 +14,7 @@ import {
   getLabels,
   updateWorkflowDelay,
 } from '../api';
-import { Plus, X, GripVertical, MoreHorizontal, Search, LayoutGrid, List, Clock } from 'lucide-react';
+import { Plus, X, GripVertical, MoreHorizontal, Search, LayoutGrid, List, Clock, Eye, Pencil, Trash2 } from 'lucide-react';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from './ui/Table';
 
 const formatDelay = (mins) => {
