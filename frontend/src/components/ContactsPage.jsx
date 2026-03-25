@@ -68,24 +68,23 @@ function ContactDetailsModal({ contact, isOpen, onClose, onDelete }) {
                                 <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 text-[10px] font-bold uppercase tracking-wider border border-slate-200">
                                     {contact.channel_name}
                                 </span>
-                                {p.leadStage && (
+                                {(contact.lead_stage || p.leadStage) && (
                                     <span className="px-2 py-0.5 rounded-full bg-orange-100 text-orange-600 text-[10px] font-bold uppercase tracking-wider border border-orange-200">
-                                        {p.leadStage}
+                                        {contact.lead_stage || p.leadStage}
                                     </span>
                                 )}
                             </div>
                         </div>
                     </div>
 
-                    {/* Quick Stats */}
                     <div className="grid grid-cols-2 gap-4">
                         <div className="p-4 rounded-xl bg-blue-50/50 border border-blue-100/50 text-center">
                             <p className="text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-1">Assigned Agent</p>
-                            <p className="text-sm font-bold text-slate-700">{contact.assignee_name || p.assignedTo || 'Unassigned'}</p>
+                            <p className="text-sm font-bold text-slate-700">{contact.assignee_name || contact.assigned_to || p.assignedTo || 'Unassigned'}</p>
                         </div>
                         <div className="p-4 rounded-xl bg-purple-50/50 border border-purple-100/50 text-center">
                             <p className="text-[10px] font-bold text-purple-400 uppercase tracking-widest mb-1">Selected Course</p>
-                            <p className="text-sm font-bold text-slate-700">{p.course || 'None'}</p>
+                            <p className="text-sm font-bold text-slate-700">{contact.course || p.course || 'None'}</p>
                         </div>
                     </div>
 
@@ -574,12 +573,12 @@ export default function ContactsPage() {
                                                     {visibleColumns.contact && (
                                                         <td className="px-6 py-4">
                                                             <div className="flex items-center gap-3">
-                                                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 font-bold text-sm border-2 ${p.syncedAt ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-slate-50 text-slate-600 border-slate-100'}`}>
+                                                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 font-bold text-sm border-2 ${(contact.last_sync_at || p.syncedAt) ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-slate-50 text-slate-600 border-slate-100'}`}>
                                                                     {contact.display_name?.charAt(0).toUpperCase() || <User size={18} />}
                                                                 </div>
                                                                 <div className="flex flex-col min-w-0 cursor-pointer group/name" onClick={() => setSelectedContact(contact)}>
                                                                     <span className="font-bold text-slate-900 truncate max-w-[150px] group-hover/name:text-blue-600 transition-colors">{contact.display_name || 'Anonymous'}</span>
-                                                                    <span className="text-[11px] text-slate-400 font-medium truncate max-w-[150px]">{p.email || 'No email'}</span>
+                                                                    <span className="text-[11px] text-slate-400 font-medium truncate max-w-[150px]">{contact.email || p.email || 'No email'}</span>
                                                                 </div>
                                                             </div>
                                                         </td>
@@ -598,29 +597,29 @@ export default function ContactsPage() {
                                                         <td className="px-6 py-4">
                                                             <div className="flex flex-col">
                                                                 <span className="text-xs font-bold text-slate-700">{contact.external_id}</span>
-                                                                {p.leadId && <span className="text-[9px] text-blue-500 font-bold">ID: {p.leadId}</span>}
+                                                                {(contact.lead_id || p.leadId) && <span className="text-[9px] text-blue-500 font-bold">ID: {contact.lead_id || p.leadId}</span>}
                                                             </div>
                                                         </td>
                                                     )}
                                                     {visibleColumns.leadStage && (
-                                                        <td className="px-6 py-4">
-                                                            {p.leadStage ? (
+                                                        <td className="px-6 py-4 text-center">
+                                                            {(contact.lead_stage || p.leadStage) ? (
                                                                 <div className="inline-flex items-center px-2 py-1 rounded bg-amber-50 text-amber-700 text-[10px] font-bold border border-amber-100 uppercase tracking-tight">
-                                                                    {p.leadStage}
+                                                                    {contact.lead_stage || p.leadStage}
                                                                 </div>
                                                             ) : <span className="text-slate-300 italic text-[10px]">None</span>}
                                                         </td>
                                                     )}
                                                     {visibleColumns.course && (
                                                         <td className="px-6 py-4">
-                                                            <span className="text-xs font-semibold text-slate-600 truncate max-w-[100px] block">{p.course || '—'}</span>
+                                                            <span className="text-xs font-semibold text-slate-600 truncate max-w-[100px] block">{contact.course || p.course || '—'}</span>
                                                         </td>
                                                     )}
                                                     {visibleColumns.assignedTo && (
                                                         <td className="px-6 py-4">
                                                             <div className="flex items-center gap-2">
-                                                                <div className="w-5 h-5 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-[9px] font-bold text-slate-500">{(contact.assignee_name || p.assignedTo || 'U').charAt(0)}</div>
-                                                                <span className="text-xs font-medium text-slate-700 truncate max-w-[80px]">{contact.assignee_name || p.assignedTo || 'Unassigned'}</span>
+                                                                <div className="w-5 h-5 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-[9px] font-bold text-slate-500">{(contact.assignee_name || contact.assigned_to || p.assignedTo || 'U').charAt(0)}</div>
+                                                                <span className="text-xs font-medium text-slate-700 truncate max-w-[80px]">{contact.assignee_name || contact.assigned_to || p.assignedTo || 'Unassigned'}</span>
                                                             </div>
                                                         </td>
                                                     )}

@@ -607,10 +607,16 @@ async function runMigrations() {
           console.log('[migrate] Adding lead tracking columns to contacts...');
           await client.query('BEGIN');
           await runSQLFile(client, path.join(__dirname, '..', 'db', 'migrations', '0029_add_contact_lead_columns.sql'));
+          await runSQLFile(client, path.join(__dirname, '..', 'db', 'migrations', '0030_backfill_contact_columns.sql'));
           await client.query('COMMIT');
-          console.log('[migrate] Applied contact lead tracking migration.');
+          console.log('[migrate] Applied contact lead tracking and backfill migration.');
         } else {
-          console.log('[migrate] Contacts table lead schema up to date.');
+          // Even if columns exist, run the backfill once to be sure
+          console.log('[migrate] Contacts table lead schema exists. Ensuring backfill is complete...');
+          await client.query('BEGIN');
+          await runSQLFile(client, path.join(__dirname, '..', 'db', 'migrations', '0030_backfill_contact_columns.sql'));
+          await client.query('COMMIT');
+          console.log('[migrate] Data backfill check finished.');
         }
 
         return;
