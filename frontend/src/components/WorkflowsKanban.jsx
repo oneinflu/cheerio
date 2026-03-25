@@ -31,73 +31,107 @@ const formatDelay = (mins) => {
   return parts.join(' ');
 };
 
-function DelayModal({ isOpen, onClose, onSubmit, currentDelay }) {
+function DelayModal({ isOpen, onClose, onSubmit, currentDelay, isIndependent: initialIndependent }) {
   const [d, setD] = useState(0);
   const [h, setH] = useState(0);
   const [m, setM] = useState(0);
+  const [isIndependent, setIsIndependent] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
       setD(Math.floor((currentDelay || 0) / (24 * 60)));
       setH(Math.floor(((currentDelay || 0) % (24 * 60)) / 60));
       setM((currentDelay || 0) % 60);
+      setIsIndependent(!!initialIndependent);
     }
-  }, [isOpen, currentDelay]);
+  }, [isOpen, currentDelay, initialIndependent]);
 
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Set Workflow Delay"
+      title="Set Workflow Orchestration"
     >
       <div className="space-y-6 pt-2">
-        <div className="p-3 bg-blue-50 border border-blue-100 rounded-lg text-xs text-blue-700 leading-relaxed">
-          Specify how long to wait <strong>after</strong> the previous workflow finishes before starting this one. 
-          Use this to create a natural, sequential nurturing sequence.
+        <div className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-lg">
+          <div className="space-y-0.5">
+            <div className="text-sm font-bold text-slate-800">Auto-execute on stage entry</div>
+            <div className="text-[10px] text-slate-500 font-medium">Link this workflow to the previous one in the sequence.</div>
+          </div>
+          <button
+            onClick={() => setIsIndependent(!isIndependent)}
+            className={cn(
+              "relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2",
+              !isIndependent ? "bg-blue-600" : "bg-slate-300"
+            )}
+          >
+            <span
+              className={cn(
+                "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
+                !isIndependent ? "translate-x-6" : "translate-x-1"
+              )}
+            />
+          </button>
         </div>
-        
-        <div className="grid grid-cols-3 gap-4">
-          <div className="space-y-2">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">Days</label>
-            <Input 
-              type="number" 
-              min="0" 
-              value={d} 
-              onChange={(e) => setD(Math.max(0, parseInt(e.target.value || 0)))}
-              className="text-center font-bold text-slate-700" 
-            />
+
+        {!isIndependent ? (
+          <>
+            <div className="p-3 bg-blue-50 border border-blue-100 rounded-lg text-xs text-blue-700 leading-relaxed">
+              Specify how long to wait <strong>after</strong> the previous workflow finishes before starting this one. 
+            </div>
+            
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">Days</label>
+                <Input 
+                  type="number" 
+                  min="0" 
+                  value={d} 
+                  onChange={(e) => setD(Math.max(0, parseInt(e.target.value || 0)))}
+                  className="text-center font-bold text-slate-700" 
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">Hours</label>
+                <Input 
+                  type="number" 
+                  min="0" 
+                  max="23"
+                  value={h} 
+                  onChange={(e) => setH(Math.min(23, Math.max(0, parseInt(e.target.value || 0))))}
+                  className="text-center font-bold text-slate-700" 
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">Minutes</label>
+                <Input 
+                  type="number" 
+                  min="0" 
+                  max="59"
+                  value={m} 
+                  onChange={(e) => setM(Math.min(59, Math.max(0, parseInt(e.target.value || 0))))}
+                  className="text-center font-bold text-slate-700" 
+                />
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="p-4 bg-purple-50 border border-purple-100 rounded-lg text-xs text-purple-700 leading-relaxed italic text-center">
+            This workflow is now <strong>Independent</strong>. It will remain in this stage but won't trigger automatically when a lead enters.
           </div>
-          <div className="space-y-2">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">Hours</label>
-            <Input 
-              type="number" 
-              min="0" 
-              max="23"
-              value={h} 
-              onChange={(e) => setH(Math.min(23, Math.max(0, parseInt(e.target.value || 0))))}
-              className="text-center font-bold text-slate-700" 
-            />
-          </div>
-          <div className="space-y-2">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">Minutes</label>
-            <Input 
-              type="number" 
-              min="0" 
-              max="59"
-              value={m} 
-              onChange={(e) => setM(Math.min(59, Math.max(0, parseInt(e.target.value || 0))))}
-              className="text-center font-bold text-slate-700" 
-            />
-          </div>
-        </div>
+        )}
 
         <div className="flex justify-between items-center py-2 px-1 border-t border-slate-100 pt-6">
           <div className="text-xs text-slate-400 font-medium italic">
-            Total wait: <span className="text-blue-600 font-bold not-italic">{formatDelay(d * 1440 + h * 60 + m)}</span>
+            {!isIndependent ? (
+              <>Total wait: <span className="text-blue-600 font-bold not-italic">{formatDelay(d * 1440 + h * 60 + m)}</span></>
+            ) : (
+              <span className="text-purple-600 font-bold not-italic font-mono uppercase tracking-tighter">Unlinked From Sequence</span>
+            )}
           </div>
           <div className="flex gap-2">
             <Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button>
-            <Button size="sm" onClick={() => onSubmit(d * 1440 + h * 60 + m)}>Save Timing</Button>
+            <Button size="sm" onClick={() => onSubmit(d * 1440 + h * 60 + m, isIndependent)}>Save Orchestration</Button>
           </div>
         </div>
       </div>
@@ -430,7 +464,7 @@ export default function WorkflowsKanban({ currentUser, onOpenBuilder }) {
   const [openStageMenuId, setOpenStageMenuId] = useState(null);
   const [openWorkflowMenuId, setOpenWorkflowMenuId] = useState(null);
   const [editWorkflow, setEditWorkflow] = useState(null);
-  const [delayModal, setDelayModal] = useState({ isOpen: false, stageId: null, workflowId: null, currentDelay: 0 });
+  const [delayModal, setDelayModal] = useState({ isOpen: false, stageId: null, workflowId: null, currentDelay: 0, isIndependent: false });
   const [viewMode, setViewMode] = useState('kanban'); // 'kanban' or 'table'
   const [filterQuery, setFilterQuery] = useState('');
 
@@ -537,10 +571,10 @@ export default function WorkflowsKanban({ currentUser, onOpenBuilder }) {
     }
   };
 
-  const handleUpdateDelay = async (delayMinutes) => {
+  const handleUpdateDelay = async (delayMinutes, isIndependent) => {
     try {
-      await updateWorkflowDelay(delayModal.stageId, delayModal.workflowId, delayMinutes);
-      setDelayModal({ isOpen: false, stageId: null, workflowId: null, currentDelay: 0 });
+      await updateWorkflowDelay(delayModal.stageId, delayModal.workflowId, delayMinutes, isIndependent);
+      setDelayModal({ isOpen: false, stageId: null, workflowId: null, currentDelay: 0, isIndependent: false });
       await load();
     } catch (e) {
       console.error('Failed to update delay:', e);
@@ -956,13 +990,19 @@ export default function WorkflowsKanban({ currentUser, onOpenBuilder }) {
                         </div>
                       )}
 
-                      <div className="flex items-center gap-2 mt-2">
+                      <div className="flex items-center gap-1.5 mt-2">
                         <Badge 
                           variant="outline" 
-                          className={`text-[10px] px-1.5 py-0 h-5 ${w.status === 'active' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-slate-50 text-slate-500'}`}
+                          className={`text-[10px] px-1.5 py-0 h-5 shadow-sm ${w.status === 'active' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-slate-50 text-slate-500'}`}
                         >
                           {w.status}
                         </Badge>
+                        
+                        {w.isIndependent && (
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 bg-purple-50 text-purple-700 border-purple-200 uppercase tracking-tighter">
+                            Unlinked
+                          </Badge>
+                        )}
                         
                         {(w.steps?.triggerCourse || w.triggerCourse) && (
                           <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 bg-blue-50 text-blue-700 border-blue-200 truncate max-w-[80px]">
@@ -976,13 +1016,17 @@ export default function WorkflowsKanban({ currentUser, onOpenBuilder }) {
                           </Badge>
                         )}
                         
-                        <span className="text-[10px] text-slate-400 font-mono ml-auto">#{idx + 1}</span>
+                        <span className="text-[10px] text-slate-400 font-mono ml-auto opacity-60">#{idx + 1}</span>
                       </div>
                     </div>
 
                     {idx < col.workflows.length - 1 && (
                       <div className="flex flex-col items-center py-1 group/delay relative h-10 -my-1 justify-center">
-                        <div className="w-px h-full border-l-2 border-dashed border-slate-200 group-hover/delay:border-blue-200 transition-colors" />
+                        <div className={cn(
+                          "w-px h-full border-l-2 border-dashed transition-colors",
+                          col.workflows[idx + 1].isIndependent ? "border-transparent" : "border-slate-200 group-hover/delay:border-blue-200"
+                        )} />
+                        
                         <button
                           onClick={(e) => {
                             e.preventDefault();
@@ -991,19 +1035,22 @@ export default function WorkflowsKanban({ currentUser, onOpenBuilder }) {
                               isOpen: true,
                               stageId: col.stage.id,
                               workflowId: col.workflows[idx + 1].id,
-                              currentDelay: col.workflows[idx + 1].delayMinutes
+                              currentDelay: col.workflows[idx + 1].delayMinutes,
+                              isIndependent: col.workflows[idx + 1].isIndependent
                             });
                           }}
                           className={cn(
                             "absolute flex items-center gap-1.5 px-3 py-1.5 rounded-full border shadow-sm transition-all z-10",
-                            col.workflows[idx + 1].delayMinutes > 0 
-                              ? "bg-blue-600 border-blue-700 text-white hover:bg-blue-700"
-                              : "bg-white border-slate-200 text-slate-400 hover:border-blue-300 hover:text-blue-600 hover:scale-105"
+                            col.workflows[idx + 1].isIndependent 
+                              ? "bg-slate-100 border-slate-200 text-slate-400 hover:bg-white hover:border-purple-300 hover:text-purple-600"
+                              : col.workflows[idx + 1].delayMinutes > 0 
+                                ? "bg-blue-600 border-blue-700 text-white hover:bg-blue-700"
+                                : "bg-white border-slate-200 text-slate-400 hover:border-blue-300 hover:text-blue-600 hover:scale-105"
                           )}
                         >
-                          <Clock size={12} className={col.workflows[idx + 1].delayMinutes > 0 ? "animate-pulse" : ""} />
+                          <Clock size={12} className={(!col.workflows[idx + 1].isIndependent && col.workflows[idx + 1].delayMinutes > 0) ? "animate-pulse" : ""} />
                           <span className="text-[10px] font-black uppercase tracking-widest leading-none">
-                            {formatDelay(col.workflows[idx + 1].delayMinutes)}
+                            {col.workflows[idx + 1].isIndependent ? 'No Link' : formatDelay(col.workflows[idx + 1].delayMinutes)}
                           </span>
                         </button>
                       </div>
@@ -1065,6 +1112,7 @@ export default function WorkflowsKanban({ currentUser, onOpenBuilder }) {
         onClose={() => setDelayModal({ ...delayModal, isOpen: false })}
         onSubmit={handleUpdateDelay}
         currentDelay={delayModal.currentDelay}
+        isIndependent={delayModal.isIndependent}
       />
     </div>
   );

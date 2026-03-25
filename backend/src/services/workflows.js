@@ -241,7 +241,7 @@ async function updateWorkflow(id, data) {
 
 async function runStageWorkflows(stageId, phoneNumber) {
   const res = await db.query(
-    `SELECT lsw.workflow_id, lsw.delay_minutes, w.steps
+    `SELECT lsw.workflow_id, lsw.delay_minutes, lsw.is_independent, w.steps
      FROM lead_stage_workflows lsw
      JOIN workflows w ON w.id = lsw.workflow_id
      WHERE lsw.stage_id = $1 AND w.status = 'active'
@@ -281,6 +281,11 @@ async function runStageWorkflows(stageId, phoneNumber) {
   for (const row of res.rows) {
     const wfId = row.workflow_id;
     const steps = row.steps || {};
+
+    if (row.is_independent) {
+      console.log(`[runStageWorkflows] Skipping workflow ${wfId}: Marked as independent (unlinked)`);
+      continue;
+    }
     
     // Check label filter if present
     if (steps.triggerLabel) {
