@@ -658,6 +658,18 @@ async function runMigrations() {
            console.log('[migrate] Ensured all orphan workflows are visible in N2 Fresh Leads.');
         }
 
+        // Ensure delay_minutes column exists in lead_stage_workflows
+        const delayColRes = await client.query(`
+          SELECT column_name
+          FROM information_schema.columns
+          WHERE table_name='lead_stage_workflows' AND column_name='delay_minutes'
+        `);
+        if (delayColRes.rowCount === 0) {
+          console.log('[migrate] Adding delay_minutes to lead_stage_workflows...');
+          await client.query('ALTER TABLE lead_stage_workflows ADD COLUMN IF NOT EXISTS delay_minutes INTEGER DEFAULT 0');
+          console.log('[migrate] Added delay_minutes.');
+        }
+
         return;
 
 
