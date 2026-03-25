@@ -195,26 +195,49 @@ export default function ContactsPage() {
         }
     };
 
-    // Global Sync logic
-    const handleSyncXolox = async (pageNum = 1) => {
+    // Full-dataset sync logic
+    const handleSyncAll = async () => {
         setIsSyncing(true);
-        setSyncProgress(`Syncing page ${pageNum}...`);
         try {
-            const res = await syncXoloxContacts(pageNum, 100);
-            if (res.success) {
-                setSyncProgress(`Synced ${res.data.created + res.data.updated} contacts from page ${pageNum}.`);
-                // Refresh contacts list
-                fetchContacts(page, searchTerm);
-                
-                // Show a brief success message and clear after 3s
-                setTimeout(() => setSyncProgress(null), 3000);
-            } else {
-                alert(res.message || 'Sync failed');
-                setSyncProgress(null);
+            // First page sync to get total count
+            setSyncProgress(`Starting full sync... Fetching first 100...`);
+            const firstRes = await syncXoloxContacts(1, 100);
+            
+            if (!firstRes.success) {
+                alert(firstRes.message || 'Sync failed');
+                return;
             }
+
+            let totalSynced = firstRes.data.created + firstRes.data.updated;
+            const xTotal = firstRes.data.xoloxTotalCount;
+            const totalPagesToFetch = Math.ceil(xTotal / 100);
+            
+            console.log(`[Sync] Full dataset detected: ${xTotal} leads across ${totalPagesToFetch} pages.`);
+            setSyncProgress(`Total leads: ${xTotal}. Beginning full import...`);
+
+            // Loop through ALL pages
+            // We start from page 2 since page 1 is already handled
+            for (let p = 2; p <= totalPagesToFetch; p++) {
+                // Calculate percentage
+                const percent = Math.round((p / totalPagesToFetch) * 100);
+                setSyncProgress(`Syncing page ${p} of ${totalPagesToFetch} (${percent}%)... Total Synced: ${totalSynced}`);
+                
+                const nextRes = await syncXoloxContacts(p, 100);
+                if (nextRes.success) {
+                    totalSynced += (nextRes.data.created + nextRes.data.updated);
+                    // Refresh every 10 pages for visual updates without lag
+                    if (p % 10 === 0) fetchContacts(page, searchTerm);
+                } else {
+                    console.warn(`[Sync] Page ${p} failed or returned partial data. Continuing...`);
+                }
+            }
+
+            setSyncProgress(`✅ Successfully imported/updated ${totalSynced} leads in your database.`);
+            fetchContacts(1, searchTerm); 
+            setTimeout(() => setSyncProgress(null), 10000); // Keep success message longer
         } catch (e) {
-            console.error('Sync Error:', e);
-            alert('A network error occurred during sync');
+            console.error('[Sync] Full Sync Error:', e);
+            alert('A network error occurred during full sync. Partial data was saved.');
             setSyncProgress(null);
         } finally {
             setIsSyncing(false);
@@ -282,10 +305,10 @@ export default function ContactsPage() {
                     <Button 
                         variant="outline" 
                         className={`flex items-center gap-2 bg-white shadow-sm border-slate-200 text-slate-700 hover:bg-slate-50 relative overflow-hidden ${isSyncing ? 'pointer-events-none opacity-80' : ''}`}
-                        onClick={() => handleSyncXolox(1)}
+                        onClick={() => handleSyncAll()}
                     >
                         <RefreshCcw size={16} className={isSyncing ? 'animate-spin' : ''} />
-                        <span className="font-semibold">{isSyncing ? 'Syncing...' : 'Sync With XOLOX'}</span>
+                        <span className="font-semibold">{isSyncing ? 'Batch Syncing...' : 'Bulk Sync XOLOX'}</span>
                     </Button>
 
                     <div className="w-px h-6 bg-slate-200 mx-1 hidden sm:block"></div>
