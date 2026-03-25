@@ -17,6 +17,7 @@ router.get('/', auth.requireRole('admin', 'agent', 'supervisor'), async (req, re
         const offset = (page - 1) * limit;
         const search = req.query.search || '';
         const leadStage = req.query.leadStage || '';
+        const leadStatus = req.query.leadStatus || '';
         const course = req.query.course || '';
         const assignedTo = req.query.assignedTo || '';
 
@@ -24,7 +25,7 @@ router.get('/', auth.requireRole('admin', 'agent', 'supervisor'), async (req, re
         let dataQuery = `
         SELECT
           c.id, c.channel_id, c.external_id, c.display_name, c.profile, 
-          c.lead_stage, c.course, c.assigned_to, c.email, c.lead_id, c.last_sync_at,
+          c.lead_stage, c.lead_status, c.course, c.assigned_to, c.email, c.lead_id, c.last_sync_at,
           c.created_at, c.updated_at,
         ch.type as channel_type, ch.name as channel_name,
         lat.conversation_id,
@@ -56,6 +57,11 @@ router.get('/', auth.requireRole('admin', 'agent', 'supervisor'), async (req, re
         if (leadStage) {
             queryParams.push(leadStage);
             whereClauses.push(`c.lead_stage = $${queryParams.length}`);
+        }
+
+        if (leadStatus) {
+            queryParams.push(leadStatus);
+            whereClauses.push(`c.lead_status = $${queryParams.length}`);
         }
 
         if (course) {

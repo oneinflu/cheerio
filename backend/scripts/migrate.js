@@ -619,6 +619,21 @@ async function runMigrations() {
           console.log('[migrate] Data backfill check finished.');
         }
 
+        // Check if lead_status column exists in contacts
+        const contactStatusColRes = await client.query(`
+          SELECT column_name 
+          FROM information_schema.columns 
+          WHERE table_name='contacts' AND column_name='lead_status'
+        `);
+
+        if (contactStatusColRes.rowCount === 0) {
+          console.log('[migrate] Adding lead_status column to contacts...');
+          await client.query('BEGIN');
+          await runSQLFile(client, path.join(__dirname, '..', 'db', 'migrations', '0031_add_contact_status.sql'));
+          await client.query('COMMIT');
+          console.log('[migrate] Applied contact lead_status migration.');
+        }
+
         return;
 
 

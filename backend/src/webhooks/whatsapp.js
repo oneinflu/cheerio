@@ -232,8 +232,8 @@ router.post('/', async (req, res, next) => {
             // Upsert contact for (channel_id, external_id=wa_id)
             const contactResult = await client.query(
               `
-              INSERT INTO contacts (id, channel_id, external_id, display_name, profile)
-              VALUES (gen_random_uuid(), $1, $2, $3, '{}'::jsonb)
+              INSERT INTO contacts (id, channel_id, external_id, display_name, profile, lead_stage, lead_status)
+              VALUES (gen_random_uuid(), $1, $2, $3, '{}'::jsonb, 'N2 Fresh Leads', 'new')
               ON CONFLICT (channel_id, external_id)
               DO UPDATE SET display_name = COALESCE(EXCLUDED.display_name, contacts.display_name)
               RETURNING id, profile

@@ -241,6 +241,29 @@ function AddContactModal({ isOpen, onClose, channels, onSuccess }) {
 // ──────────────────────────────────────────
 // Main Contacts Page
 // ──────────────────────────────────────────
+const LEAD_STAGES = [
+    'N2 Fresh Leads',
+    'N2 Minus',
+    'N2 Plus',
+    'N3 Interested',
+    'N3 Plus',
+    'N3 Minus',
+    'Lost',
+    'Converted'
+];
+
+const LEAD_STATUSES = [
+    'new',
+    'renewed',
+    'assigned',
+    'contacted',
+    'interested',
+    'not_interested',
+    'counseling',
+    'won',
+    'lost'
+];
+
 export default function ContactsPage() {
     const [contacts, setContacts] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -261,6 +284,7 @@ export default function ContactsPage() {
     // Filter and Column Visibility State
     const [filters, setFilters] = useState({
         leadStage: '',
+        leadStatus: '',
         course: '',
         assignedTo: ''
     });
@@ -270,6 +294,7 @@ export default function ContactsPage() {
         channel: true,
         externalId: true,
         leadStage: true,
+        leadStatus: true,
         course: true,
         assignedTo: true,
         source: false,
@@ -460,11 +485,19 @@ export default function ContactsPage() {
                                 }}
                             >
                                 <option value="">Stage: All</option>
-                                <option value="N2 Fresh Leads">N2 Fresh Leads</option>
-                                <option value="N3 Working Leads">N3 Working Leads</option>
-                                <option value="Interested">Interested</option>
-                                <option value="Follow-up">Follow-up</option>
-                                <option value="Converted">Converted</option>
+                                {LEAD_STAGES.map(s => <option key={s} value={s}>{s}</option>)}
+                            </select>
+
+                            <select 
+                                className="text-[11px] font-bold bg-white border border-slate-200 rounded-lg px-2 py-2 focus:ring-2 focus:ring-blue-500/10 outline-none uppercase tracking-wide text-slate-600 cursor-pointer"
+                                value={filters.leadStatus}
+                                onChange={(e) => {
+                                    const nf = { ...filters, leadStatus: e.target.value };
+                                    setFilters(nf); setPage(1); fetchContacts(1, searchTerm, nf);
+                                }}
+                            >
+                                <option value="">Status: All</option>
+                                {LEAD_STATUSES.map(s => <option key={s} value={s}>{s.toUpperCase()}</option>)}
                             </select>
 
                             <select 
@@ -542,7 +575,8 @@ export default function ContactsPage() {
                                         {visibleColumns.contact && <th className="px-6 py-4">Identity</th>}
                                         {visibleColumns.channel && <th className="px-6 py-4">Channel</th>}
                                         {visibleColumns.externalId && <th className="px-6 py-4">Mobile/ID</th>}
-                                        {visibleColumns.leadStage && <th className="px-6 py-4">Status / Stage</th>}
+                                        {visibleColumns.leadStage && <th className="px-6 py-4">Lead Stage</th>}
+                                        {visibleColumns.leadStatus && <th className="px-6 py-4">Lead Status</th>}
                                         {visibleColumns.course && <th className="px-6 py-4">Course</th>}
                                         {visibleColumns.assignedTo && <th className="px-6 py-4">Assigned To</th>}
                                         {visibleColumns.source && <th className="px-6 py-4">Source</th>}
@@ -602,10 +636,19 @@ export default function ContactsPage() {
                                                         </td>
                                                     )}
                                                     {visibleColumns.leadStage && (
-                                                        <td className="px-6 py-4 text-center">
+                                                        <td className="px-6 py-4">
                                                             {(contact.lead_stage || p.leadStage) ? (
                                                                 <div className="inline-flex items-center px-2 py-1 rounded bg-amber-50 text-amber-700 text-[10px] font-bold border border-amber-100 uppercase tracking-tight">
                                                                     {contact.lead_stage || p.leadStage}
+                                                                </div>
+                                                            ) : <span className="text-slate-300 italic text-[10px]">None</span>}
+                                                        </td>
+                                                    )}
+                                                    {visibleColumns.leadStatus && (
+                                                        <td className="px-6 py-4">
+                                                            {(contact.lead_status || p.leadStatus) ? (
+                                                                <div className="inline-flex items-center px-2 py-1 rounded bg-blue-50 text-blue-700 text-[10px] font-bold border border-blue-100 uppercase tracking-tight">
+                                                                    {contact.lead_status || p.leadStatus}
                                                                 </div>
                                                             ) : <span className="text-slate-300 italic text-[10px]">None</span>}
                                                         </td>

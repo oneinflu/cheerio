@@ -764,6 +764,7 @@ export async function getContacts(page = 1, limit = 10, search = "", filters = {
   if (limit) params.append("limit", limit);
   if (search) params.append("search", search);
   if (filters.leadStage) params.append("leadStage", filters.leadStage);
+  if (filters.leadStatus) params.append("leadStatus", filters.leadStatus);
   if (filters.course) params.append("course", filters.course);
   if (filters.assignedTo) params.append("assignedTo", filters.assignedTo);
   
