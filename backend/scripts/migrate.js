@@ -644,6 +644,20 @@ async function runMigrations() {
           console.log('[migrate] Applied standardized lead stages reset.');
         }
 
+        // Final catch-all: Ensure ALL workflows have a stage (N2 Fresh Leads)
+        const firstStage = await client.query("SELECT id FROM lead_stages WHERE name='N2 Fresh Leads' LIMIT 1");
+        if (firstStage.rowCount > 0) {
+           const stageId = firstStage.rows[0].id;
+           await client.query(`
+             INSERT INTO lead_stage_workflows (stage_id, workflow_id, position)
+             SELECT $1, id, ROW_NUMBER() OVER (ORDER BY created_at ASC)
+             FROM workflows
+             WHERE NOT EXISTS (SELECT 1 FROM lead_stage_workflows WHERE workflow_id = workflows.id)
+             ON CONFLICT DO NOTHING
+           `, [stageId]);
+           console.log('[migrate] Ensured all orphan workflows are visible in N2 Fresh Leads.');
+        }
+
         return;
 
 

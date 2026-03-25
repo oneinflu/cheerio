@@ -12,8 +12,96 @@ import {
   deleteLeadStage,
   createLeadStage,
   getLabels,
+  updateWorkflowDelay,
 } from '../api';
-import { Plus, X, GripVertical, MoreHorizontal, Search } from 'lucide-react';
+import { Plus, X, GripVertical, MoreHorizontal, Search, LayoutGrid, List, Clock } from 'lucide-react';
+import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from './ui/Table';
+
+const formatDelay = (mins) => {
+  if (!mins) return 'Instant';
+  const d = Math.floor(mins / (24 * 60));
+  const h = Math.floor((mins % (24 * 60)) / 60);
+  const m = mins % 60;
+  let parts = [];
+  if (d > 0) parts.push(`${d}d`);
+  if (h > 0) parts.push(`${h}h`);
+  if (m > 0 || (d === 0 && h === 0)) parts.push(`${m}m`);
+  return parts.join(' ');
+};
+
+function DelayModal({ isOpen, onClose, onSubmit, currentDelay }) {
+  const [d, setD] = useState(0);
+  const [h, setH] = useState(0);
+  const [m, setM] = useState(0);
+
+  useEffect(() => {
+    if (isOpen) {
+      setD(Math.floor((currentDelay || 0) / (24 * 60)));
+      setH(Math.floor(((currentDelay || 0) % (24 * 60)) / 60));
+      setM((currentDelay || 0) % 60);
+    }
+  }, [isOpen, currentDelay]);
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Set Workflow Delay"
+    >
+      <div className="space-y-6 pt-2">
+        <div className="p-3 bg-blue-50 border border-blue-100 rounded-lg text-xs text-blue-700 leading-relaxed">
+          Specify how long to wait <strong>after</strong> the previous workflow finishes before starting this one. 
+          Use this to create a natural, sequential nurturing sequence.
+        </div>
+        
+        <div className="grid grid-cols-3 gap-4">
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">Days</label>
+            <Input 
+              type="number" 
+              min="0" 
+              value={d} 
+              onChange={(e) => setD(Math.max(0, parseInt(e.target.value || 0)))}
+              className="text-center font-bold text-slate-700" 
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">Hours</label>
+            <Input 
+              type="number" 
+              min="0" 
+              max="23"
+              value={h} 
+              onChange={(e) => setH(Math.min(23, Math.max(0, parseInt(e.target.value || 0))))}
+              className="text-center font-bold text-slate-700" 
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">Minutes</label>
+            <Input 
+              type="number" 
+              min="0" 
+              max="59"
+              value={m} 
+              onChange={(e) => setM(Math.min(59, Math.max(0, parseInt(e.target.value || 0))))}
+              className="text-center font-bold text-slate-700" 
+            />
+          </div>
+        </div>
+
+        <div className="flex justify-between items-center py-2 px-1 border-t border-slate-100 pt-6">
+          <div className="text-xs text-slate-400 font-medium italic">
+            Total wait: <span className="text-blue-600 font-bold not-italic">{formatDelay(d * 1440 + h * 60 + m)}</span>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button>
+            <Button size="sm" onClick={() => onSubmit(d * 1440 + h * 60 + m)}>Save Timing</Button>
+          </div>
+        </div>
+      </div>
+    </Modal>
+  );
+}
 
 function CreateWorkflowModal({ isOpen, onClose, onSubmit, stageName }) {
   const [name, setName] = useState('');
@@ -340,6 +428,8 @@ export default function WorkflowsKanban({ currentUser, onOpenBuilder }) {
   const [openStageMenuId, setOpenStageMenuId] = useState(null);
   const [openWorkflowMenuId, setOpenWorkflowMenuId] = useState(null);
   const [editWorkflow, setEditWorkflow] = useState(null);
+  const [delayModal, setDelayModal] = useState({ isOpen: false, stageId: null, workflowId: null, currentDelay: 0 });
+  const [viewMode, setViewMode] = useState('kanban'); // 'kanban' or 'table'
   const [filterQuery, setFilterQuery] = useState('');
 
   const load = async () => {
@@ -442,6 +532,16 @@ export default function WorkflowsKanban({ currentUser, onOpenBuilder }) {
       await load();
     } catch (e) {
       setError('Failed to delete stage');
+    }
+  };
+
+  const handleUpdateDelay = async (delayMinutes) => {
+    try {
+      await updateWorkflowDelay(delayModal.stageId, delayModal.workflowId, delayMinutes);
+      setDelayModal({ isOpen: false, stageId: null, workflowId: null, currentDelay: 0 });
+      await load();
+    } catch (e) {
+      console.error('Failed to update delay:', e);
     }
   };
 
@@ -566,18 +666,113 @@ export default function WorkflowsKanban({ currentUser, onOpenBuilder }) {
                 </button>
               )}
             </div>
+            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg mr-2">
+              <button 
+                onClick={() => setViewMode('kanban')}
+                className={`p-1.5 rounded-md transition-all ${viewMode === 'kanban' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}
+                title="Board View"
+              >
+                <LayoutGrid size={16} />
+              </button>
+              <button 
+                onClick={() => setViewMode('table')}
+                className={`p-1.5 rounded-md transition-all ${viewMode === 'table' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}
+                title="Table View"
+              >
+                <List size={16} />
+              </button>
+            </div>
             <Button variant="outline" size="sm" onClick={load}>Refresh</Button>
           </div>
         </div>
       </div>
       
-      <div className="flex-1 overflow-x-auto overflow-y-hidden p-6">
+      <div className="flex-1 overflow-x-auto overflow-y-auto p-6">
         {error && (
           <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {error}
           </div>
         )}
-        <div className="flex gap-6 h-full pb-2">
+
+        {viewMode === 'table' ? (
+           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+             <Table>
+               <TableHeader>
+                 <TableRow className="bg-slate-50/50 hover:bg-slate-50/50">
+                   <TableHead className="w-[300px] font-bold text-slate-700">Workflow Name</TableHead>
+                   <TableHead className="font-bold text-slate-700">Stage</TableHead>
+                   <TableHead className="font-bold text-slate-700">Course Filter</TableHead>
+                   <TableHead className="font-bold text-slate-700">Tag Filter</TableHead>
+                   <TableHead className="font-bold text-slate-700 text-center">Status</TableHead>
+                   <TableHead className="text-right font-bold text-slate-700 pr-8">Actions</TableHead>
+                 </TableRow>
+               </TableHeader>
+               <TableBody>
+                 {filteredColumns.flatMap(col => col.workflows.map(w => (
+                   <TableRow key={w.id} className="group hover:bg-blue-50/30 transition-all border-b border-slate-100 last:border-0">
+                     <TableCell className="py-4">
+                       <div className="flex flex-col">
+                         <span className="font-bold text-slate-800 text-sm group-hover:text-blue-600 transition-colors uppercase tracking-tight">{w.name}</span>
+                         {w.description && <span className="text-[10px] text-slate-500 line-clamp-1 mt-0.5">{w.description}</span>}
+                       </div>
+                     </TableCell>
+                     <TableCell>
+                       <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-slate-100 text-slate-600 text-[10px] font-bold uppercase tracking-wide">
+                          <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: col.stage.color || '#0f172a' }} />
+                          {col.stage.name}
+                       </div>
+                     </TableCell>
+                     <TableCell>
+                        <span className="text-xs font-semibold text-slate-600">{(w.steps?.triggerCourse || w.triggerCourse) || '—'}</span>
+                     </TableCell>
+                     <TableCell>
+                        <span className="text-xs font-semibold text-slate-600">{(w.steps?.triggerLabel || w.triggerLabel) || '—'}</span>
+                     </TableCell>
+                     <TableCell className="text-center">
+                        <Badge variant={w.status === 'active' ? 'success' : 'secondary'} className="uppercase text-[9px] font-black px-2 py-0.5 tracking-widest">
+                          {w.status}
+                        </Badge>
+                     </TableCell>
+                     <TableCell className="text-right pr-6">
+                        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8 text-slate-400 hover:text-blue-600" 
+                            onClick={async () => {
+                              try {
+                                const wf = await getWorkflow(w.id);
+                                if (wf && wf.id && onOpenBuilder) onOpenBuilder(wf);
+                              } catch (e) { console.error(e); }
+                            }}
+                          >
+                            <Eye size={16} />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8 text-slate-400 hover:text-blue-600" 
+                            onClick={() => setEditWorkflow(w)}
+                          >
+                            <Pencil size={16} />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8 text-slate-400 hover:text-red-600"
+                            onClick={() => handleDeleteWorkflow(w.id)}
+                          >
+                            <Trash2 size={16} />
+                          </Button>
+                        </div>
+                     </TableCell>
+                   </TableRow>
+                 )))}
+               </TableBody>
+             </Table>
+           </div>
+        ) : (
+          <div className="flex gap-6 h-full pb-2">
           {filteredColumns.map((col) => (
             <div key={col.stage.id} className="w-80 flex-shrink-0 flex flex-col h-full max-h-full">
               <div className="flex items-center justify-between mb-3 px-1">
@@ -642,148 +837,176 @@ export default function WorkflowsKanban({ currentUser, onOpenBuilder }) {
                 }}
               >
                 {col.workflows.map((w, idx) => (
-                  <div
-                    key={w.id}
-                    className="bg-white rounded-lg border border-slate-200 shadow-sm p-3 cursor-grab active:cursor-grabbing hover:shadow-md hover:border-blue-200 transition-all group/card relative"
-                    draggable
-                    onDragStart={(e) => {
-                      e.dataTransfer.effectAllowed = 'move';
-                      handleDragStart(w.id, col.stage.id);
-                    }}
-                    onDragOver={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                    }}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      handleDrop(col.stage.id, idx);
-                    }}
-                    onClick={async () => {
-                      try {
-                        const wf = await getWorkflow(w.id);
-                        if (wf && wf.id && onOpenBuilder) onOpenBuilder(wf);
-                      } catch (e) {
-                        console.error(e);
-                      }
-                    }}
-                  >
-                    <div className="flex justify-between items-start mb-2">
-                      <div className="font-medium text-slate-800 text-sm leading-snug hover:text-blue-600 transition-colors">
-                        {w.name}
+                  <React.Fragment key={w.id}>
+                    <div
+                      key={w.id}
+                      className="bg-white rounded-lg border border-slate-200 shadow-sm p-3 cursor-grab active:cursor-grabbing hover:shadow-md hover:border-blue-200 transition-all group/card relative"
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.effectAllowed = 'move';
+                        handleDragStart(w.id, col.stage.id);
+                      }}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleDrop(col.stage.id, idx);
+                      }}
+                      onClick={async () => {
+                        try {
+                          const wf = await getWorkflow(w.id);
+                          if (wf && wf.id && onOpenBuilder) onOpenBuilder(wf);
+                        } catch (e) {
+                          console.error(e);
+                        }
+                      }}
+                    >
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="font-medium text-slate-800 text-sm leading-snug hover:text-blue-600 transition-colors">
+                          {w.name}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <div className="text-slate-300 group-hover/card:text-slate-400 cursor-move">
+                            <GripVertical size={14} />
+                          </div>
+                          <div className="relative opacity-0 group-hover/card:opacity-100 transition-opacity" data-kanban-menu>
+                            <button
+                              className="text-slate-400 hover:text-slate-600 p-1 rounded-md hover:bg-slate-100 transition-colors"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setOpenWorkflowMenuId((v) => (v === w.id ? null : w.id));
+                                setOpenStageMenuId(null);
+                              }}
+                            >
+                              <MoreHorizontal size={14} />
+                            </button>
+                            {openWorkflowMenuId === w.id && (
+                              <div className="absolute right-0 top-7 z-20 w-44 rounded-lg border border-slate-200 bg-white shadow-lg overflow-hidden">
+                                <button
+                                  className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setEditWorkflow(w);
+                                    setOpenWorkflowMenuId(null);
+                                  }}
+                                >
+                                  Edit details
+                                </button>
+                                <button
+                                  className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    const steps = w.steps || {};
+                                    const triggerLabel = steps.triggerLabel || w.triggerLabel;
+                                    const triggerCourse = steps.triggerCourse || w.triggerCourse;
+                                    onOpenBuilder(w.id, triggerLabel, triggerCourse);
+                                    setOpenWorkflowMenuId(null);
+                                  }}
+                                >
+                                  Open builder
+                                </button>
+                                <button
+                                  className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    const nextStatus = w.status === 'active' ? 'inactive' : 'active';
+                                    handleToggleWorkflowStatus(w.id, nextStatus);
+                                  }}
+                                >
+                                  {w.status === 'active' ? 'Deactivate' : 'Activate'}
+                                </button>
+                                <button
+                                  className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleDuplicateWorkflow(col.stage.id, w.id);
+                                  }}
+                                >
+                                  Duplicate
+                                </button>
+                                <button
+                                  className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleDeleteWorkflow(w.id);
+                                  }}
+                                >
+                                  Delete workflow
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-1">
-                        <div className="text-slate-300 group-hover/card:text-slate-400 cursor-move">
-                          <GripVertical size={14} />
+                      
+                      {w.description && (
+                        <div className="text-xs text-slate-500 mb-3 line-clamp-2 leading-relaxed">
+                          {w.description}
                         </div>
-                        <div className="relative opacity-0 group-hover/card:opacity-100 transition-opacity" data-kanban-menu>
-                          <button
-                            className="text-slate-400 hover:text-slate-600 p-1 rounded-md hover:bg-slate-100 transition-colors"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              setOpenWorkflowMenuId((v) => (v === w.id ? null : w.id));
-                              setOpenStageMenuId(null);
-                            }}
-                          >
-                            <MoreHorizontal size={14} />
-                          </button>
-                          {openWorkflowMenuId === w.id && (
-                            <div className="absolute right-0 top-7 z-20 w-44 rounded-lg border border-slate-200 bg-white shadow-lg overflow-hidden">
-                              <button
-                                className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  setEditWorkflow(w);
-                                  setOpenWorkflowMenuId(null);
-                                }}
-                              >
-                                Edit details
-                              </button>
-                              <button
-                                className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  // Pass course and label to builder if available
-                                  const steps = w.steps || {};
-                                  const triggerLabel = steps.triggerLabel || w.triggerLabel;
-                                  const triggerCourse = steps.triggerCourse || w.triggerCourse;
-                                  onOpenBuilder(w.id, triggerLabel, triggerCourse);
-                                  setOpenWorkflowMenuId(null);
-                                }}
-                              >
-                                Open builder
-                              </button>
-                              <button
-                                className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  const nextStatus = w.status === 'active' ? 'inactive' : 'active';
-                                  handleToggleWorkflowStatus(w.id, nextStatus);
-                                }}
-                              >
-                                {w.status === 'active' ? 'Deactivate' : 'Activate'}
-                              </button>
-                              <button
-                                className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  handleDuplicateWorkflow(col.stage.id, w.id);
-                                }}
-                              >
-                                Duplicate
-                              </button>
-                              <button
-                                className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50"
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  handleDeleteWorkflow(w.id);
-                                }}
-                              >
-                                Delete workflow
-                              </button>
-                            </div>
-                          )}
-                        </div>
+                      )}
+
+                      <div className="flex items-center gap-2 mt-2">
+                        <Badge 
+                          variant="outline" 
+                          className={`text-[10px] px-1.5 py-0 h-5 ${w.status === 'active' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-slate-50 text-slate-500'}`}
+                        >
+                          {w.status}
+                        </Badge>
+                        
+                        {(w.steps?.triggerCourse || w.triggerCourse) && (
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 bg-blue-50 text-blue-700 border-blue-200 truncate max-w-[80px]">
+                            {w.steps?.triggerCourse || w.triggerCourse}
+                          </Badge>
+                        )}
+
+                        {(w.steps?.triggerLabel || w.triggerLabel) && (
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 bg-purple-50 text-purple-700 border-purple-200 truncate max-w-[80px]">
+                            {w.steps?.triggerLabel || w.triggerLabel}
+                          </Badge>
+                        )}
+                        
+                        <span className="text-[10px] text-slate-400 font-mono ml-auto">#{idx + 1}</span>
                       </div>
                     </div>
-                    
-                    {w.description && (
-                      <div className="text-xs text-slate-500 mb-3 line-clamp-2 leading-relaxed">
-                        {w.description}
+
+                    {idx < col.workflows.length - 1 && (
+                      <div className="flex flex-col items-center py-1 group/delay relative h-10 -my-1 justify-center">
+                        <div className="w-px h-full border-l-2 border-dashed border-slate-200 group-hover/delay:border-blue-200 transition-colors" />
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setDelayModal({
+                              isOpen: true,
+                              stageId: col.stage.id,
+                              workflowId: col.workflows[idx + 1].id,
+                              currentDelay: col.workflows[idx + 1].delayMinutes
+                            });
+                          }}
+                          className={cn(
+                            "absolute flex items-center gap-1.5 px-3 py-1.5 rounded-full border shadow-sm transition-all z-10",
+                            col.workflows[idx + 1].delayMinutes > 0 
+                              ? "bg-blue-600 border-blue-700 text-white hover:bg-blue-700"
+                              : "bg-white border-slate-200 text-slate-400 hover:border-blue-300 hover:text-blue-600 hover:scale-105"
+                          )}
+                        >
+                          <Clock size={12} className={col.workflows[idx + 1].delayMinutes > 0 ? "animate-pulse" : ""} />
+                          <span className="text-[10px] font-black uppercase tracking-widest leading-none">
+                            {formatDelay(col.workflows[idx + 1].delayMinutes)}
+                          </span>
+                        </button>
                       </div>
                     )}
-
-                    <div className="flex items-center gap-2 mt-2">
-                      <Badge 
-                        variant="outline" 
-                        className={`text-[10px] px-1.5 py-0 h-5 ${w.status === 'active' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-slate-50 text-slate-500'}`}
-                      >
-                        {w.status}
-                      </Badge>
-                      
-                      {/* Show Course Tag */}
-                      {(w.steps?.triggerCourse || w.triggerCourse) && (
-                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 bg-blue-50 text-blue-700 border-blue-200 truncate max-w-[80px]">
-                          {w.steps?.triggerCourse || w.triggerCourse}
-                        </Badge>
-                      )}
-
-                      {/* Show Label Tag */}
-                      {(w.steps?.triggerLabel || w.triggerLabel) && (
-                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 bg-purple-50 text-purple-700 border-purple-200 truncate max-w-[80px]">
-                          {w.steps?.triggerLabel || w.triggerLabel}
-                        </Badge>
-                      )}
-                      
-                      <span className="text-[10px] text-slate-400 font-mono ml-auto">#{idx + 1}</span>
-                    </div>
-                  </div>
+                  </React.Fragment>
                 ))}
 
                 {col.workflows.length === 0 && (
@@ -814,7 +1037,8 @@ export default function WorkflowsKanban({ currentUser, onOpenBuilder }) {
               <span className="font-medium">Add New Stage</span>
             </button>
           </div>
-        </div>
+          </div>
+        )}
       </div>
 
       <CreateWorkflowModal 
@@ -833,6 +1057,12 @@ export default function WorkflowsKanban({ currentUser, onOpenBuilder }) {
         onClose={() => setEditWorkflow(null)}
         onSubmit={handleEditWorkflowSubmit}
         workflow={editWorkflow}
+      />
+      <DelayModal 
+        isOpen={delayModal.isOpen}
+        onClose={() => setDelayModal({ ...delayModal, isOpen: false })}
+        onSubmit={handleUpdateDelay}
+        currentDelay={delayModal.currentDelay}
       />
     </div>
   );

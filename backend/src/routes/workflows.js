@@ -94,7 +94,7 @@ router.get('/kanban', auth.requireRole('admin', 'super_admin', 'supervisor', 'qu
     let workflowsByStage = {};
     if (stageIds.length > 0) {
       const mapRes = await db.query(
-        `SELECT lsw.stage_id, lsw.workflow_id, lsw.position, w.name, w.status, w.description
+        `SELECT lsw.stage_id, lsw.workflow_id, lsw.position, lsw.delay_minutes, w.name, w.status, w.description
          FROM lead_stage_workflows lsw
          JOIN workflows w ON w.id = lsw.workflow_id
          WHERE lsw.stage_id = ANY($1::uuid[])
@@ -109,6 +109,7 @@ router.get('/kanban', auth.requireRole('admin', 'super_admin', 'supervisor', 'qu
           status: r.status,
           description: r.description,
           position: r.position,
+          delayMinutes: r.delay_minutes || 0,
         });
         return acc;
       }, {});
@@ -173,6 +174,24 @@ router.put('/kanban/reorder', auth.requireRole('admin', 'super_admin', 'supervis
     res.json({ success: true });
   } catch (err) {
     try { await db.query('ROLLBACK'); } catch {}
+    next(err);
+  }
+});
+
+// Update delay_minutes for a workflow in a stage
+router.put('/kanban/delay', auth.requireRole('admin', 'super_admin', 'supervisor', 'quality_manager', 'agent'), async (req, res, next) => {
+  try {
+    const { stageId, workflowId, delayMinutes } = req.body || {};
+    if (!stageId || !workflowId) return res.status(400).json({ error: 'stageId and workflowId are required' });
+    
+    await db.query(`
+      UPDATE lead_stage_workflows
+      SET delay_minutes = $1
+      WHERE stage_id = $2 AND workflow_id = $3
+    `, [delayMinutes || 0, stageId, workflowId]);
+    
+    res.json({ success: true });
+  } catch (err) {
     next(err);
   }
 });

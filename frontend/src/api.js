@@ -791,6 +791,16 @@ export async function putContact(id, data) {
   return res.json();
 }
 
+export async function updateWorkflowDelay(stageId, workflowId, delayMinutes) {
+  const headers = getAuthHeaders();
+  const res = await fetch(`/api/workflows/kanban/delay`, {
+    method: "PUT",
+    headers,
+    body: JSON.stringify({ stageId, workflowId, delayMinutes }),
+  });
+  return res.json();
+}
+
 export async function getLabels() {
   const res = await fetch(`/api/labels`, { headers: getAuthHeaders() });
   return res.json();

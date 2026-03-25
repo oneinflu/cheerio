@@ -241,7 +241,7 @@ async function updateWorkflow(id, data) {
 
 async function runStageWorkflows(stageId, phoneNumber) {
   const res = await db.query(
-    `SELECT lsw.workflow_id, w.steps
+    `SELECT lsw.workflow_id, lsw.delay_minutes, w.steps
      FROM lead_stage_workflows lsw
      JOIN workflows w ON w.id = lsw.workflow_id
      WHERE lsw.stage_id = $1 AND w.status = 'active'
@@ -313,6 +313,10 @@ async function runStageWorkflows(stageId, phoneNumber) {
     }
 
     try {
+      if (row.delay_minutes > 0) {
+        console.log(`[runStageWorkflows] Delaying workflow ${wfId} for ${row.delay_minutes} mins for ${phoneNumber}`);
+        await sleep(row.delay_minutes * 60 * 1000);
+      }
       await runWorkflow(wfId, phoneNumber);
     } catch (e) {
       console.error(`[runStageWorkflows] Workflow ${wfId} failed: ${e.message}`);
