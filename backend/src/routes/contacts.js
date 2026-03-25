@@ -14,8 +14,11 @@ router.get('/', auth.requireRole('admin', 'agent', 'supervisor'), async (req, re
         const limit = parseInt(req.query.limit) || 10;
         const offset = (page - 1) * limit;
         const search = req.query.search || '';
+        const leadStage = req.query.leadStage || '';
+        const course = req.query.course || '';
+        const assignedTo = req.query.assignedTo || '';
 
-        let countQuery = 'SELECT count(*) FROM contacts';
+        let countQuery = 'SELECT count(*) FROM contacts c';
         let dataQuery = `
       SELECT
         c.id, c.channel_id, c.external_id, c.display_name, c.profile, c.created_at, c.updated_at,
@@ -39,11 +42,32 @@ router.get('/', auth.requireRole('admin', 'agent', 'supervisor'), async (req, re
       ) lat ON true
     `;
         let queryParams = [];
+        let whereClauses = [];
 
         if (search) {
-            countQuery += ' WHERE c.display_name ILIKE $1 OR c.external_id ILIKE $1';
-            dataQuery += ' WHERE c.display_name ILIKE $1 OR c.external_id ILIKE $1';
             queryParams.push(`%${search}%`);
+            whereClauses.push(`(c.display_name ILIKE $${queryParams.length} OR c.external_id ILIKE $${queryParams.length})`);
+        }
+
+        if (leadStage) {
+            queryParams.push(leadStage);
+            whereClauses.push(`c.profile->>'leadStage' = $${queryParams.length}`);
+        }
+
+        if (course) {
+            queryParams.push(course);
+            whereClauses.push(`c.profile->>'course' = $${queryParams.length}`);
+        }
+
+        if (assignedTo) {
+            queryParams.push(assignedTo);
+            whereClauses.push(`c.profile->>'assignedTo' = $${queryParams.length}`);
+        }
+
+        if (whereClauses.length > 0) {
+            const condition = ' WHERE ' + whereClauses.join(' AND ');
+            countQuery += condition;
+            dataQuery += condition;
         }
 
         dataQuery += ` ORDER BY c.created_at DESC LIMIT $${queryParams.length + 1} OFFSET $${queryParams.length + 2} `;
@@ -144,79 +168,71 @@ router.delete('/:id', auth.requireRole('admin', 'supervisor'), async (req, res, 
     }
 });
 
-const axios = require('axios');
-const crypto = require('crypto');
+// Global state to track background sync status
+let syncStatus = {
+    isRunning: false,
+    totalLeads: 0,
+    syncedLeads: 0,
+    currentPage: 0,
+    totalPages: 0,
+    lastError: null,
+    startTime: null,
+    completedTime: null
+};
+
+/**
+ * GET /api/contacts/sync/status
+ * Returns current background sync status.
+ */
+router.get('/sync/status', auth.requireRole('admin', 'supervisor'), (req, res) => {
+    res.json({ success: true, status: syncStatus });
+});
 
 /**
  * POST /api/contacts/sync
- * Syncs contacts from XOLOX API for a specific page and limit.
+ * Starts a sync. If 'full' is provided, it runs in background.
  */
 router.post('/sync', auth.requireRole('admin', 'supervisor'), async (req, res, next) => {
     try {
+        const isFullSync = req.body.full === true;
+        
+        // Return if sync is already running
+        if (isFullSync && syncStatus.isRunning) {
+            return res.status(409).json({ success: false, message: 'A sync is already in progress' });
+        }
+
         const page = parseInt(req.body.page) || 1;
         const limit = parseInt(req.body.limit) || 100;
+        const authHeader = req.headers.authorization;
 
-        console.log(`[Sync] Starting sync for page ${page}, limit ${limit}`);
-
-        // 1. Get/Create XOLOX channel
-        let channelId;
-        const channelRes = await db.query("SELECT id FROM channels WHERE name = 'XOLOX' LIMIT 1");
-        if (channelRes.rowCount > 0) {
-            channelId = channelRes.rows[0].id;
-        } else {
-            console.log('[Sync] XOLOX channel not found, creating one...');
-            // The database only supports 'whatsapp' and 'instagram' for channel_type.
-            // Using 'whatsapp' ensures compatibility with the ENUM.
-            const newChannelId = crypto.randomUUID();
-            const newChannelRes = await db.query(
+        // 1. Get/Create XOLOX channel (shared logic)
+        const getChannel = async () => {
+            const channelRes = await db.query("SELECT id FROM channels WHERE name = 'XOLOX' LIMIT 1");
+            if (channelRes.rowCount > 0) return channelRes.rows[0].id;
+            
+            const newId = crypto.randomUUID();
+            const res = await db.query(
                 "INSERT INTO channels (id, name, type, external_id, active) VALUES ($1, $2, $3, $4, $5) RETURNING id",
-                [newChannelId, 'XOLOX', 'whatsapp', 'xolox_external', true]
+                [newId, 'XOLOX', 'whatsapp', 'xolox_external', true]
             );
-            channelId = newChannelRes.rows[0].id;
-        }
+            return res.rows[0].id;
+        };
 
-        // 2. Fetch from XOLOX
-        const xoloxUrl = `https://api.starforze.com/api/leads?page=${page}&limit=${limit}`;
-        let xData;
-        try {
-            // Forward the Bearer token from the original request
-            const authHeader = req.headers.authorization;
-            const xResponse = await axios.get(xoloxUrl, {
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'Authorization': authHeader // Pass same token to XOLOX
-                },
-                timeout: 30000 // 30s timeout for large data
+        const channelId = await getChannel();
+
+        // Single Page Sync Logic (Immediate response)
+        const syncPage = async (p, l) => {
+            const xoloxUrl = `https://api.starforze.com/api/leads?page=${p}&limit=${l}`;
+            const xRes = await axios.get(xoloxUrl, {
+                headers: { 'Content-Type': 'application/json', 'Authorization': authHeader },
+                timeout: 30000
             });
-            xData = xResponse.data;
-        } catch (fetchErr) {
-            console.error('[Sync] XOLOX API call failed:', fetchErr.message);
-            return res.status(502).json({
-                success: false,
-                message: 'Failed to reach XOLOX API',
-                error: fetchErr.message
-            });
-        }
-
-        if (!xData.success || !xData.data || !Array.isArray(xData.data.data)) {
-            console.error('[Sync] Invalid XOLOX response structure:', JSON.stringify(xData).substring(0, 200));
-            return res.status(502).json({ 
-                success: false, 
-                message: 'Invalid response structure from XOLOX',
-            });
-        }
-
-        const leads = xData.data.data;
-        console.log(`[Sync] Processing ${leads.length} leads...`);
-        const results = { updated: 0, created: 0, errors: 0 };
-
-        // 3. Upsert into contacts
-        for (const lead of leads) {
-            try {
-                const externalId = lead.mobile; 
-                if (!externalId) continue;
-
-                const displayName = lead.name || 'Unknown';
+            const data = xRes.data;
+            if (!data.success || !data.data || !Array.isArray(data.data.data)) throw new Error('Invalid XOLOX response');
+            
+            let inserted = 0, updated = 0;
+            for (const lead of data.data.data) {
+                if (!lead.mobile) continue;
                 const profile = {
                     email: lead.email,
                     leadId: lead.leadId,
@@ -224,51 +240,66 @@ router.post('/sync', auth.requireRole('admin', 'supervisor'), async (req, res, n
                     course: lead.courseId?.name,
                     assignedTo: lead.assignedTo ? `${lead.assignedTo.firstname} ${lead.assignedTo.lastname}` : null,
                     leadSource: lead.leadSource,
-                    leadSubSource: lead.leadSubSource,
-                    studyMode: lead.studyMode,
                     syncedAt: new Date().toISOString(),
                     xoloxData: lead
                 };
-
-                const upsertQuery = `
+                const upsertRes = await db.query(`
                     INSERT INTO contacts (channel_id, external_id, display_name, profile, updated_at)
                     VALUES ($1, $2, $3, $4, NOW())
-                    ON CONFLICT (channel_id, external_id) 
-                    DO UPDATE SET 
-                        display_name = EXCLUDED.display_name,
-                        profile = EXCLUDED.profile,
-                        updated_at = NOW()
-                    RETURNING (xmax = 0) AS inserted;
-                `;
-                const upsertRes = await db.query(upsertQuery, [channelId, externalId, displayName, profile]);
-                
-                if (upsertRes.rows[0]?.inserted) {
-                    results.created++;
-                } else {
-                    results.updated++;
+                    ON CONFLICT (channel_id, external_id) DO UPDATE SET 
+                    display_name = EXCLUDED.display_name, profile = EXCLUDED.profile, updated_at = NOW()
+                    RETURNING (xmax = 0) AS inserted;`, [channelId, lead.mobile, lead.name || 'Unknown', profile]);
+                if (upsertRes.rows[0]?.inserted) inserted++; else updated++;
+            }
+            return { total: data.data.count, processed: data.data.data.length, inserted, updated };
+        };
+
+        if (isFullSync) {
+            // Start Background Full Sync
+            syncStatus = { 
+                isRunning: true, totalLeads: 0, syncedLeads: 0, currentPage: 0, totalPages: 0, 
+                lastError: null, startTime: new Date().toISOString(), completedTime: null 
+            };
+
+            // Start the async loop without awaiting it
+            (async () => {
+                try {
+                    console.log('[Sync] Background sync started...');
+                    const first = await syncPage(1, 100);
+                    syncStatus.totalLeads = first.total;
+                    syncStatus.syncedLeads = first.inserted + first.updated;
+                    syncStatus.totalPages = Math.ceil(first.total / 100);
+                    syncStatus.currentPage = 1;
+
+                    for (let p = 2; p <= syncStatus.totalPages; p++) {
+                        const next = await syncPage(p, 100);
+                        syncStatus.syncedLeads += (next.inserted + next.updated);
+                        syncStatus.currentPage = p;
+                        if (p % 10 === 0) console.log(`[Sync] Background Progress: ${syncStatus.syncedLeads}/${syncStatus.totalLeads} (${syncStatus.currentPage}/${syncStatus.totalPages})`);
+                    }
+                    syncStatus.completedTime = new Date().toISOString();
+                } catch (err) {
+                    console.error('[Sync] Background error:', err.message);
+                    syncStatus.lastError = err.message;
+                } finally {
+                    syncStatus.isRunning = false;
+                    console.log('[Sync] Background sync finished.');
                 }
-            } catch (err) {
-                results.errors++;
-            }
+            })();
+
+            return res.json({ success: true, message: 'Background sync started', status: syncStatus });
+        } else {
+            // Single page sync
+            const result = await syncPage(page, limit);
+            return res.json({ success: true, message: `Page ${page} synced`, data: result });
         }
-
-        console.log(`[Sync] Sync completed: Created ${results.created}, Updated ${results.updated}, Errors ${results.errors}`);
-
-        return res.json({
-            success: true,
-            message: `Sync completed for page ${page}`,
-            data: {
-                totalInPage: leads.length,
-                ...results,
-                xoloxTotalCount: xData.data.count
-            }
-        });
     } catch (err) {
-        console.error('[Sync] Fatal Error:', err);
+        console.error('[Sync] POST Error:', err);
         next(err);
     }
 });
 
 module.exports = router;
+
 
 

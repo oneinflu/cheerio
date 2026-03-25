@@ -757,12 +757,16 @@ function getAuthHeaders(contentType = 'application/json') {
   return headers;
 }
 
-export async function getContacts(page = 1, limit = 10, search = "") {
+export async function getContacts(page = 1, limit = 10, search = "", filters = {}) {
   const headers = getAuthHeaders();
   const params = new URLSearchParams();
   if (page) params.append("page", page);
   if (limit) params.append("limit", limit);
   if (search) params.append("search", search);
+  if (filters.leadStage) params.append("leadStage", filters.leadStage);
+  if (filters.course) params.append("course", filters.course);
+  if (filters.assignedTo) params.append("assignedTo", filters.assignedTo);
+  
   const res = await fetch(`/api/contacts?${params.toString()}`, { headers });
   return res.json();
 }
@@ -1408,12 +1412,20 @@ export async function deleteEmailMessage(id, teamId) {
   const res = await fetch(`/api/settings/email/messages/${id}?${params.toString()}`, { method: 'DELETE', headers });
   return res.json();
 }
-export async function syncXoloxContacts(page = 1, limit = 100) {
+export async function syncXoloxContacts(page = 1, limit = 100, full = false) {
   const headers = getAuthHeaders();
   const res = await fetch('/api/contacts/sync', {
     method: 'POST',
     headers,
-    body: JSON.stringify({ page, limit })
+    body: JSON.stringify({ page, limit, full })
+  });
+  return res.json();
+}
+
+export async function getXoloxSyncStatus() {
+  const headers = getAuthHeaders();
+  const res = await fetch('/api/contacts/sync/status', {
+    headers
   });
   return res.json();
 }

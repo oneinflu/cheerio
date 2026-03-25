@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Download, Upload, Plus, Search, MoreHorizontal, User, MessageCircle, Instagram, Database, X, Trash2, RefreshCcw, Filter, ChevronLeft, ChevronRight, ArrowRight, ExternalLink } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Modal } from './ui/Modal';
-import { getContacts, getContactChannels, addContact, deleteContact, syncXoloxContacts } from '../api';
+import { getContacts, getContactChannels, addContact, deleteContact, syncXoloxContacts, getXoloxSyncStatus } from '../api';
 
 // Small helper to pick the right icon for a channel type
 function ChannelIcon({ type, name }) {
@@ -179,10 +179,30 @@ export default function ContactsPage() {
     const [channels, setChannels] = useState([]);
     const [showAddModal, setShowAddModal] = useState(false);
 
-    const fetchContacts = async (pageNum, search) => {
+    // Filter and Column Visibility State
+    const [filters, setFilters] = useState({
+        leadStage: '',
+        course: '',
+        assignedTo: ''
+    });
+
+    const [visibleColumns, setVisibleColumns] = useState({
+        contact: true,
+        channel: true,
+        externalId: true,
+        leadStage: true,
+        course: true,
+        assignedTo: true,
+        source: false,
+        syncAt: false,
+        createdAt: true,
+        actions: true
+    });
+
+    const fetchContacts = async (pageNum, search, activeFilters = filters) => {
         setIsLoading(true);
         try {
-            const res = await getContacts(pageNum, 15, search);
+            const res = await getContacts(pageNum, 15, search, activeFilters);
             if (res.success) {
                 setContacts(res.contacts);
                 setTotalPages(res.pagination.totalPages);
@@ -195,54 +215,57 @@ export default function ContactsPage() {
         }
     };
 
-    // Full-dataset sync logic
+    // New Background Sync Logic
     const handleSyncAll = async () => {
         setIsSyncing(true);
         try {
-            // First page sync to get total count
-            setSyncProgress(`Starting full sync... Fetching first 100...`);
-            const firstRes = await syncXoloxContacts(1, 100);
-            
-            if (!firstRes.success) {
-                alert(firstRes.message || 'Sync failed');
-                return;
+            setSyncProgress(`Requesting background sync...`);
+            const res = await syncXoloxContacts(1, 100, true);
+            if (res.success) {
+                setSyncProgress(`Background sync started! Moving to status tracking...`);
+                // Polling starts automatically via the useEffect below
+            } else {
+                alert(res.message || 'Sync failed');
+                setIsSyncing(false);
             }
-
-            let totalSynced = firstRes.data.created + firstRes.data.updated;
-            const xTotal = firstRes.data.xoloxTotalCount;
-            const totalPagesToFetch = Math.ceil(xTotal / 100);
-            
-            console.log(`[Sync] Full dataset detected: ${xTotal} leads across ${totalPagesToFetch} pages.`);
-            setSyncProgress(`Total leads: ${xTotal}. Beginning full import...`);
-
-            // Loop through ALL pages
-            // We start from page 2 since page 1 is already handled
-            for (let p = 2; p <= totalPagesToFetch; p++) {
-                // Calculate percentage
-                const percent = Math.round((p / totalPagesToFetch) * 100);
-                setSyncProgress(`Syncing page ${p} of ${totalPagesToFetch} (${percent}%)... Total Synced: ${totalSynced}`);
-                
-                const nextRes = await syncXoloxContacts(p, 100);
-                if (nextRes.success) {
-                    totalSynced += (nextRes.data.created + nextRes.data.updated);
-                    // Refresh every 10 pages for visual updates without lag
-                    if (p % 10 === 0) fetchContacts(page, searchTerm);
-                } else {
-                    console.warn(`[Sync] Page ${p} failed or returned partial data. Continuing...`);
-                }
-            }
-
-            setSyncProgress(`✅ Successfully imported/updated ${totalSynced} leads in your database.`);
-            fetchContacts(1, searchTerm); 
-            setTimeout(() => setSyncProgress(null), 10000); // Keep success message longer
         } catch (e) {
-            console.error('[Sync] Full Sync Error:', e);
-            alert('A network error occurred during full sync. Partial data was saved.');
-            setSyncProgress(null);
-        } finally {
+            console.error('Backend Sync Error:', e);
+            alert('Could not start background sync');
             setIsSyncing(false);
         }
     };
+
+    // Background Status Polling
+    useEffect(() => {
+        let pollTimer;
+        const checkStatus = async () => {
+            try {
+                const res = await getXoloxSyncStatus();
+                if (res.success && res.status.isRunning) {
+                    setIsSyncing(true);
+                    const s = res.status;
+                    const percent = s.totalPages > 0 ? Math.round((s.currentPage / s.totalPages) * 100) : 0;
+                    setSyncProgress(`Background Sync: Page ${s.currentPage} of ${s.totalPages} (${percent}%) - ${s.syncedLeads} leads`);
+                    if (s.currentPage % 20 === 0) fetchContacts(page, searchTerm);
+                    pollTimer = setTimeout(checkStatus, 3000);
+                } else if (res.success && res.status.completedTime) {
+                    setIsSyncing(false);
+                    if (syncProgress && syncProgress.includes('Sync')) {
+                        setSyncProgress(`✅ Full sync finished! Total Synced: ${res.status.syncedLeads}`);
+                        fetchContacts(1, searchTerm);
+                        setTimeout(() => setSyncProgress(null), 10000);
+                    }
+                } else if (res.success && res.status.lastError) {
+                    setIsSyncing(false);
+                    setSyncProgress(`❌ Sync failed: ${res.status.lastError}`);
+                }
+            } catch (err) {
+                console.warn('Status poll failed:', err);
+            }
+        };
+        checkStatus();
+        return () => clearTimeout(pollTimer);
+    }, [page, searchTerm]); 
 
     // Fetch channels for modal
     useEffect(() => {
@@ -331,16 +354,94 @@ export default function ContactsPage() {
             <div className="flex-1 p-6 overflow-auto">
                 <div className="max-w-7xl mx-auto space-y-4">
 
-                    {/* Search */}
-                    <div className="relative max-w-md w-full">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-                        <input
-                            type="text"
-                            placeholder="Search by name, phone, email or stage..."
-                            className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm shadow-sm outline-none focus:ring-4 focus:ring-blue-50 focus:border-blue-500 transition-all"
-                            value={searchTerm}
-                            onChange={e => setSearchTerm(e.target.value)}
-                        />
+                    {/* Search & Filters */}
+                    <div className="flex flex-col md:flex-row md:items-center gap-3">
+                        <div className="relative flex-1 max-w-md">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                            <input
+                                type="text"
+                                placeholder="Search by name, ID or mobile..."
+                                className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm shadow-sm outline-none focus:ring-4 focus:ring-blue-50 focus:border-blue-500 transition-all font-medium"
+                                value={searchTerm}
+                                onChange={(e) => {
+                                    setSearchTerm(e.target.value);
+                                    setPage(1);
+                                    fetchContacts(1, e.target.value, filters);
+                                }}
+                            />
+                        </div>
+
+                        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+                            <select 
+                                className="text-[11px] font-bold bg-white border border-slate-200 rounded-lg px-2 py-2 focus:ring-2 focus:ring-blue-500/10 outline-none uppercase tracking-wide text-slate-600 cursor-pointer"
+                                value={filters.leadStage}
+                                onChange={(e) => {
+                                    const nf = { ...filters, leadStage: e.target.value };
+                                    setFilters(nf); setPage(1); fetchContacts(1, searchTerm, nf);
+                                }}
+                            >
+                                <option value="">Stage: All</option>
+                                <option value="N2 Fresh Leads">N2 Fresh Leads</option>
+                                <option value="N3 Working Leads">N3 Working Leads</option>
+                                <option value="Interested">Interested</option>
+                                <option value="Follow-up">Follow-up</option>
+                                <option value="Converted">Converted</option>
+                            </select>
+
+                            <select 
+                                className="text-[11px] font-bold bg-white border border-slate-200 rounded-lg px-2 py-2 focus:ring-2 focus:ring-blue-500/10 outline-none uppercase tracking-wide text-slate-600 cursor-pointer"
+                                value={filters.course}
+                                onChange={(e) => {
+                                    const nf = { ...filters, course: e.target.value };
+                                    setFilters(nf); setPage(1); fetchContacts(1, searchTerm, nf);
+                                }}
+                            >
+                                <option value="">Course: All</option>
+                                <option value="CMA (USA)">CMA (USA)</option>
+                                <option value="ACCA (UK)">ACCA (UK)</option>
+                                <option value="CPA (USA)">CPA (USA)</option>
+                            </select>
+
+                            <select 
+                                className="text-[11px] font-bold bg-white border border-slate-200 rounded-lg px-2 py-2 focus:ring-2 focus:ring-blue-500/10 outline-none uppercase tracking-wide text-slate-600 cursor-pointer"
+                                value={filters.assignedTo}
+                                onChange={(e) => {
+                                    const nf = { ...filters, assignedTo: e.target.value };
+                                    setFilters(nf); setPage(1); fetchContacts(1, searchTerm, nf);
+                                }}
+                            >
+                                <option value="">Agent: All</option>
+                                <option value="Test User">Test User</option>
+                            </select>
+
+                            <div className="relative group ml-1">
+                                <Button variant="outline" className="flex items-center gap-2 bg-white shadow-sm border-slate-200 text-slate-600 h-9 px-3 rounded-lg">
+                                    <Filter size={14} className="text-slate-400" />
+                                    <span className="text-[11px] font-bold uppercase tracking-wider">Columns</span>
+                                </Button>
+                                <div className="absolute right-0 top-full mt-1.5 w-52 bg-white border border-slate-200 rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 p-2 overflow-hidden transform scale-95 origin-top-right group-hover:scale-100">
+                                    <div className="mb-2 px-3 py-1.5 bg-slate-50 border-b border-slate-100 -mx-2 -mt-2">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">Column Visibility</span>
+                                    </div>
+                                    <div className="max-h-[300px] overflow-y-auto space-y-0.5 custom-scrollbar">
+                                        {Object.keys(visibleColumns).map(col => (
+                                            <label key={col} className="flex items-center gap-2.5 px-3 py-2 hover:bg-blue-50/50 rounded-lg cursor-pointer transition-colors group/item">
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={visibleColumns[col]} 
+                                                    onChange={(e) => {
+                                                        e.stopPropagation();
+                                                        setVisibleColumns(prev => ({ ...prev, [col]: !prev[col] }));
+                                                    }}
+                                                    className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500/20"
+                                                />
+                                                <span className="text-xs font-semibold text-slate-600 capitalize group-hover/item:text-blue-700">{col.replace(/([A-Z])/g, ' $1')}</span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     {/* Table */}
@@ -349,123 +450,112 @@ export default function ContactsPage() {
                             <table className="w-full text-sm text-left">
                                 <thead className="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[10px] whitespace-nowrap">
                                     <tr>
-                                        <th className="px-6 py-4">Identity</th>
-                                        <th className="px-6 py-4">Internal / Channel</th>
-                                        <th className="px-6 py-4">Status / Stage</th>
-                                        <th className="px-6 py-4">Assigned To</th>
-                                        <th className="px-6 py-4">Synced/Created</th>
-                                        <th className="px-6 py-4"></th>
+                                        {visibleColumns.contact && <th className="px-6 py-4">Identity</th>}
+                                        {visibleColumns.channel && <th className="px-6 py-4">Channel</th>}
+                                        {visibleColumns.externalId && <th className="px-6 py-4">Mobile/ID</th>}
+                                        {visibleColumns.leadStage && <th className="px-6 py-4">Status / Stage</th>}
+                                        {visibleColumns.course && <th className="px-6 py-4">Course</th>}
+                                        {visibleColumns.assignedTo && <th className="px-6 py-4">Assigned To</th>}
+                                        {visibleColumns.source && <th className="px-6 py-4">Source</th>}
+                                        {visibleColumns.syncAt && <th className="px-6 py-4">Synced At</th>}
+                                        {visibleColumns.createdAt && <th className="px-6 py-4">Created At</th>}
+                                        {visibleColumns.actions && <th className="px-6 py-4 text-right"></th>}
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
                                     {isLoading ? (
                                         <tr>
-                                            <td colSpan="6" className="px-6 py-20 text-center">
+                                            <td colSpan="10" className="px-6 py-20 text-center">
                                                 <div className="flex flex-col items-center justify-center space-y-3">
                                                     <div className="w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-                                                    <span className="text-slate-400 font-medium">Loading contacts...</span>
+                                                    <span className="text-slate-400 font-medium text-xs">Loading filtered leads...</span>
                                                 </div>
                                             </td>
                                         </tr>
                                     ) : contacts.length === 0 ? (
                                         <tr>
-                                            <td colSpan="6" className="px-6 py-20 text-center text-slate-400 font-medium italic">No contacts found. Try syncing with XOLOX.</td>
+                                            <td colSpan="10" className="px-6 py-20 text-center text-slate-400 font-medium italic text-xs">No leads found matching these filters. Try syncing with XOLOX.</td>
                                         </tr>
                                     ) : (
                                         contacts.map(contact => {
                                             const p = contact.profile || {};
                                             return (
-                                                <tr key={contact.id} className="hover:bg-slate-50/70 transition-all group">
-                                                    <td className="px-6 py-4">
-                                                        <div className="flex items-center gap-3">
-                                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 font-bold text-sm border-2 ${p.syncedAt ? 'bg-indigo-50 text-indigo-600 border-indigo-100' : 'bg-slate-50 text-slate-600 border-slate-100'}`}>
-                                                                {contact.display_name?.charAt(0).toUpperCase() || <User size={18} />}
+                                                <tr key={contact.id} className="hover:bg-slate-50/70 transition-all group not-italic">
+                                                    {visibleColumns.contact && (
+                                                        <td className="px-6 py-4">
+                                                            <div className="flex items-center gap-3">
+                                                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 font-bold text-sm border-2 ${p.syncedAt ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-slate-50 text-slate-600 border-slate-100'}`}>
+                                                                    {contact.display_name?.charAt(0).toUpperCase() || <User size={18} />}
+                                                                </div>
+                                                                <div className="flex flex-col min-w-0">
+                                                                    <span className="font-bold text-slate-900 truncate max-w-[150px]">{contact.display_name || 'Anonymous'}</span>
+                                                                    <span className="text-[11px] text-slate-400 font-medium truncate max-w-[150px]">{p.email || 'No email'}</span>
+                                                                </div>
                                                             </div>
-                                                            <div className="flex flex-col min-w-0">
-                                                                <span className="font-bold text-slate-900 truncate max-w-[180px]">
-                                                                    {contact.display_name || 'Anonymous'}
-                                                                </span>
-                                                                {p.leadId && (
-                                                                    <span className="text-[10px] text-blue-600 font-bold bg-blue-50 px-1 rounded-sm w-fit mb-0.5">ID: {p.leadId}</span>
-                                                                )}
-                                                                <span className="text-[11px] text-slate-400 font-medium truncate max-w-[180px]">
-                                                                    {p.email || 'No email'}
-                                                                </span>
-                                                            </div>
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-6 py-4">
-                                                        <div className="flex flex-col">
-                                                            <span className="text-xs font-bold text-slate-700">{contact.external_id}</span>
-                                                            <div className="flex items-center gap-1.5 mt-1">
+                                                        </td>
+                                                    )}
+                                                    {visibleColumns.channel && (
+                                                        <td className="px-6 py-4">
+                                                            <div className="flex items-center gap-1.5">
                                                                 <ChannelIcon type={contact.channel_type} name={contact.channel_name} />
                                                                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
-                                                                    {contact.channel_name === 'XOLOX' ? 'Synced (API)' : (CHANNEL_TYPE_LABELS[contact.channel_type] || contact.channel_type)}
+                                                                    {contact.channel_name === 'XOLOX' ? 'Synced' : contact.channel_type}
                                                                 </span>
                                                             </div>
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-6 py-4">
-                                                        <div className="flex flex-col gap-1.5">
+                                                        </td>
+                                                    )}
+                                                    {visibleColumns.externalId && (
+                                                        <td className="px-6 py-4">
+                                                            <div className="flex flex-col">
+                                                                <span className="text-xs font-bold text-slate-700">{contact.external_id}</span>
+                                                                {p.leadId && <span className="text-[9px] text-blue-500 font-bold">ID: {p.leadId}</span>}
+                                                            </div>
+                                                        </td>
+                                                    )}
+                                                    {visibleColumns.leadStage && (
+                                                        <td className="px-6 py-4">
                                                             {p.leadStage ? (
-                                                                <span className="px-2 py-0.5 rounded bg-orange-50 text-orange-600 border border-orange-100 text-[10px] font-bold w-fit uppercase tabular-nums tracking-tight">
+                                                                <div className="inline-flex items-center px-2 py-1 rounded bg-amber-50 text-amber-700 text-[10px] font-bold border border-amber-100 uppercase tracking-tight">
                                                                     {p.leadStage}
-                                                                </span>
-                                                            ) : (
-                                                                <span className="text-[10px] text-slate-400 font-medium italic">General</span>
-                                                            )}
-                                                            {p.course && (
-                                                                <span className="text-[10px] text-blue-600 font-semibold bg-blue-50/50 px-2 py-0.5 rounded-sm border border-blue-100/50 w-fit">
-                                                                    {p.course}
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-6 py-4">
-                                                        {contact.assignee_name || p.assignedTo ? (
-                                                            <div className="flex items-center gap-2">
-                                                                <div className="w-6 h-6 rounded-full bg-purple-100 text-purple-600 text-[9px] flex items-center justify-center font-bold ring-2 ring-purple-50 shadow-sm uppercase">
-                                                                    {(contact.assignee_name || p.assignedTo).charAt(0)}
                                                                 </div>
-                                                                <span className="text-xs font-bold text-slate-700 truncate max-w-[120px]">
-                                                                    {contact.assignee_name || p.assignedTo}
-                                                                </span>
+                                                            ) : <span className="text-slate-300 italic text-[10px]">None</span>}
+                                                        </td>
+                                                    )}
+                                                    {visibleColumns.course && (
+                                                        <td className="px-6 py-4">
+                                                            <span className="text-xs font-semibold text-slate-600 truncate max-w-[100px] block">{p.course || '—'}</span>
+                                                        </td>
+                                                    )}
+                                                    {visibleColumns.assignedTo && (
+                                                        <td className="px-6 py-4">
+                                                            <div className="flex items-center gap-2">
+                                                                <div className="w-5 h-5 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-[9px] font-bold text-slate-500">{(contact.assignee_name || p.assignedTo || 'U').charAt(0)}</div>
+                                                                <span className="text-xs font-medium text-slate-700 truncate max-w-[80px]">{contact.assignee_name || p.assignedTo || 'Unassigned'}</span>
                                                             </div>
-                                                        ) : (
-                                                            <span className="text-[11px] font-medium text-slate-400 italic">Unassigned</span>
-                                                        )}
-                                                    </td>
-                                                    <td className="px-6 py-4">
-                                                        <div className="flex flex-col">
-                                                            <span className="text-[11px] font-bold text-slate-600">
-                                                                {new Date(contact.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                                                            </span>
-                                                            {p.syncedAt && (
-                                                                <span className="text-[9px] text-green-500 font-bold uppercase mt-0.5 flex items-center gap-1">
-                                                                    <RefreshCcw size={8} /> Synced
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-6 py-4 text-right">
-                                                        <div className="flex justify-end gap-1">
-                                                            <Button 
-                                                                variant="ghost" 
-                                                                size="icon" 
-                                                                className="h-8 w-8 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                                            >
-                                                                <ExternalLink size={16} />
-                                                            </Button>
-                                                            <Button 
-                                                                variant="ghost" 
-                                                                size="icon" 
-                                                                className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                                                onClick={() => handleDeleteContact(contact)}
-                                                            >
-                                                                <Trash2 size={16} />
-                                                            </Button>
-                                                        </div>
-                                                    </td>
+                                                        </td>
+                                                    )}
+                                                    {visibleColumns.source && <td className="px-6 py-4 text-xs text-slate-500">{p.leadSource || 'Direct'}</td>}
+                                                    {visibleColumns.syncAt && (
+                                                        <td className="px-6 py-4 text-[10px] text-slate-400 font-medium">
+                                                            {p.syncedAt ? new Date(p.syncedAt).toLocaleDateString() : 'Never'}
+                                                        </td>
+                                                    )}
+                                                    {visibleColumns.createdAt && (
+                                                        <td className="px-6 py-4 text-[10px] text-slate-400 font-medium whitespace-nowrap">
+                                                            {new Date(contact.created_at).toLocaleDateString()}
+                                                        </td>
+                                                    )}
+                                                    {visibleColumns.actions && (
+                                                        <td className="px-6 py-4 text-right">
+                                                            <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100">
+                                                                <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><ExternalLink size={16} /></Button>
+                                                                <Button 
+                                                                    variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                                                    onClick={() => handleDeleteContact(contact)}
+                                                                ><Trash2 size={16} /></Button>
+                                                            </div>
+                                                        </td>
+                                                    )}
                                                 </tr>
                                             );
                                         })
