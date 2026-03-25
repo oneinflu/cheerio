@@ -24,6 +24,143 @@ function channelLabel(ch) {
 }
 
 // ──────────────────────────────────────────
+// Contact Details Side Modal (Drawer)
+// ──────────────────────────────────────────
+function ContactDetailsModal({ contact, isOpen, onClose, onDelete }) {
+    if (!contact) return null;
+    const p = contact.profile || {};
+
+    return (
+        <div className={`fixed inset-0 z-[100] transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+            {/* Backdrop */}
+            <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px]" onClick={onClose} />
+            
+            {/* Slide-out Panel */}
+            <div className={`absolute right-0 top-0 bottom-0 w-full max-w-md bg-white shadow-2xl transform transition-transform duration-300 ease-out border-l border-slate-200 flex flex-col ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+                
+                {/* Header */}
+                <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                    <div>
+                        <h2 className="text-lg font-bold text-slate-900">Lead Registry Details</h2>
+                        <p className="text-xs text-slate-500 font-medium">Internal System ID: <span className="text-blue-600 font-bold">{contact.id.slice(0, 8)}...</span></p>
+                    </div>
+                    <button onClick={onClose} className="p-2 hover:bg-slate-200/60 rounded-full text-slate-400 hover:text-slate-600 transition-colors">
+                        <X size={20} />
+                    </button>
+                </div>
+
+                {/* Content */}
+                <div className="flex-1 overflow-y-auto px-6 py-8 space-y-9 no-scrollbar">
+                    
+                    {/* Hero Section */}
+                    <div className="flex flex-col items-center text-center space-y-4">
+                        <div className="relative">
+                            <div className="w-20 h-20 rounded-2xl bg-blue-600 flex items-center justify-center text-white text-3xl font-bold shadow-xl shadow-blue-100 border-4 border-white ring-1 ring-blue-50">
+                                {contact.display_name?.charAt(0).toUpperCase() || <User size={32} />}
+                            </div>
+                            <div className="absolute -bottom-1 -right-1 w-7 h-7 bg-white rounded-lg shadow-md border border-slate-100 flex items-center justify-center">
+                                <ChannelIcon type={contact.channel_type} name={contact.channel_name} />
+                            </div>
+                        </div>
+                        <div>
+                            <h3 className="text-xl font-bold text-slate-900">{contact.display_name || 'Anonymous Lead'}</h3>
+                            <div className="flex items-center justify-center gap-2 mt-1.5">
+                                <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 text-[10px] font-bold uppercase tracking-wider border border-slate-200">
+                                    {contact.channel_name}
+                                </span>
+                                {p.leadStage && (
+                                    <span className="px-2 py-0.5 rounded-full bg-orange-100 text-orange-600 text-[10px] font-bold uppercase tracking-wider border border-orange-200">
+                                        {p.leadStage}
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Quick Stats */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="p-4 rounded-xl bg-blue-50/50 border border-blue-100/50 text-center">
+                            <p className="text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-1">Assigned Agent</p>
+                            <p className="text-sm font-bold text-slate-700">{contact.assignee_name || p.assignedTo || 'Unassigned'}</p>
+                        </div>
+                        <div className="p-4 rounded-xl bg-purple-50/50 border border-purple-100/50 text-center">
+                            <p className="text-[10px] font-bold text-purple-400 uppercase tracking-widest mb-1">Selected Course</p>
+                            <p className="text-sm font-bold text-slate-700">{p.course || 'None'}</p>
+                        </div>
+                    </div>
+
+                    {/* Metadata Groups */}
+                    <div className="space-y-6">
+                        <section>
+                            <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.15em] mb-4 flex items-center gap-2">
+                                <div className="h-px bg-slate-100 flex-1"></div>
+                                Contact Information
+                            </h4>
+                            <div className="grid grid-cols-1 gap-4">
+                                <DataField icon={<User size={14}/>} label="Full Identity" value={contact.display_name || 'N/A'} />
+                                <DataField icon={<MessageCircle size={14}/>} label="Primary Mobile" value={contact.external_id} />
+                                <DataField icon={<Download size={14}/>} label="Email Address" value={p.email || 'N/A'} />
+                                <DataField icon={<RefreshCcw size={14}/>} label="Lead Source" value={p.leadSource || 'Direct Import'} />
+                            </div>
+                        </section>
+
+                        <section>
+                            <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.15em] mb-4 flex items-center gap-2">
+                                <div className="h-px bg-slate-100 flex-1"></div>
+                                System Attributes
+                            </h4>
+                            <div className="grid grid-cols-1 gap-4">
+                                <DataField label="Registered At" value={new Date(contact.created_at).toLocaleString()} />
+                                <DataField label="Last XOLOX Sync" value={p.syncedAt ? new Date(p.syncedAt).toLocaleString() : 'Never'} />
+                                <DataField label="Lead Score / ID" value={p.leadId || 'N/A'} />
+                            </div>
+                        </section>
+
+                        {contact.profile && Object.keys(contact.profile).length > 0 && (
+                            <section>
+                                <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.15em] mb-4 flex items-center gap-2">
+                                    <div className="h-px bg-slate-100 flex-1"></div>
+                                    Raw Profile Snapshot
+                                </h4>
+                                <div className="bg-slate-900 rounded-xl p-4 overflow-x-auto">
+                                    <pre className="text-[11px] font-mono text-blue-300/80 leading-relaxed">
+                                        {JSON.stringify(contact.profile, null, 2)}
+                                    </pre>
+                                </div>
+                            </section>
+                        )}
+                    </div>
+                </div>
+
+                {/* Footer Actions */}
+                <div className="px-6 py-5 border-t border-slate-100 bg-slate-50/50 flex gap-3">
+                    <Button variant="outline" className="flex-1 font-bold text-xs" onClick={() => { onDelete(contact); onClose(); }}>
+                        <Trash2 size={14} className="mr-2 text-red-500" />
+                        DELETE RECORD
+                    </Button>
+                    <Button className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs">
+                        <ExternalLink size={14} className="mr-2" />
+                        UPDATE DATA
+                    </Button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function DataField({ icon, label, value }) {
+    return (
+        <div className="flex items-start gap-3">
+            {icon && <div className="mt-1 text-slate-400">{icon}</div>}
+            <div className="flex flex-col min-w-0">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">{label}</span>
+                <span className="text-sm font-semibold text-slate-700 break-words">{value}</span>
+            </div>
+        </div>
+    );
+}
+
+// ──────────────────────────────────────────
 // Add Contact Modal
 // ──────────────────────────────────────────
 function AddContactModal({ isOpen, onClose, channels, onSuccess }) {
@@ -32,7 +169,6 @@ function AddContactModal({ isOpen, onClose, channels, onSuccess }) {
     const [error, setError] = useState('');
     const [saving, setSaving] = useState(false);
 
-    // Reset when opened
     useEffect(() => {
         if (isOpen) {
             setForm({ channel_id: channels[0]?.id || '', external_id: '', display_name: '' });
@@ -42,21 +178,13 @@ function AddContactModal({ isOpen, onClose, channels, onSuccess }) {
     }, [isOpen, channels]);
 
     const selectedChannel = channels.find(c => c.id === form.channel_id);
-    const isRaw = selectedChannel?.type === 'raw' || (!selectedChannel && false);
+    const isRaw = selectedChannel?.type === 'raw';
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
-
-        if (!form.channel_id) { setError('Please select a channel.'); return; }
-        if (!form.external_id.trim()) { setError('External ID / Phone is required.'); return; }
-
-        let profile = {};
-        if (isRaw) {
-            try { profile = JSON.parse(rawJson); } catch {
-                setError('Raw Data must be valid JSON.'); return;
-            }
-        }
+        if (!form.channel_id) { setError('Select a channel.'); return; }
+        if (!form.external_id.trim()) { setError('Mobile/ID required.'); return; }
 
         setSaving(true);
         try {
@@ -64,97 +192,46 @@ function AddContactModal({ isOpen, onClose, channels, onSuccess }) {
                 channel_id: form.channel_id,
                 external_id: form.external_id.trim(),
                 display_name: form.display_name.trim() || null,
-                profile,
+                profile: isRaw ? JSON.parse(rawJson) : {},
             });
-
-            if (res.success) {
-                onSuccess(res.contact);
-                onClose();
-            } else {
-                setError(res.error || 'Failed to create contact.');
-            }
-        } catch (err) {
-            setError('Network error. Please try again.');
-        } finally {
-            setSaving(false);
-        }
+            if (res.success) { onSuccess(res.contact); onClose(); }
+            else setError(res.error || 'Failed.');
+        } catch (err) { setError('Network error.'); }
+        finally { setSaving(false); }
     };
 
     return (
         <Modal isOpen={isOpen} onClose={onClose} title="Add New Contact">
-            <form onSubmit={handleSubmit} className="space-y-5">
-
-                {/* Channel selector */}
+            <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                        Channel <span className="text-red-500">*</span>
-                    </label>
-                    <div className="relative">
-                        <select
-                            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 appearance-none pr-8"
-                            value={form.channel_id}
-                            onChange={e => setForm(f => ({ ...f, channel_id: e.target.value }))}
-                        >
-                            {channels.length === 0 && (
-                                <option value="">No channels available</option>
-                            )}
-                            {channels.map(ch => (
-                                <option key={ch.id} value={ch.id}>
-                                    {channelLabel(ch)}
-                                </option>
-                            ))}
-                        </select>
-                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
-                            <svg className="h-4 w-4 text-slate-400" viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                            </svg>
-                        </div>
-                    </div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Channel</label>
+                    <select
+                        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500"
+                        value={form.channel_id}
+                        onChange={e => setForm(f => ({ ...f, channel_id: e.target.value }))}
+                    >
+                        {channels.map(ch => <option key={ch.id} value={ch.id}>{channelLabel(ch)}</option>)}
+                    </select>
                 </div>
-
-                {/* External ID / Phone */}
                 <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                        External ID / Phone <span className="text-red-500">*</span>
-                    </label>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Mobile / ID</label>
                     <input
-                        type="text"
-                        className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                        placeholder="e.g. 919876543210"
-                        value={form.external_id}
-                        onChange={e => setForm(f => ({ ...f, external_id: e.target.value }))}
+                        type="text" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                        value={form.external_id} onChange={e => setForm(f => ({ ...f, external_id: e.target.value }))}
                     />
                 </div>
-
-                {/* Display Name */}
                 <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                        Display Name <span className="text-slate-400 font-normal">(optional)</span>
-                    </label>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Display Name</label>
                     <input
-                        type="text"
-                        className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                        placeholder="Full name"
-                        value={form.display_name}
-                        onChange={e => setForm(f => ({ ...f, display_name: e.target.value }))}
+                        type="text" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                        value={form.display_name} onChange={e => setForm(f => ({ ...f, display_name: e.target.value }))}
                     />
                 </div>
-
-                {/* Error */}
-                {error && (
-                    <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-2.5 text-sm text-red-700 flex items-center gap-2">
-                        <X size={14} />
-                        {error}
-                    </div>
-                )}
-
-                {/* Actions */}
-                <div className="flex justify-end gap-3 pt-1 border-t border-slate-100">
-                    <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
-                        Cancel
-                    </Button>
+                {error && <div className="text-xs text-red-500 font-bold">{error}</div>}
+                <div className="flex justify-end gap-2 pt-2">
+                    <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
                     <Button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white" disabled={saving}>
-                        {saving ? 'Adding...' : 'Add Contact'}
+                        {saving ? 'Saving...' : 'Add Contact'}
                     </Button>
                 </div>
             </form>
@@ -178,6 +255,8 @@ export default function ContactsPage() {
 
     const [channels, setChannels] = useState([]);
     const [showAddModal, setShowAddModal] = useState(false);
+    const [selectedContact, setSelectedContact] = useState(null);
+    const [showColumnMenu, setShowColumnMenu] = useState(false);
 
     // Filter and Column Visibility State
     const [filters, setFilters] = useState({
@@ -397,9 +476,10 @@ export default function ContactsPage() {
                                 }}
                             >
                                 <option value="">Course: All</option>
-                                <option value="CMA (USA)">CMA (USA)</option>
-                                <option value="ACCA (UK)">ACCA (UK)</option>
-                                <option value="CPA (USA)">CPA (USA)</option>
+                                <option value="CPA">CPA</option>
+                                <option value="CMA USA">CMA USA</option>
+                                <option value="ACCA">ACCA</option>
+                                <option value="EA">EA</option>
                             </select>
 
                             <select 
@@ -414,32 +494,40 @@ export default function ContactsPage() {
                                 <option value="Test User">Test User</option>
                             </select>
 
-                            <div className="relative group ml-1">
-                                <Button variant="outline" className="flex items-center gap-2 bg-white shadow-sm border-slate-200 text-slate-600 h-9 px-3 rounded-lg">
+                            <div className="relative ml-1">
+                                <Button 
+                                    variant="outline" 
+                                    className={`flex items-center gap-2 bg-white shadow-sm border-slate-200 text-slate-600 h-9 px-3 rounded-lg ${showColumnMenu ? 'ring-2 ring-blue-500/20 border-blue-200' : ''}`}
+                                    onClick={() => setShowColumnMenu(!showColumnMenu)}
+                                >
                                     <Filter size={14} className="text-slate-400" />
                                     <span className="text-[11px] font-bold uppercase tracking-wider">Columns</span>
                                 </Button>
-                                <div className="absolute right-0 top-full mt-1.5 w-52 bg-white border border-slate-200 rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 p-2 overflow-hidden transform scale-95 origin-top-right group-hover:scale-100">
-                                    <div className="mb-2 px-3 py-1.5 bg-slate-50 border-b border-slate-100 -mx-2 -mt-2">
-                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">Column Visibility</span>
-                                    </div>
-                                    <div className="max-h-[300px] overflow-y-auto space-y-0.5 custom-scrollbar">
-                                        {Object.keys(visibleColumns).map(col => (
-                                            <label key={col} className="flex items-center gap-2.5 px-3 py-2 hover:bg-blue-50/50 rounded-lg cursor-pointer transition-colors group/item">
-                                                <input 
-                                                    type="checkbox" 
-                                                    checked={visibleColumns[col]} 
-                                                    onChange={(e) => {
-                                                        e.stopPropagation();
-                                                        setVisibleColumns(prev => ({ ...prev, [col]: !prev[col] }));
-                                                    }}
-                                                    className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500/20"
-                                                />
-                                                <span className="text-xs font-semibold text-slate-600 capitalize group-hover/item:text-blue-700">{col.replace(/([A-Z])/g, ' $1')}</span>
-                                            </label>
-                                        ))}
-                                    </div>
-                                </div>
+                                {showColumnMenu && (
+                                    <>
+                                        <div className="fixed inset-0 z-40" onClick={() => setShowColumnMenu(false)} />
+                                        <div className="absolute right-0 top-full mt-1.5 w-52 bg-white border border-slate-200 rounded-xl shadow-xl z-50 p-2 overflow-hidden transform origin-top-right transition-all animate-in fade-in zoom-in-95 duration-100">
+                                            <div className="mb-2 px-3 py-1.5 bg-slate-50 border-b border-slate-100 -mx-2 -mt-2">
+                                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">Column Visibility</span>
+                                            </div>
+                                            <div className="max-h-[300px] overflow-y-auto space-y-0.5 custom-scrollbar">
+                                                {Object.keys(visibleColumns).map(col => (
+                                                    <label key={col} className="flex items-center gap-2.5 px-3 py-2 hover:bg-blue-50/50 rounded-lg cursor-pointer transition-colors group/item">
+                                                        <input 
+                                                            type="checkbox" 
+                                                            checked={visibleColumns[col]} 
+                                                            onChange={(e) => {
+                                                                setVisibleColumns(prev => ({ ...prev, [col]: !prev[col] }));
+                                                            }}
+                                                            className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500/20"
+                                                        />
+                                                        <span className="text-xs font-semibold text-slate-600 capitalize group-hover/item:text-blue-700">{col.replace(/([A-Z])/g, ' $1')}</span>
+                                                    </label>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -487,8 +575,8 @@ export default function ContactsPage() {
                                                                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 font-bold text-sm border-2 ${p.syncedAt ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-slate-50 text-slate-600 border-slate-100'}`}>
                                                                     {contact.display_name?.charAt(0).toUpperCase() || <User size={18} />}
                                                                 </div>
-                                                                <div className="flex flex-col min-w-0">
-                                                                    <span className="font-bold text-slate-900 truncate max-w-[150px]">{contact.display_name || 'Anonymous'}</span>
+                                                                <div className="flex flex-col min-w-0 cursor-pointer group/name" onClick={() => setSelectedContact(contact)}>
+                                                                    <span className="font-bold text-slate-900 truncate max-w-[150px] group-hover/name:text-blue-600 transition-colors">{contact.display_name || 'Anonymous'}</span>
                                                                     <span className="text-[11px] text-slate-400 font-medium truncate max-w-[150px]">{p.email || 'No email'}</span>
                                                                 </div>
                                                             </div>
@@ -548,7 +636,12 @@ export default function ContactsPage() {
                                                     {visibleColumns.actions && (
                                                         <td className="px-6 py-4 text-right">
                                                             <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100">
-                                                                <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><ExternalLink size={16} /></Button>
+                                                                <Button 
+                                                                    variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                                                    onClick={() => setSelectedContact(contact)}
+                                                                >
+                                                                    <ExternalLink size={16} />
+                                                                </Button>
                                                                 <Button 
                                                                     variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                                                                     onClick={() => handleDeleteContact(contact)}
@@ -606,6 +699,13 @@ export default function ContactsPage() {
                 onClose={() => setShowAddModal(false)}
                 channels={channels}
                 onSuccess={handleContactAdded}
+            />
+
+            <ContactDetailsModal
+                contact={selectedContact}
+                isOpen={!!selectedContact}
+                onClose={() => setSelectedContact(null)}
+                onDelete={handleDeleteContact}
             />
         </div>
     );
