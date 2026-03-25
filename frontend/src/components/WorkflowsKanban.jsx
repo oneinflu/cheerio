@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { cn } from '../lib/utils';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Badge } from './ui/Badge';
@@ -16,6 +17,7 @@ import {
 } from '../api';
 import { Plus, X, GripVertical, MoreHorizontal, Search, LayoutGrid, List, Clock, Eye, Pencil, Trash2 } from 'lucide-react';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from './ui/Table';
+import { Modal } from './ui/Modal';
 
 const formatDelay = (mins) => {
   if (!mins) return 'Instant';
