@@ -121,7 +121,7 @@ export default function CustomerCard({ conversationId, onLeadStageUpdated }) {
         })
       });
       if (!res.ok) throw new Error('Failed to update contact');
-      toast({ description: "Contact details updated" });
+      toast({ description: "Contact details updated", duration: 1200 });
     } catch (err) {
       console.error(err);
     } finally {

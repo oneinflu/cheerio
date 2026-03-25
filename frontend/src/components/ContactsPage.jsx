@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Download, Upload, Plus, Search, MoreHorizontal, User, MessageCircle, Instagram, Database, X, Trash2, RefreshCcw, Filter, ChevronLeft, ChevronRight, ChevronDown, ArrowRight, ExternalLink } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Modal } from './ui/Modal';
+import { useToast } from './ui/use-toast';
 import { getContacts, getContactChannels, addContact, deleteContact, syncXoloxContacts, getXoloxSyncStatus, putContact } from '../api';
 
 const LEAD_STAGES = [
@@ -49,8 +50,10 @@ function channelLabel(ch) {
 // ──────────────────────────────────────────
 // Contact Details Side Modal (Drawer)
 // ──────────────────────────────────────────
-function ContactDetailsModal({ contact, isOpen, onClose, onDelete }) {
+function ContactDetailsModal({ contact, isOpen, onClose, onDelete, onUpdate }) {
     if (!contact) return null;
+    const { toast } = useToast();
+    const p = contact.profile || {};
     const [isSaving, setIsSaving] = useState(false);
     const [editForm, setEditForm] = useState({ 
         display_name: contact.display_name || '', 
@@ -66,6 +69,7 @@ function ContactDetailsModal({ contact, isOpen, onClose, onDelete }) {
             // For now, we'll use putContact for direct Registry updates
             const res = await putContact(contact.id, editForm);
             if (res.success) {
+                toast({ description: "Registry record updated", duration: 1200 });
                 onUpdate(res.contact);
                 onClose();
             }
