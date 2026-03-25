@@ -504,29 +504,30 @@ export default function ContactsPage() {
                                     <span className="text-[11px] font-bold uppercase tracking-wider">Columns</span>
                                 </Button>
                                 {showColumnMenu && (
-                                    <>
-                                        <div className="fixed inset-0 z-40" onClick={() => setShowColumnMenu(false)} />
-                                        <div className="absolute right-0 top-full mt-1.5 w-52 bg-white border border-slate-200 rounded-xl shadow-xl z-50 p-2 overflow-hidden transform origin-top-right transition-all animate-in fade-in zoom-in-95 duration-100">
-                                            <div className="mb-2 px-3 py-1.5 bg-slate-50 border-b border-slate-100 -mx-2 -mt-2">
-                                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">Column Visibility</span>
-                                            </div>
-                                            <div className="max-h-[300px] overflow-y-auto space-y-0.5 custom-scrollbar">
-                                                {Object.keys(visibleColumns).map(col => (
-                                                    <label key={col} className="flex items-center gap-2.5 px-3 py-2 hover:bg-blue-50/50 rounded-lg cursor-pointer transition-colors group/item">
-                                                        <input 
-                                                            type="checkbox" 
-                                                            checked={visibleColumns[col]} 
-                                                            onChange={(e) => {
-                                                                setVisibleColumns(prev => ({ ...prev, [col]: !prev[col] }));
-                                                            }}
-                                                            className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500/20"
-                                                        />
-                                                        <span className="text-xs font-semibold text-slate-600 capitalize group-hover/item:text-blue-700">{col.replace(/([A-Z])/g, ' $1')}</span>
-                                                    </label>
-                                                ))}
-                                            </div>
+                                    <div className="absolute right-0 top-full mt-2 w-52 bg-white border border-slate-200 rounded-xl shadow-2xl z-50 p-2 transform origin-top-right transition-all whitespace-normal">
+                                        <div className="flex items-center justify-between mb-2 px-3 py-1.5 bg-slate-50 border-b border-slate-100 -mx-2 -mt-2">
+                                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Visibility Control</span>
                                         </div>
-                                    </>
+                                        <div className="max-h-[350px] overflow-y-auto space-y-0.5 custom-scrollbar pb-1">
+                                            {Object.keys(visibleColumns).map(col => (
+                                                <div 
+                                                    key={col} 
+                                                    className="flex items-center gap-2.5 px-3 py-2 hover:bg-blue-50/70 rounded-lg cursor-pointer transition-all group/item select-none"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setVisibleColumns(prev => ({ ...prev, [col]: !prev[col] }));
+                                                    }}
+                                                >
+                                                    <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${visibleColumns[col] ? 'bg-blue-600 border-blue-600' : 'bg-white border-slate-300'}`}>
+                                                        {visibleColumns[col] && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                                                    </div>
+                                                    <span className={`text-xs font-semibold capitalize transition-colors ${visibleColumns[col] ? 'text-blue-700' : 'text-slate-500'}`}>
+                                                        {col.replace(/([A-Z])/g, ' $1')}
+                                                    </span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
                                 )}
                             </div>
                         </div>
