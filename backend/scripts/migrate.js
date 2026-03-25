@@ -596,6 +596,23 @@ async function runMigrations() {
           }
         }
 
+        // Check if lead_stage column exists in contacts
+        const contactLeadColRes = await client.query(`
+          SELECT column_name 
+          FROM information_schema.columns 
+          WHERE table_name='contacts' AND column_name='lead_stage'
+        `);
+
+        if (contactLeadColRes.rowCount === 0) {
+          console.log('[migrate] Adding lead tracking columns to contacts...');
+          await client.query('BEGIN');
+          await runSQLFile(client, path.join(__dirname, '..', 'db', 'migrations', '0029_add_contact_lead_columns.sql'));
+          await client.query('COMMIT');
+          console.log('[migrate] Applied contact lead tracking migration.');
+        } else {
+          console.log('[migrate] Contacts table lead schema up to date.');
+        }
+
         return;
 
 

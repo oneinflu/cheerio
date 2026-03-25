@@ -51,17 +51,17 @@ router.get('/', auth.requireRole('admin', 'agent', 'supervisor'), async (req, re
 
         if (leadStage) {
             queryParams.push(leadStage);
-            whereClauses.push(`c.profile->>'leadStage' = $${queryParams.length}`);
+            whereClauses.push(`c.lead_stage = $${queryParams.length}`);
         }
 
         if (course) {
             queryParams.push(course);
-            whereClauses.push(`c.profile->>'course' = $${queryParams.length}`);
+            whereClauses.push(`c.course = $${queryParams.length}`);
         }
 
         if (assignedTo) {
             queryParams.push(assignedTo);
-            whereClauses.push(`c.profile->>'assignedTo' = $${queryParams.length}`);
+            whereClauses.push(`c.assigned_to = $${queryParams.length}`);
         }
 
         if (whereClauses.length > 0) {
@@ -234,21 +234,30 @@ router.post('/sync', auth.requireRole('admin', 'supervisor'), async (req, res, n
             for (const lead of data.data.data) {
                 if (!lead.mobile) continue;
                 const profile = {
-                    email: lead.email,
                     leadId: lead.leadId,
-                    leadStage: lead.leadStage,
-                    course: lead.courseId?.name,
-                    assignedTo: lead.assignedTo ? `${lead.assignedTo.firstname} ${lead.assignedTo.lastname}` : null,
                     leadSource: lead.leadSource,
-                    syncedAt: new Date().toISOString(),
                     xoloxData: lead
                 };
+                const leadStage = lead.leadStage;
+                const courseName = lead.courseId?.name;
+                const assignedTo = lead.assignedTo ? `${lead.assignedTo.firstname} ${lead.assignedTo.lastname}` : null;
+                const lastSyncAt = new Date().toISOString();
+
                 const upsertRes = await db.query(`
-                    INSERT INTO contacts (channel_id, external_id, display_name, profile, updated_at)
-                    VALUES ($1, $2, $3, $4, NOW())
+                    INSERT INTO contacts (channel_id, external_id, display_name, profile, lead_stage, course, assigned_to, last_sync_at, email, lead_id, updated_at)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
                     ON CONFLICT (channel_id, external_id) DO UPDATE SET 
-                    display_name = EXCLUDED.display_name, profile = EXCLUDED.profile, updated_at = NOW()
-                    RETURNING (xmax = 0) AS inserted;`, [channelId, lead.mobile, lead.name || 'Unknown', profile]);
+                    display_name = EXCLUDED.display_name, 
+                    profile = EXCLUDED.profile, 
+                    lead_stage = EXCLUDED.lead_stage,
+                    course = EXCLUDED.course,
+                    assigned_to = EXCLUDED.assigned_to,
+                    last_sync_at = EXCLUDED.last_sync_at,
+                    email = EXCLUDED.email,
+                    lead_id = EXCLUDED.lead_id,
+                    updated_at = NOW()
+                    RETURNING (xmax = 0) AS inserted;
+                `, [channelId, lead.mobile, lead.name || 'Unknown', profile, leadStage, courseName, assignedTo, lastSyncAt, lead.email, lead.leadId]);
                 if (upsertRes.rows[0]?.inserted) inserted++; else updated++;
             }
             return { total: data.data.count, processed: data.data.data.length, inserted, updated };
