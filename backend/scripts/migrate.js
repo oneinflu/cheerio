@@ -634,6 +634,16 @@ async function runMigrations() {
           console.log('[migrate] Applied contact lead_status migration.');
         }
 
+        // Check if N2 Fresh Leads exists in lead_stages to determine if we need to sync new list
+        const stageCheck = await client.query("SELECT id FROM lead_stages WHERE name='N2 Fresh Leads' LIMIT 1");
+        if (stageCheck.rowCount === 0) {
+          console.log('[migrate] Standardizing lead stages to N2 tracks...');
+          await client.query('BEGIN');
+          await runSQLFile(client, path.join(__dirname, '..', 'db', 'migrations', '0032_sync_lead_stages.sql'));
+          await client.query('COMMIT');
+          console.log('[migrate] Applied standardized lead stages reset.');
+        }
+
         return;
 
 

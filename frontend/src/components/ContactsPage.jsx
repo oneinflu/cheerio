@@ -2,7 +2,30 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Download, Upload, Plus, Search, MoreHorizontal, User, MessageCircle, Instagram, Database, X, Trash2, RefreshCcw, Filter, ChevronLeft, ChevronRight, ChevronDown, ArrowRight, ExternalLink } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Modal } from './ui/Modal';
-import { getContacts, getContactChannels, addContact, deleteContact, syncXoloxContacts, getXoloxSyncStatus } from '../api';
+import { getContacts, getContactChannels, addContact, deleteContact, syncXoloxContacts, getXoloxSyncStatus, putContact } from '../api';
+
+const LEAD_STAGES = [
+    'N2 Fresh Leads',
+    'N2 Minus',
+    'N2 Plus',
+    'N3 Interested',
+    'N3 Plus',
+    'N3 Minus',
+    'Lost',
+    'Converted'
+];
+
+const LEAD_STATUSES = [
+    'new',
+    'renewed',
+    'assigned',
+    'contacted',
+    'interested',
+    'not_interested',
+    'counseling',
+    'won',
+    'lost'
+];
 
 // Small helper to pick the right icon for a channel type
 function ChannelIcon({ type, name }) {
@@ -28,7 +51,30 @@ function channelLabel(ch) {
 // ──────────────────────────────────────────
 function ContactDetailsModal({ contact, isOpen, onClose, onDelete }) {
     if (!contact) return null;
-    const p = contact.profile || {};
+    const [isSaving, setIsSaving] = useState(false);
+    const [editForm, setEditForm] = useState({ 
+        display_name: contact.display_name || '', 
+        course: contact.course || p.course || '',
+        lead_stage: contact.lead_stage || p.leadStage || '',
+        lead_status: contact.lead_status || 'new'
+    });
+
+    const handleUpdateContact = async () => {
+        setIsSaving(true);
+        try {
+            // Re-using a generic update contact API or creating one if needed
+            // For now, we'll use putContact for direct Registry updates
+            const res = await putContact(contact.id, editForm);
+            if (res.success) {
+                onUpdate(res.contact);
+                onClose();
+            }
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setIsSaving(false);
+        }
+    };
 
     return (
         <div className={`fixed inset-0 z-[100] transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
@@ -110,8 +156,35 @@ function ContactDetailsModal({ contact, isOpen, onClose, onDelete }) {
                             </h4>
                             <div className="grid grid-cols-1 gap-4">
                                 <DataField label="Registered At" value={new Date(contact.created_at).toLocaleString()} />
-                                <DataField label="Last XOLOX Sync" value={p.syncedAt ? new Date(p.syncedAt).toLocaleString() : 'Never'} />
-                                <DataField label="Lead Score / ID" value={p.leadId || 'N/A'} />
+                                <DataField label="Last XOLOX Sync" value={(contact.last_sync_at || p.syncedAt) ? new Date(contact.last_sync_at || p.syncedAt).toLocaleString() : 'Never'} />
+                                <DataField label="Lead Score / ID" value={contact.lead_id || p.leadId || 'N/A'} />
+                            </div>
+                        </section>
+
+                        <section className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
+                            <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.15em] mb-4">Lead Categorization</h4>
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 block">Lead Status (CRT Track)</label>
+                                    <select 
+                                        className="w-full h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 outline-none focus:border-blue-500"
+                                        value={editForm.lead_status}
+                                        onChange={e => setEditForm(v => ({ ...v, lead_status: e.target.value }))}
+                                    >
+                                        {LEAD_STATUSES.map(s => <option key={s} value={s}>{s.toUpperCase()}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 block">Lead Stage (N2 Track)</label>
+                                    <select 
+                                        className="w-full h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 outline-none focus:border-blue-500"
+                                        value={editForm.lead_stage}
+                                        onChange={e => setEditForm(v => ({ ...v, lead_stage: e.target.value }))}
+                                    >
+                                        <option value="">SELECT STAGE</option>
+                                        {LEAD_STAGES.map(s => <option key={s} value={s}>{s.toUpperCase()}</option>)}
+                                    </select>
+                                </div>
                             </div>
                         </section>
 
@@ -137,9 +210,13 @@ function ContactDetailsModal({ contact, isOpen, onClose, onDelete }) {
                         <Trash2 size={14} className="mr-2 text-red-500" />
                         DELETE RECORD
                     </Button>
-                    <Button className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs">
+                    <Button 
+                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs" 
+                        onClick={handleUpdateContact}
+                        disabled={isSaving}
+                    >
                         <ExternalLink size={14} className="mr-2" />
-                        UPDATE DATA
+                        {isSaving ? 'SAVING...' : 'UPDATE DATA'}
                     </Button>
                 </div>
             </div>
@@ -241,29 +318,6 @@ function AddContactModal({ isOpen, onClose, channels, onSuccess }) {
 // ──────────────────────────────────────────
 // Main Contacts Page
 // ──────────────────────────────────────────
-const LEAD_STAGES = [
-    'N2 Fresh Leads',
-    'N2 Minus',
-    'N2 Plus',
-    'N3 Interested',
-    'N3 Plus',
-    'N3 Minus',
-    'Lost',
-    'Converted'
-];
-
-const LEAD_STATUSES = [
-    'new',
-    'renewed',
-    'assigned',
-    'contacted',
-    'interested',
-    'not_interested',
-    'counseling',
-    'won',
-    'lost'
-];
-
 export default function ContactsPage() {
     const [contacts, setContacts] = useState([]);
     const [isLoading, setIsLoading] = useState(true);

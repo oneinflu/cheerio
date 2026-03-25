@@ -781,6 +781,16 @@ export async function deleteContact(id) {
   return res.json();
 }
 
+export async function putContact(id, data) {
+  const headers = getAuthHeaders();
+  const res = await fetch(`/api/contacts/${id}`, {
+    method: "PUT",
+    headers,
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
 export async function getLabels() {
   const res = await fetch(`/api/labels`, { headers: getAuthHeaders() });
   return res.json();

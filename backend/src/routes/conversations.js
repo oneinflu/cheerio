@@ -33,7 +33,7 @@ router.get('/:conversationId/contact', auth.requireRole('admin', 'super_admin', 
   try {
     const { conversationId } = req.params;
     const result = await db.query(
-      `SELECT ct.id as contact_id, ct.display_name, ct.external_id, ct.profile,
+      `SELECT ct.id as contact_id, ct.display_name, ct.external_id, ct.profile, ct.lead_status,
               c.lead_stage_id,
               ls.name AS lead_stage_name,
               ls.color AS lead_stage_color,
@@ -75,6 +75,7 @@ router.get('/:conversationId/contact', auth.requireRole('admin', 'super_admin', 
           isClosed: row.lead_stage_is_closed === true,
         }
         : null,
+      leadStatus: row.lead_status || 'new',
       tags: tags
     });
   } catch (err) {
@@ -113,10 +114,14 @@ router.put('/:conversationId/lead-stage', auth.requireRole('admin', 'super_admin
         `UPDATE conversations
          SET lead_stage_id = $1
          WHERE id = $2
-         RETURNING id`,
+         RETURNING id, contact_id`,
         [stageId, conversationId]
       );
       if (upd.rowCount === 0) return res.status(404).json({ error: 'Conversation not found' });
+      
+      const contactId = upd.rows[0].contact_id;
+      // Sync text stage back to contacts table for Registry visibility
+      await db.query(`UPDATE contacts SET lead_stage = $1 WHERE id = $2`, [stageRes.rows[0].name, contactId]);
       try {
         const { runStageWorkflows } = require('../services/workflows');
         const phoneRes = await db.query('SELECT contacts.external_id FROM conversations JOIN contacts ON contacts.id = conversations.contact_id WHERE conversations.id = $1', [conversationId]);
@@ -157,7 +162,7 @@ router.put('/:conversationId/lead-stage', auth.requireRole('admin', 'super_admin
 router.put('/:conversationId/contact', auth.requireRole('admin', 'super_admin', 'quality_manager', 'agent', 'supervisor'), async (req, res, next) => {
   try {
     const { conversationId } = req.params;
-    const { name, course, tags } = req.body;
+    const { name, course, tags, leadStatus } = req.body;
 
     const cRes = await db.query('SELECT contact_id, lead_id FROM conversations WHERE id = $1', [conversationId]);
     if (cRes.rows.length === 0) {
@@ -172,9 +177,10 @@ router.put('/:conversationId/contact', auth.requireRole('admin', 'super_admin', 
     await db.query(
       `UPDATE contacts 
        SET display_name = $1, 
-           profile = jsonb_set(COALESCE(profile, '{}'), '{course}', to_jsonb($2::text), true)
-       WHERE id = $3`,
-      [name, course, contactId]
+           lead_status = COALESCE($2, lead_status),
+           profile = jsonb_set(COALESCE(profile, '{}'), '{course}', to_jsonb($3::text), true)
+       WHERE id = $4`,
+      [name, leadStatus || null, course, contactId]
     );
 
     // Update tags if provided

@@ -160,6 +160,37 @@ router.get('/channels', auth.requireRole('admin', 'agent', 'supervisor'), async 
 });
 
 /**
+ * PUT /api/contacts/:id
+ * Updates specific contact fields.
+ */
+router.put('/:id', auth.requireRole('admin', 'supervisor', 'agent'), async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const { display_name, lead_stage, lead_status, course } = req.body;
+        
+        const result = await db.query(
+            `UPDATE contacts 
+             SET display_name = COALESCE($1, display_name),
+                 lead_stage = COALESCE($2, lead_stage),
+                 lead_status = COALESCE($3, lead_status),
+                 profile = jsonb_set(COALESCE(profile, '{}'), '{course}', to_jsonb($4::text), true),
+                 updated_at = NOW()
+             WHERE id = $5
+             RETURNING id, display_name, lead_stage, lead_status, profile, channel_id, external_id`,
+            [display_name, lead_stage, lead_status, course, id]
+        );
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ success: false, error: 'Contact not found' });
+        }
+
+        return res.json({ success: true, contact: result.rows[0] });
+    } catch (err) {
+        next(err);
+    }
+});
+
+/**
  * DELETE /api/contacts/:id
  * Removes a contact and all cascading data (conversations, messages).
  */

@@ -20,6 +20,18 @@ export default function CustomerCard({ conversationId, onLeadStageUpdated }) {
     mr: 'Marathi',
     gu: 'Gujarati'
   };
+
+  const LEAD_STATUSES = [
+    'new',
+    'renewed',
+    'assigned',
+    'contacted',
+    'interested',
+    'not_interested',
+    'counseling',
+    'won',
+    'lost'
+  ];
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -34,6 +46,7 @@ export default function CustomerCard({ conversationId, onLeadStageUpdated }) {
     preferredLanguage: '',
     blocked: false,
     leadStageId: '',
+    leadStatus: 'new',
     tags: []
   });
 
@@ -56,6 +69,7 @@ export default function CustomerCard({ conversationId, onLeadStageUpdated }) {
           preferredLanguage: data.preferredLanguage || '',
           blocked: !!data.blocked,
           leadStageId: data.leadStage && data.leadStage.id ? data.leadStage.id : '',
+          leadStatus: data.leadStatus || 'new',
           tags: data.tags || []
         });
       })
@@ -102,7 +116,8 @@ export default function CustomerCard({ conversationId, onLeadStageUpdated }) {
         body: JSON.stringify({
           name: formData.name,
           course: formData.course,
-          tags: formData.tags
+          tags: formData.tags,
+          leadStatus: formData.leadStatus
         })
       });
       if (!res.ok) throw new Error('Failed to update contact');
@@ -191,7 +206,17 @@ export default function CustomerCard({ conversationId, onLeadStageUpdated }) {
               />
             </div>
             <div>
-              <label className="text-xs font-medium text-slate-500">Status</label>
+              <label className="text-xs font-medium text-slate-500">Lead Status</label>
+              <select
+                className="flex h-8 w-full rounded-md border border-slate-200 bg-white px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 mt-1"
+                value={formData.leadStatus}
+                onChange={e => setFormData({...formData, leadStatus: e.target.value})}
+              >
+                {LEAD_STATUSES.map(s => <option key={s} value={s}>{s.toUpperCase()}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-500">System Visibility</label>
               <Input 
                 value={formData.blocked ? 'Blocked' : 'Active'}
                 disabled
