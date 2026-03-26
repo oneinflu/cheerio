@@ -558,16 +558,28 @@ async function runWorkflow(id, phoneNumber, context = {}) {
     const workflow = await getWorkflow(id);
     if (!workflow) throw new Error('Workflow not found');
 
-    const { steps } = workflow;
-  if (!steps || !steps.nodes) throw new Error('Invalid workflow definition: no steps found');
+    const { nodes, edges = [] } = steps;
+    
+    // Find trigger node (formal)
+    let currentNode = nodes.find(n => n.type === 'trigger' || n.type === 'incoming_webhook' || n.type === 'new_contact' || n.type === 'campaign_trigger');
+    
+    // FALLBACK: If no formal trigger but part of a Drip Sequence (or manual run), 
+    // find the first "Entry Node" (no incoming edges)
+    if (!currentNode && nodes.length > 0) {
+      console.log(`[WorkflowRunner] No formal trigger found for workflow ${id}. Seeking entry point...`);
+      const targetIds = new Set(edges.map(e => e.target));
+      currentNode = nodes.find(n => !targetIds.has(n.id));
+      
+      if (currentNode) {
+        console.log(`[WorkflowRunner] Using entry point node: ${currentNode.type} (${currentNode.id})`);
+      }
+    }
 
-  const { nodes } = steps;
+    if (!currentNode) {
+        throw new Error('No trigger node or entry point found in workflow steps');
+    }
 
-  // Find trigger node
-  let currentNode = nodes.find(n => n.type === 'trigger' || n.type === 'incoming_webhook' || n.type === 'new_contact' || n.type === 'campaign_trigger');
-  if (!currentNode) throw new Error('No trigger node found');
-
-  // Ensure contact exists or update it with new info
+    // Ensure contact exists or update it with new info
   try {
       // If we don't have a name in context (e.g. inbound message trigger), try to fetch it from DB
           const contactRes = await db.query('SELECT id, display_name, profile FROM contacts WHERE external_id = $1', [phoneNumber]);
