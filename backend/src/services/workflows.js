@@ -316,11 +316,12 @@ async function runStageWorkflows(stageId, phoneNumber) {
             continue; // Skip if we can't verify course
         }
     }
-
+    const delayMinutes = parseInt(row.delay_minutes || 0, 10);
+      
     try {
-      if (row.delay_minutes > 0) {
-        console.log(`[runStageWorkflows] Delaying workflow ${wfId} for ${row.delay_minutes} mins for ${phoneNumber}`);
-        await sleep(row.delay_minutes * 60 * 1000);
+      if (delayMinutes > 0) {
+        console.log(`[runStageWorkflows] Delaying workflow ${wfId} for ${delayMinutes} mins for ${phoneNumber}`);
+        await sleep(delayMinutes * 60 * 1000);
       }
       
       if (row.target_time) {
