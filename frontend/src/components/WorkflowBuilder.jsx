@@ -2271,7 +2271,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
       n.type === 'trigger' || n.type === 'incoming_webhook' ||
       n.type === 'new_contact' || n.type === 'campaign_trigger'
     );
-    let triggerType = triggerNode?.data?.triggerType || 'incoming_whatsapp';
+    let triggerType = triggerNode?.data?.triggerType || (triggerNode ? 'incoming_whatsapp' : null);
     // Map canvas node types to execution trigger keys
     if (triggerNode?.type === 'incoming_webhook') triggerType = 'incoming_webhook';
     if (triggerNode?.type === 'new_contact') triggerType = 'new_contact';
