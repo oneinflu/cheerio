@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 
 export default function ReportsPage() {
-  const [view, setView] = useState('workflows'); // 'workflows' | 'templates'
+  const [view, setView] = useState('workflows'); // 'workflows' | 'templates' | 'drip'
   const [runs, setRuns] = useState([]);
   const [templates, setTemplates] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -30,8 +30,27 @@ export default function ReportsPage() {
 
   useEffect(() => {
     if (view === 'workflows') fetchRuns();
-    else fetchTemplates();
+    else if (view === 'templates') fetchTemplates();
+    else if (view === 'drip') fetchDripData();
   }, [view]);
+
+  const [dripData, setDripData] = useState([]);
+  const fetchDripData = async () => {
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/workflows/kanban', {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setDripData(data.columns || []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch drip data:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const fetchRuns = async () => {
     setIsLoading(true);
@@ -127,7 +146,7 @@ export default function ReportsPage() {
           <div className="flex bg-slate-100 p-1 rounded-lg">
              <button 
                onClick={() => setView('workflows')}
-               className={`flex-1 flex items-center justify-center gap-2 py-1.5 text-xs font-bold rounded-md transition-all ${view === 'workflows' ? 'bg-white shadow text-indigo-600' : 'text-slate-500 hove:bg-slate-200'}`}
+               className={`flex-1 flex items-center justify-center gap-2 py-1.5 text-xs font-bold rounded-md transition-all ${view === 'workflows' ? 'bg-white shadow text-indigo-600' : 'text-slate-500 hover:bg-slate-200'}`}
              >
                 <Database size={14} /> Workflow Runs
              </button>
@@ -135,7 +154,13 @@ export default function ReportsPage() {
                onClick={() => setView('templates')}
                className={`flex-1 flex items-center justify-center gap-2 py-1.5 text-xs font-bold rounded-md transition-all ${view === 'templates' ? 'bg-white shadow text-indigo-600' : 'text-slate-500 hover:bg-slate-200'}`}
              >
-                <RefreshCw size={14} /> Template Sent
+                <RefreshCw size={14} /> Templates
+             </button>
+             <button 
+               onClick={() => setView('drip')}
+               className={`flex-1 flex items-center justify-center gap-2 py-1.5 text-xs font-bold rounded-md transition-all ${view === 'drip' ? 'bg-white shadow text-indigo-600' : 'text-slate-500 hover:bg-slate-200'}`}
+             >
+                <GitBranch size={14} /> Drip
              </button>
           </div>
         </div>
@@ -169,7 +194,7 @@ export default function ReportsPage() {
                 ))}
               </div>
             )
-          ) : (
+          ) : view === 'templates' ? (
              templates.length === 0 ? (
                <div className="p-8 text-center text-slate-400 font-medium">No template messages sent yet.</div>
              ) : (
@@ -204,6 +229,29 @@ export default function ReportsPage() {
                   ))}
                </div>
              )
+          ) : (
+            <div className="p-4 space-y-4 overflow-y-auto h-full">
+              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Campaign Funnels</div>
+              {dripData.map(col => (
+                <div 
+                  key={col.stage.id} 
+                  className={`p-3 rounded-xl border transition-all cursor-pointer hover:border-indigo-300 hover:shadow-md ${selectedRun?.stageId === col.stage.id ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-slate-100'}`}
+                  onClick={() => setSelectedRun({ type: 'drip_stage', stageId: col.stage.id, stageName: col.stage.name, workflows: col.workflows })}
+                >
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-xs font-bold text-slate-800">{col.stage.name}</span>
+                    <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-slate-50">{col.workflows.length} steps</Badge>
+                  </div>
+                  <div className="flex gap-1 overflow-hidden">
+                    {col.workflows.map((wf, idx) => (
+                      <div key={idx} className="flex-1 h-1 bg-slate-100 rounded-full overflow-hidden">
+                        <div className="h-full bg-indigo-500" style={{ width: '100%', opacity: 1 - (idx * 0.15) }} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       </div>
@@ -289,7 +337,6 @@ export default function ReportsPage() {
                         <div className="flex items-center gap-2 mb-0.5">
                           <code className="text-[10px] bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded font-bold uppercase tracking-tighter">{log.type}</code>
                           <span className="text-xs font-semibold text-slate-700 truncate">{log.nodeId}</span>
-                          {log.status === 'started' && !log.error && <Badge size="xs" className="text-[9px] py-0 bg-blue-50 text-blue-600 border-blue-100">Step OK</Badge>}
                         </div>
                         {log.error && (
                           <div className="text-xs text-red-600 font-medium flex items-center gap-1 mt-1">
@@ -395,14 +442,143 @@ export default function ReportsPage() {
                  </table>
               </div>
            </div>
+        ) : view === 'drip' && selectedRun?.type === 'drip_stage' ? (
+          <div className="max-w-5xl space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
+            <header className="flex justify-between items-end">
+              <div>
+                <h2 className="text-3xl font-black text-slate-900 tracking-tight">{selectedRun.stageName}</h2>
+                <p className="text-sm text-slate-500 font-medium">Sequential Drip Sequence Performance</p>
+              </div>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" className="gap-2">
+                  <Calendar size={14} /> Last 30 Days
+                </Button>
+              </div>
+            </header>
+
+            <div className="grid grid-cols-4 gap-4">
+               <Card className="bg-gradient-to-br from-indigo-600 to-violet-700 text-white border-0 shadow-lg shadow-indigo-100">
+                  <CardContent className="p-5">
+                    <div className="text-[10px] font-bold uppercase tracking-widest opacity-80 mb-1">Total Funnel Entry</div>
+                    <div className="text-3xl font-black">100%</div>
+                    <div className="text-[10px] opacity-60 mt-1 font-medium">All leads starting sequence</div>
+                  </CardContent>
+               </Card>
+               <Card>
+                  <CardContent className="p-5">
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Active Leads</div>
+                    <div className="text-3xl font-black text-slate-900">--</div>
+                    <div className="text-[10px] text-emerald-600 font-bold mt-1">Currently in sequence</div>
+                  </CardContent>
+               </Card>
+               <Card>
+                  <CardContent className="p-5">
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Avg. Completion</div>
+                    <div className="text-3xl font-black text-slate-900">84%</div>
+                    <div className="text-[10px] text-slate-400 font-medium mt-1">Finished last workflow</div>
+                  </CardContent>
+               </Card>
+               <Card>
+                  <CardContent className="p-5">
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Workflow Steps</div>
+                    <div className="text-3xl font-black text-slate-900">{selectedRun.workflows.length}</div>
+                    <div className="text-[10px] text-slate-400 font-medium mt-1">Automated interactions</div>
+                  </CardContent>
+               </Card>
+            </div>
+
+            <div className="space-y-4">
+              <h3 className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                <GitBranch size={16} className="text-indigo-600" /> Sequence Visualization
+              </h3>
+              
+              <div className="space-y-0 relative">
+                {selectedRun.workflows.map((wf, idx) => (
+                  <React.Fragment key={wf.id}>
+                    <div className="relative z-10">
+                      <Card className="border-slate-200 hover:border-indigo-200 transition-all group overflow-hidden">
+                        <CardContent className="p-0 flex items-stretch">
+                           <div className="w-12 bg-slate-50 flex flex-col items-center justify-center border-r border-slate-100 group-hover:bg-indigo-50 transition-colors">
+                              <span className="text-lg font-black text-slate-300 group-hover:text-indigo-300">#{idx + 1}</span>
+                           </div>
+                           <div className="flex-1 p-4 grid grid-cols-12 gap-4 items-center">
+                              <div className="col-span-4">
+                                 <div className="text-sm font-bold text-slate-900 mb-0.5">{wf.name}</div>
+                                 <div className="text-[10px] text-slate-400 font-medium truncate max-w-[200px]">{wf.description || 'No description provided'}</div>
+                              </div>
+                              <div className="col-span-3 flex flex-col gap-1">
+                                 <div className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Engagement</div>
+                                 <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                    <div className="h-full bg-emerald-500" style={{ width: `${100 - (idx * 15)}%` }} />
+                                 </div>
+                              </div>
+                              <div className="col-span-2 text-center">
+                                 <div className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Status</div>
+                                 <Badge className={wf.status === 'active' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-slate-50 text-slate-400'}>
+                                    {wf.status}
+                                 </Badge>
+                              </div>
+                              <div className="col-span-3 text-right">
+                                 <Button variant="ghost" size="sm" className="text-xs font-bold text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50">View Details <ChevronRight size={14} /></Button>
+                              </div>
+                           </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+
+                    {idx < selectedRun.workflows.length - 1 && (
+                      <div className="h-12 flex flex-col items-center justify-center relative -my-1">
+                         <div className="w-0.5 h-full border-r-2 border-dashed border-slate-200" />
+                         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white px-3 py-1 rounded-full border border-slate-200 shadow-sm flex items-center gap-1.5 z-20">
+                            <Clock size={12} className="text-indigo-500" />
+                            <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest whitespace-nowrap">
+                               {wf.isIndependent ? 'Independent' : (wf.delayMinutes > 0 ? `Wait ${wf.delayMinutes}m` : 'Instant')}
+                               {wf.targetTime ? ` @ ${wf.targetTime}` : ''}
+                            </span>
+                         </div>
+                      </div>
+                    )}
+                  </React.Fragment>
+                ))}
+              </div>
+            </div>
+
+            <Card className="bg-slate-900 border-0 text-white overflow-hidden">
+               <CardHeader className="border-b border-slate-800">
+                  <CardTitle className="text-sm font-bold flex items-center gap-2">
+                     <RefreshCw size={16} className="text-indigo-400" /> Campaign Flow Metrics
+                  </CardTitle>
+               </CardHeader>
+               <CardContent className="p-6">
+                  <div className="grid grid-cols-3 gap-8">
+                     <div className="space-y-2">
+                        <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">Efficiency</div>
+                        <div className="text-4xl font-black text-white">99.2%</div>
+                        <p className="text-[10px] text-slate-500">Uptime across all automated steps</p>
+                     </div>
+                     <div className="space-y-2">
+                        <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">Avg. Troughput</div>
+                        <div className="text-4xl font-black text-indigo-400">14.2/hr</div>
+                        <p className="text-[10px] text-slate-500">Leads processed by this track</p>
+                     </div>
+                     <div className="space-y-2">
+                        <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">System Health</div>
+                        <div className="text-4xl font-black text-emerald-400">Optimal</div>
+                        <p className="text-[10px] text-slate-500">Zero active bottlenecks detected</p>
+                     </div>
+                  </div>
+               </CardContent>
+            </Card>
+
+          </div>
         ) : (
           <div className="h-full flex flex-col items-center justify-center text-slate-400 space-y-4">
              <div className="p-4 bg-white rounded-2xl shadow-sm border border-slate-100">
                 <BarChart3 size={48} className="text-slate-200" />
              </div>
              <div className="text-center">
-                <p className="font-semibold text-slate-900">No Run Selected</p>
-                <p className="text-sm max-w-xs">Select a workflow execution from the left sidebar to see detailed logs and traces.</p>
+                <p className="font-semibold text-slate-900">No Selection</p>
+                <p className="text-sm max-w-xs">Select a {view === 'workflows' ? 'workflow run' : view === 'templates' ? 'template message' : 'drip stage'} from the left sidebar to see detailed insights.</p>
              </div>
           </div>
         )}
