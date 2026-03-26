@@ -1,4 +1,5 @@
-const db = require('/Users/suuryaprabhat/Desktop/cheerio/backend/db');
+require('dotenv').config();
+const db = require('../db');
 
 async function setup() {
   console.log('--- Setting up Test Orchestration Funnel ---');
@@ -79,6 +80,20 @@ async function setup() {
   `, [stageId, wf2.rows[0].id]);
 
   console.log('✅ Drip Orchestration Linked to N2 Fresh Leads.');
+
+  // 4. Trigger for specific number: 919182151640
+  const testNumber = '919182151640';
+  console.log(`--- Triggering Test for Number: ${testNumber} ---`);
+  
+  const contactRes = await db.query("SELECT id FROM contacts WHERE external_id LIKE $1 LIMIT 1", [`%${testNumber}%`]);
+  if (contactRes.rowCount > 0) {
+    const contactId = contactRes.rows[0].id;
+    await db.query("UPDATE contacts SET lead_stage_id = $1 WHERE id = $2", [stageId, contactId]);
+    console.log(`✅ Contact ${testNumber} moved to N2 Fresh Leads. Sequence started!`);
+  } else {
+    console.log(`⚠️ Contact ${testNumber} not found in DB. Please ensure they have messaged the bot once.`);
+  }
+
   console.log('🚀 READY FOR TESTING!');
   db.close();
 }
