@@ -2200,4 +2200,5 @@ module.exports = {
   triggerContactCreatedWorkflows,
   triggerWebhookWorkflows,
   generateWorkflowFromDescription,
+  runStageWorkflows,
 };

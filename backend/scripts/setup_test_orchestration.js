@@ -85,7 +85,7 @@ async function setup() {
   const testNumber = '919182151640';
   console.log(`--- Triggering Test for Number: ${testNumber} ---`);
   
-  const contactRes = await db.query("SELECT id FROM contacts WHERE external_id LIKE $1 LIMIT 1", [`%${testNumber}%`]);
+  const contactRes = await db.query("SELECT id, external_id FROM contacts WHERE external_id LIKE $1 LIMIT 1", [`%${testNumber}%`]);
   if (contactRes.rowCount > 0) {
     const contactId = contactRes.rows[0].id;
     // Lead stage is on conversations table in this schema
