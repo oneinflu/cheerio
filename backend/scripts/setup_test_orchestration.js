@@ -10,14 +10,14 @@ async function setup() {
     VALUES ($1, $2, $3)
     ON CONFLICT (name) DO UPDATE SET components = $2, status = $3
     RETURNING id
-  `, ['n2_welcome_test', JSON.stringify([{ type: 'BODY', text: 'Hello! Welcome to Greeto. This is step 1.' }]), 'APPROVED']);
+  `, ['n2_fresh_welcome', JSON.stringify([{ type: 'BODY', text: 'Welcome to NorthStar! {{1}}, we are excited to have you on board.', example: { body_text: [['Student']] } }]), 'APPROVED']);
   
   const t2 = await db.query(`
     INSERT INTO whatsapp_templates (name, components, status)
     VALUES ($1, $2, $3)
     ON CONFLICT (name) DO UPDATE SET components = $2, status = $3
     RETURNING id
-  `, ['n2_followup_test', JSON.stringify([{ type: 'BODY', text: 'Hi again! Just checking in after 10 mins. This is step 2.' }]), 'APPROVED']);
+  `, ['n2_fresh_followup', JSON.stringify([{ type: 'BODY', text: 'Hi {{1}}, just checking in to see if you have any questions about the curriculum.', example: { body_text: [['Student']] } }]), 'APPROVED']);
 
   console.log('✅ Templates created.');
 
@@ -32,7 +32,7 @@ async function setup() {
     JSON.stringify({
       nodes: [
         { id: '1', type: 'trigger', position: { x: 250, y: 0 }, data: { label: 'Manual' } },
-        { id: '2', type: 'send_template', position: { x: 250, y: 150 }, data: { template: 'n2_welcome_test' } }
+        { id: '2', type: 'send_template', position: { x: 250, y: 150 }, data: { template: 'n2_fresh_welcome' } }
       ],
       edges: [{ id: 'e1', source: '1', target: '2' }]
     })
@@ -48,7 +48,7 @@ async function setup() {
     JSON.stringify({
       nodes: [
         { id: '1', type: 'trigger', position: { x: 250, y: 0 }, data: { label: 'Manual' } },
-        { id: '2', type: 'send_template', position: { x: 250, y: 150 }, data: { template: 'n2_followup_test' } }
+        { id: '2', type: 'send_template', position: { x: 250, y: 150 }, data: { template: 'n2_fresh_followup' } }
       ],
       edges: [{ id: 'e1', source: '1', target: '2' }]
     })
@@ -73,10 +73,10 @@ async function setup() {
     VALUES ($1, $2, 0, 0)
   `, [stageId, wf1.rows[0].id]);
 
-  // Insert Step 2 (10 min delay)
+  // Insert Step 2 (5 min delay)
   await db.query(`
     INSERT INTO lead_stage_workflows (stage_id, workflow_id, position, delay_minutes)
-    VALUES ($1, $2, 1, 10)
+    VALUES ($1, $2, 1, 5)
   `, [stageId, wf2.rows[0].id]);
 
   console.log('✅ Drip Orchestration Linked to N2 Fresh Leads.');

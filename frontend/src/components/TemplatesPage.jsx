@@ -107,6 +107,8 @@ export default function TemplatesPage() {
       const res = await getTemplates(pid);
       if (res && res.data) {
         const mapped = res.data.map(t => {
+          if (!t.components || !Array.isArray(t.components)) return { ...t, components: [], status: t.status || 'PENDING' };
+          
           const bodyComp = t.components.find(c => c.type === 'BODY');
           const headerComp = t.components.find(c => c.type === 'HEADER');
           const footerComp = t.components.find(c => c.type === 'FOOTER');
