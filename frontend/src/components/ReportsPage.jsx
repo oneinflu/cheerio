@@ -35,6 +35,8 @@ export default function ReportsPage() {
   }, [view]);
 
   const [dripData, setDripData] = useState([]);
+  const [workflowFilterId, setWorkflowFilterId] = useState(null);
+
   const fetchDripData = async () => {
     setIsLoading(true);
     try {
@@ -52,10 +54,14 @@ export default function ReportsPage() {
     }
   };
 
-  const fetchRuns = async () => {
+  const fetchRuns = async (filterId = null) => {
     setIsLoading(true);
+    const fid = filterId || workflowFilterId;
     try {
-      const res = await fetch('/api/reports/workflow-runs?limit=100', {
+      let url = '/api/reports/workflow-runs?limit=100';
+      if (fid) url += `&workflowId=${fid}`;
+
+      const res = await fetch(url, {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` }
       });
       const data = await res.json();
@@ -136,11 +142,26 @@ export default function ReportsPage() {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <BarChart3 size={20} className="text-indigo-600" />
-              <h1 className="text-lg font-bold text-slate-900">Reports</h1>
+              <h1 className="text-lg font-bold text-slate-900">Reports {workflowFilterId && '(Filtered)'}</h1>
             </div>
-            <Button variant="ghost" size="sm" onClick={view === 'workflows' ? fetchRuns : fetchTemplates} disabled={isLoading}>
-              <RefreshCw size={16} className={isLoading ? "animate-spin" : ""} />
-            </Button>
+            <div className="flex items-center gap-1">
+              {workflowFilterId && (
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => {
+                    setWorkflowFilterId(null);
+                    fetchRuns(null);
+                  }}
+                  className="text-xs text-indigo-600 hover:text-indigo-700 font-bold px-2 h-7"
+                >
+                  Clear
+                </Button>
+              )}
+              <Button variant="ghost" size="sm" onClick={view === 'workflows' ? () => fetchRuns() : fetchTemplates} disabled={isLoading}>
+                <RefreshCw size={16} className={isLoading ? "animate-spin" : ""} />
+              </Button>
+            </div>
           </div>
           
           <div className="flex bg-slate-100 p-1 rounded-lg">
@@ -519,7 +540,18 @@ export default function ReportsPage() {
                                  </Badge>
                               </div>
                               <div className="col-span-3 text-right">
-                                 <Button variant="ghost" size="sm" className="text-xs font-bold text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50">View Details <ChevronRight size={14} /></Button>
+                                 <Button 
+                                   variant="ghost" 
+                                   size="sm" 
+                                   onClick={() => {
+                                     setWorkflowFilterId(wf.id);
+                                     setView('workflows');
+                                     fetchRuns(wf.id);
+                                   }}
+                                   className="text-xs font-bold text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
+                                 >
+                                   View Details <ChevronRight size={14} />
+                                 </Button>
                               </div>
                            </div>
                         </CardContent>
@@ -532,8 +564,8 @@ export default function ReportsPage() {
                          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white px-3 py-1 rounded-full border border-slate-200 shadow-sm flex items-center gap-1.5 z-20">
                             <Clock size={12} className="text-indigo-500" />
                             <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest whitespace-nowrap">
-                               {wf.isIndependent ? 'Independent' : (wf.delayMinutes > 0 ? `Wait ${wf.delayMinutes}m` : 'Instant')}
-                               {wf.targetTime ? ` @ ${wf.targetTime}` : ''}
+                               {selectedRun.workflows[idx + 1].isIndependent ? 'Independent' : (selectedRun.workflows[idx + 1].delayMinutes > 0 ? `Wait ${selectedRun.workflows[idx + 1].delayMinutes}m` : 'Instant')}
+                               {selectedRun.workflows[idx + 1].targetTime ? ` @ ${selectedRun.workflows[idx + 1].targetTime}` : ''}
                             </span>
                          </div>
                       </div>
