@@ -88,8 +88,14 @@ async function setup() {
   const contactRes = await db.query("SELECT id FROM contacts WHERE external_id LIKE $1 LIMIT 1", [`%${testNumber}%`]);
   if (contactRes.rowCount > 0) {
     const contactId = contactRes.rows[0].id;
-    await db.query("UPDATE contacts SET lead_stage_id = $1 WHERE id = $2", [stageId, contactId]);
-    console.log(`✅ Contact ${testNumber} moved to N2 Fresh Leads. Sequence started!`);
+    // Lead stage is on conversations table in this schema
+    const convRes = await db.query("SELECT id FROM conversations WHERE contact_id = $1 LIMIT 1", [contactId]);
+    if (convRes.rowCount > 0) {
+      await db.query("UPDATE conversations SET lead_stage_id = $1 WHERE id = $2", [stageId, convRes.rows[0].id]);
+      console.log(`✅ Conversation for ${testNumber} moved to N2 Fresh Leads. Sequence started!`);
+    } else {
+      console.log(`⚠️ No active conversation found for ${testNumber}. Moving stage might not trigger workflow correctly.`);
+    }
   } else {
     console.log(`⚠️ Contact ${testNumber} not found in DB. Please ensure they have messaged the bot once.`);
   }
