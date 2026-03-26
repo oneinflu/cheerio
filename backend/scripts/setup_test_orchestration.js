@@ -92,7 +92,19 @@ async function setup() {
     const convRes = await db.query("SELECT id FROM conversations WHERE contact_id = $1 LIMIT 1", [contactId]);
     if (convRes.rowCount > 0) {
       await db.query("UPDATE conversations SET lead_stage_id = $1 WHERE id = $2", [stageId, convRes.rows[0].id]);
-      console.log(`✅ Conversation for ${testNumber} moved to N2 Fresh Leads. Sequence started!`);
+      console.log(`✅ Conversation for ${testNumber} moved to N2 Fresh Leads.`);
+      
+      // TRIGGER THE WORKFLOW SERVICE MANUALLY
+      try {
+        const { runStageWorkflows } = require('../src/services/workflows');
+        const phoneNumber = contactRes.rows[0].external_id;
+        console.log(`🚀 Manually triggering orchestration for ${phoneNumber}...`);
+        await runStageWorkflows(stageId, phoneNumber);
+        console.log(`✅ Orchestration triggered successfully.`);
+      } catch (triggerErr) {
+        console.error(`⚠️ Failed to trigger workflow service:`, triggerErr.message);
+        console.log(`💡 Tip: You can also manually toggle the stage to "N2 Fresh Leads" in the UI to trigger.`);
+      }
     } else {
       console.log(`⚠️ No active conversation found for ${testNumber}. Moving stage might not trigger workflow correctly.`);
     }
