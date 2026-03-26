@@ -779,6 +779,7 @@ const ExotelCallNode = ({ data, selected }) => (
 
 const nodeTypes = {
   trigger: TriggerNode,
+  whatsapp: TemplateNode,
   send_template: TemplateNode,
   delay: DelayNode,
   condition: ConditionNode,

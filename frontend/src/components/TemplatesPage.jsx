@@ -105,7 +105,7 @@ export default function TemplatesPage() {
     try {
       const pid = selectedPhoneNumberId === 'ALL' ? null : selectedPhoneNumberId;
       const res = await getTemplates(pid);
-      if (res && res.data) {
+      if (res && Array.isArray(res.data)) {
         const mapped = res.data.map(t => {
           if (!t.components || !Array.isArray(t.components)) return { ...t, components: [], status: t.status || 'PENDING' };
           
