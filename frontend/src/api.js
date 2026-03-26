@@ -423,6 +423,12 @@ export async function getWorkflows() {
   return res.json();
 }
 
+export async function getWorkflowSequence(id) {
+  const headers = getAuthHeaders();
+  const res = await fetch(`/api/workflows/${id}/sequence`, { headers });
+  return res.json();
+}
+
 export async function getWorkflow(id) {
   const headers = getAuthHeaders();
   const res = await fetch(`/api/workflows/${id}`, { headers });

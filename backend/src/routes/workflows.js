@@ -198,6 +198,31 @@ router.put('/kanban/delay', auth.requireRole('admin', 'super_admin', 'supervisor
   }
 });
 
+// Get sequence for a workflow (preceding workflows in same stage)
+router.get('/:id/sequence', auth.requireAuth, async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    // Find stage for this workflow
+    const stageRes = await db.query('SELECT stage_id, position FROM lead_stage_workflows WHERE workflow_id = $1 LIMIT 1', [id]);
+    if (stageRes.rowCount === 0) return res.json({ preceding: [] });
+    
+    const { stage_id, position } = stageRes.rows[0];
+    
+    // Find absolute preceding workflows in this stage
+    const precRes = await db.query(`
+      SELECT w.id, w.name, w.steps
+      FROM lead_stage_workflows lsw
+      JOIN workflows w ON w.id = lsw.workflow_id
+      WHERE lsw.stage_id = $1 AND lsw.position < $2
+      ORDER BY lsw.position ASC
+    `, [stage_id, position]);
+    
+    res.json({ preceding: precRes.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Get workflow
 router.get('/:id', auth.requireRole('admin', 'super_admin', 'supervisor', 'quality_manager', 'agent'), async (req, res, next) => {
   try {

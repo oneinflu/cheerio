@@ -945,8 +945,8 @@ const buildTemplateComponentsPayload = (tmpl, variables, header) => {
  * Centrally manages the collection of all {{variables}} available to a given node
  * by walking backward through the workflow graph (BFS).
  */
-const getUpstreamVariables = (targetNodeId, nodes, edges) => {
-  const vars = [];
+const getUpstreamVariables = (targetNodeId, nodes, edges, externalVars = []) => {
+  const vars = [...externalVars];
   const visited = new Set();
   const queue = [targetNodeId];
 
@@ -1101,6 +1101,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
   ]);
   const [pabblyJSON, setPabblyJSON] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
+  const [precedingVariables, setPrecedingVariables] = useState([]);
 
   useEffect(() => {
     const loadResources = async () => {
@@ -1182,6 +1183,29 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
         setLoadingEmailTemplates(false);
         setLoadingWorkflows(false);
         setLoadingLabels(false);
+        
+        // Fetch preceding workflow variables (Drip sequence)
+        if (initialWorkflow && initialWorkflow.id) {
+          getWorkflowSequence(initialWorkflow.id).then(res => {
+            if (res && Array.isArray(res.preceding)) {
+              const vars = [];
+              res.preceding.forEach(pw => {
+                const nodes = pw.steps?.nodes || [];
+                const prefix = pw.name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
+                
+                // Get all variables from this preceding workflow
+                const pwVars = getAllDefinedVariables(nodes);
+                pwVars.forEach(v => {
+                  const cleaned = v.replace('{{', '').replace('}}', '');
+                  if (!vars.includes(`{{${prefix}.${cleaned}}}`)) {
+                    vars.push(`{{${prefix}.${cleaned}}}`);
+                  }
+                });
+              });
+              setPrecedingVariables(vars);
+            }
+          }).catch(console.error);
+        }
       }
     };
     loadResources();
@@ -4509,7 +4533,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                     {/* Available variables hint — dynamically computed from upstream nodes */}
                     {(() => {
                       // Walk backward through edges to find all variables exposed by upstream nodes
-                      const upstreamVars = getUpstreamVariables(selectedNode.id, nodes, edges);
+                      const upstreamVars = getUpstreamVariables(selectedNode.id, nodes, edges, precedingVariables);
 
                       return (
                         <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
@@ -4844,7 +4868,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 };
 
                 // Compute upstream variables (same BFS as XOLOX panel)
-                const upstreamVars = getUpstreamVariables(selectedNode.id, nodes, edges);
+                const upstreamVars = getUpstreamVariables(selectedNode.id, nodes, edges, precedingVariables);
 
                 return (
                   <div className="space-y-4">
@@ -5111,7 +5135,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 const msg = d.message || '';
 
                 // Compute upstream variables (reuse same logic)
-                const upstreamVars = getUpstreamVariables(selectedNode.id, nodes, edges);
+                const upstreamVars = getUpstreamVariables(selectedNode.id, nodes, edges, precedingVariables);
 
                 const setField = (key, val) => updateNodeFields(selectedNode.id, { [key]: val });
 
@@ -6111,7 +6135,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                     <div className="text-xs text-slate-600">Default route executes when none of the below match.</div>
                   </div>
                   {(() => {
-                    const upstreamVars = getUpstreamVariables(selectedNode.id, nodes, edges);
+                    const upstreamVars = getUpstreamVariables(selectedNode.id, nodes, edges, precedingVariables);
                     const allVars = getAllDefinedVariables(nodes);
                     const upstreamKeys = Array.from(
                       new Set(
@@ -6541,7 +6565,7 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                       </div>
 
                       {(() => {
-                        const upstreamVars = getUpstreamVariables(selectedNode.id, nodes, edges);
+                        const upstreamVars = getUpstreamVariables(selectedNode.id, nodes, edges, precedingVariables);
                         const allVars = getAllDefinedVariables(nodes);
                         const toKeys = Array.from(
                           new Set(
