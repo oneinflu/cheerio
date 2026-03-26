@@ -31,8 +31,8 @@ async function setup() {
     'Sends a welcome message immediately upon stage entry',
     JSON.stringify({
       nodes: [
-        { id: '1', type: 'trigger', data: { label: 'Manual' } },
-        { id: '2', type: 'whatsapp', data: { templateName: 'n2_welcome_test' } }
+        { id: '1', type: 'trigger', position: { x: 250, y: 0 }, data: { label: 'Manual' } },
+        { id: '2', type: 'send_template', position: { x: 250, y: 150 }, data: { template: 'n2_welcome_test' } }
       ],
       edges: [{ id: 'e1', source: '1', target: '2' }]
     })
@@ -47,8 +47,8 @@ async function setup() {
     'Sends a follow-up message after 10 minutes',
     JSON.stringify({
       nodes: [
-        { id: '1', type: 'trigger', data: { label: 'Manual' } },
-        { id: '2', type: 'whatsapp', data: { templateName: 'n2_followup_test' } }
+        { id: '1', type: 'trigger', position: { x: 250, y: 0 }, data: { label: 'Manual' } },
+        { id: '2', type: 'send_template', position: { x: 250, y: 150 }, data: { template: 'n2_followup_test' } }
       ],
       edges: [{ id: 'e1', source: '1', target: '2' }]
     })
