@@ -42,8 +42,8 @@ export default function ReportsPage() {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` }
       });
       const data = await res.json();
-      if (data.success) {
-        setDripData(data.columns || []);
+      if (data && Array.isArray(data.columns)) {
+        setDripData(data.columns);
       }
     } catch (err) {
       console.error('Failed to fetch drip data:', err);
