@@ -126,7 +126,8 @@ router.put('/:conversationId/lead-stage', auth.requireRole('admin', 'super_admin
         const { runStageWorkflows } = require('../services/workflows');
         const phoneRes = await db.query('SELECT contacts.external_id FROM conversations JOIN contacts ON contacts.id = conversations.contact_id WHERE conversations.id = $1', [conversationId]);
         const phoneNumber = phoneRes.rows[0]?.external_id;
-        if (phoneNumber) await runStageWorkflows(stageId, phoneNumber);
+        // Run sequence in background to prevent API hang
+        if (phoneNumber) runStageWorkflows(stageId, phoneNumber).catch(e => console.error('[lead-stage] Drip error:', e.message));
       } catch (e) {
         console.error('[lead-stage] Failed to trigger stage workflows:', e.message);
       }

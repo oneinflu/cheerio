@@ -1324,7 +1324,9 @@ async function runWorkflow(id, phoneNumber, context = {}) {
               console.log('[WorkflowRunner] update_lead_stage skipped: no stage id');
             } else {
               await db.query('UPDATE conversations SET lead_stage_id = $1 WHERE id = $2', [stageId, conversationId]);
-              console.log(`[WorkflowRunner] Updated lead stage to ${stageId}`);
+              console.log(`[WorkflowRunner] Updated lead stage to ${stageId}. Triggering sequence...`);
+              // Trigger sequestration for the new stage (background)
+              runStageWorkflows(stageId, phoneNumber).catch(e => console.error('[WorkflowRunner] Drip sequence failed:', e.message));
             }
           } else if (actionType === 'send_sms_otp') {
             const digits = parseInt(currentNode.data.otpDigits || currentNode.data.digits || 6, 10);

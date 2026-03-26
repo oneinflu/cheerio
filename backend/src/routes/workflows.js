@@ -186,11 +186,13 @@ router.put('/kanban/delay', auth.requireRole('admin', 'super_admin', 'supervisor
     const { stageId, workflowId, delayMinutes, isIndependent, targetTime } = req.body || {};
     if (!stageId || !workflowId) return res.status(400).json({ error: 'stageId and workflowId are required' });
     
+    console.log(`[WorkflowsRoute] Updating orchestration: Stage=${stageId}, WF=${workflowId}, Delay=${delayMinutes}m, Independent=${isIndependent}`);
+    
     await db.query(`
       UPDATE lead_stage_workflows
       SET delay_minutes = $1, is_independent = $2, target_time = $3
       WHERE stage_id = $4 AND workflow_id = $5
-    `, [delayMinutes || 0, isIndependent || false, targetTime || null, stageId, workflowId]);
+    `, [parseInt(delayMinutes, 10) || 0, isIndependent || false, targetTime || null, stageId, workflowId]);
     
     res.json({ success: true });
   } catch (err) {
