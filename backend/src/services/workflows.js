@@ -558,6 +558,9 @@ async function runWorkflow(id, phoneNumber, context = {}) {
     const workflow = await getWorkflow(id);
     if (!workflow) throw new Error('Workflow not found');
 
+    const { steps } = workflow;
+    if (!steps || !steps.nodes) throw new Error('Invalid workflow definition: no steps found');
+
     const { nodes, edges = [] } = steps;
     
     // Find trigger node (formal)
