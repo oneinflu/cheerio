@@ -1448,17 +1448,12 @@ async function runWorkflow(id, phoneNumber, context = {}) {
               runStageWorkflows(stageId, phoneNumber).catch(e => console.error('[WorkflowRunner] Drip sequence failed:', e.message));
             }
           } else if (actionType === 'send_sms_otp') {
-            const digits = parseInt(currentNode.data.otpDigits || currentNode.data.digits || 6, 10);
-            const saveVarRaw = currentNode.data.saveVariable || 'otp';
-            const saveVar = String(saveVarRaw).replace(/[{}]/g, '').trim() || 'otp';
-            const otp = fast2sms.generateOtp(Number.isFinite(digits) ? digits : 6);
-            context[saveVar] = otp;
-            await fast2sms.sendOtpSms({ phoneNumber, otp });
+            const smsBody = resolvePlaceholders(actionValue || 'Your OTP is {{otp}}', localContext);
+            await fast2sms.sendSMS(phoneNumber, smsBody);
           } else if (actionType === 'remove_tag') {
             const convRes = await db.query('SELECT contact_id FROM conversations WHERE id = $1', [conversationId]);
             if (convRes.rowCount > 0) {
               const contactId = convRes.rows[0].contact_id;
-              // Remove tag from profile.tags array
               await db.query(`
                         UPDATE contacts 
                         SET profile = jsonb_set(
@@ -1476,10 +1471,8 @@ async function runWorkflow(id, phoneNumber, context = {}) {
             if (convRes.rowCount > 0) {
               const contactId = convRes.rows[0].contact_id;
               const varName = currentNode.data.variableName;
-              const varValue = currentNode.data.variableValue; // stored as string or whatever
-
+              const varValue = currentNode.data.variableValue;
               if (varName) {
-                // Store in profile.attributes
                 await db.query(`
                             UPDATE contacts 
                             SET profile = jsonb_set(
@@ -1494,189 +1487,84 @@ async function runWorkflow(id, phoneNumber, context = {}) {
           } else if (actionType === 'assign_agent' || actionType === 'assign_agent_xolox') {
             let assignedUserId = null;
             let teamId = null;
-
-            // 1. Resolve potential dynamic variables (e.g. {{xolox_response.assignedTo}})
-            let resolvedValue = typeof actionValue === 'string' 
-              ? resolvePlaceholders(actionValue, context).trim() 
-              : actionValue;
-
-            // 2. Smart Fallback: If no explicit value provided, try to extract assigned agent from Xolox response
-            if ((!resolvedValue || resolvedValue === 'null' || resolvedValue === 'undefined' || resolvedValue === null)) {
-                const xr = context.xolox_response || context.xolox_event_response; // check both potential keys
+            let resolvedValue = typeof actionValue === 'string' ? resolvePlaceholders(actionValue, context).trim() : actionValue;
+            if ((!resolvedValue || resolvedValue === 'null')) {
+                const xr = context.xolox_response || context.xolox_event_response;
                 if (xr) {
-                  const leadData = xr.data || xr; // Handle both {data: {assignedTo}} and {assignedTo}
-                  const assignedTo = leadData.assignedTo || leadData.assignedId || leadData.counselorId || leadData.assigned_id;
-                  
-                  if (assignedTo) {
-                      if (typeof assignedTo === 'object') {
-                          resolvedValue = assignedTo.id || assignedTo._id || assignedTo.value;
-                      } else {
-                          resolvedValue = assignedTo;
-                      }
-                      console.log(`[WorkflowRunner] Auto-resolving agent from Starforze/Xolox response: ${resolvedValue}`);
-                  }
-
-                  // Also try to capture teamId from response if available
-                  if (!teamId) {
-                      teamId = leadData.teamId || leadData.team_id || null;
-                  }
-
-                  // Linking: Use lead ID from response if available
-                  const leadId = leadData.leadId || leadData.lead_id || (leadData.lead && (leadData.lead._id || leadData.lead.id));
-                  if (leadId) {
-                      await db.query('UPDATE conversations SET lead_id = $1 WHERE id = $2', [leadId, conversationId]);
-                      console.log(`[WorkflowRunner] Linked lead ${leadId} from Starforze response to conversation ${conversationId}`);
-                  }
+                  const leadData = xr.data || xr;
+                  const assignedTo = leadData.assignedTo || leadData.assignedId || leadData.counselorId;
+                  if (assignedTo) resolvedValue = typeof assignedTo === 'object' ? (assignedTo.id || assignedTo._id) : assignedTo;
                 }
             }
-
-            console.log(`[WorkflowRunner] Assigning agent. Target: ${JSON.stringify(resolvedValue)}`);
-
-            // Check if actionValue is a conditions object (Round Robin) or direct email/id assignment
-            let conditions = {};
-            if (typeof resolvedValue === 'object' && resolvedValue !== null) {
-                 conditions = resolvedValue;
-            } else if (typeof resolvedValue === 'string' && resolvedValue.startsWith('{')) {
-                 try { conditions = JSON.parse(resolvedValue); } catch (e) {}
-            }
-
-            if (Object.keys(conditions).length > 0) {
-                // Round Robin Assignment based on conditions
-                console.log(`[WorkflowRunner] Attempting Round Robin assignment with conditions:`, conditions);
-                assignedUserId = await findAgentForAssignment(conditions);
-                if (assignedUserId) {
-                     // Get team
-                     const teamRes = await db.query('SELECT team_id FROM team_members WHERE user_id = $1 LIMIT 1', [assignedUserId]);
-                     teamId = teamRes.rows[0]?.team_id;
-                }
-            } else if (resolvedValue) {
-                // Direct Email or ID Assignment
-                // Try looking up by ID, email, or a potential custom agent_id in attributes
-                const query = `
-                  SELECT id FROM users 
-                  WHERE id::text = $1 
-                     OR email = $1 
-                     OR attributes->>'agent_id' = $1 
-                     OR attributes->>'starforze_id' = $1
-                     OR attributes->>'external_id' = $1
-                  LIMIT 1
-                `;
-                
-                const userRes = await db.query(query, [resolvedValue]);
+            if (resolvedValue) {
+                const userRes = await db.query('SELECT id FROM users WHERE id::text = $1 OR email = $1 LIMIT 1', [resolvedValue]);
                 if (userRes.rowCount > 0) {
                   assignedUserId = userRes.rows[0].id;
                   const teamRes = await db.query('SELECT team_id FROM team_members WHERE user_id = $1 LIMIT 1', [assignedUserId]);
                   teamId = teamRes.rows[0]?.team_id;
-                } else {
-                  console.log(`[WorkflowRunner] User ${resolvedValue} not found in our database`);
                 }
             }
-
             if (assignedUserId) {
-                // Check for existing active assignment
-                const existing = await db.query(
-                  'SELECT id FROM conversation_assignments WHERE conversation_id = $1 AND released_at IS NULL',
-                  [conversationId]
-                );
-
-                if (existing.rowCount > 0) {
-                  // Update existing
-                  await db.query(`
-                                UPDATE conversation_assignments
-                                SET assignee_user_id = $1, team_id = $2, claimed_at = NOW()
-                                WHERE id = $3
-                            `, [assignedUserId, teamId, existing.rows[0].id]);
-                } else {
-                  // Insert new
-                  await db.query(`
-                                INSERT INTO conversation_assignments (conversation_id, team_id, assignee_user_id, claimed_at)
-                                VALUES ($1, $2, $3, NOW())
-                            `, [conversationId, teamId, assignedUserId]);
-                }
+                await db.query(`
+                   INSERT INTO conversation_assignments (conversation_id, team_id, assignee_user_id, claimed_at)
+                   VALUES ($1, $2, $3, NOW())
+                   ON CONFLICT (conversation_id) WHERE released_at IS NULL DO UPDATE SET
+                   assignee_user_id = EXCLUDED.assignee_user_id, team_id = EXCLUDED.team_id, claimed_at = NOW()
+                `, [conversationId, teamId, assignedUserId]);
                 console.log(`[WorkflowRunner] Assigned conversation to user ${assignedUserId}`);
-            } else if (resolvedValue && context.xolox_response) {
-                // LAST CHANCE: If user not found in DB but we have their full info in the Xolox response, 
-                // we can auto-provision them so assignment succeeds.
-                const xr = context.xolox_response;
-                const leadData = xr.data || xr;
-                const assignedTo = leadData.assignedTo;
-
-                if (assignedTo && typeof assignedTo === 'object' && (assignedTo._id || assignedTo.id) === resolvedValue) {
-                    const userId = assignedTo._id || assignedTo.id;
-                    const email = assignedTo.email || '';
-                    const name = `${assignedTo.firstname || ''} ${assignedTo.lastname || ''}`.trim() || assignedTo.name || 'Unknown Agent';
-                    
-                    if (userId && email) {
-                        console.log(`[WorkflowRunner] Auto-provisioning agent ${name} (${userId}) from Starforze response...`);
-                        await db.query(`
-                            INSERT INTO users (id, email, name, role, active, created_at)
-                            VALUES ($1, $2, $3, 'agent', true, NOW())
-                            ON CONFLICT (id) DO UPDATE SET
-                                email = EXCLUDED.email,
-                                name = EXCLUDED.name
-                        `, [userId, email, name]);
-
-                        // Now retry assignment logic with the newly created user
-                        const retryTeamRes = await db.query('SELECT team_id FROM team_members WHERE user_id = $1 LIMIT 1', [userId]);
-                        const finalTeamId = teamId || retryTeamRes.rows[0]?.team_id || null;
-
-                        await db.query(`
-                            INSERT INTO conversation_assignments (conversation_id, team_id, assignee_user_id, claimed_at)
-                            VALUES ($1, $2, $3, NOW())
-                            ON CONFLICT (conversation_id) WHERE released_at IS NULL DO UPDATE SET
-                                assignee_user_id = EXCLUDED.assignee_user_id,
-                                team_id = EXCLUDED.team_id,
-                                claimed_at = NOW()
-                        `, [conversationId, finalTeamId, userId]);
-                        
-                        console.log(`[WorkflowRunner] Successfully auto-provisioned and assigned agent ${userId}`);
-                    }
-                }
             }
           } else if (actionType === 'update_chat_status') {
-            const newStatus = actionValue; // 'closed', 'open', 'snoozed'
-            if (['open', 'closed', 'snoozed'].includes(newStatus)) {
-              await db.query('UPDATE conversations SET status = $1 WHERE id = $2', [newStatus, conversationId]);
-              console.log(`[WorkflowRunner] Updated chat status to ${newStatus}`);
+            if (['open', 'closed', 'snoozed'].includes(actionValue)) {
+              await db.query('UPDATE conversations SET status = $1 WHERE id = $2', [actionValue, conversationId]);
             }
           } else if (actionType === 'update_lead_status') {
-            const newStatus = actionValue; // 'new', 'interested', etc.
-            await db.query(`
-              UPDATE contacts 
-              SET lead_status = $1 
-              WHERE id = (SELECT contact_id FROM conversations WHERE id = $2)
-            `, [newStatus, conversationId]);
-            console.log(`[WorkflowRunner] Updated lead status to ${newStatus}`);
-          } else if (actionType === 'update_lead_stage') {
-            const stageValue = actionValue;
-            if (stageValue) {
-              await db.query(`
-                UPDATE contacts 
-                SET lead_stage = $1 
-                WHERE id = (SELECT contact_id FROM conversations WHERE id = $2)
-              `, [stageValue, conversationId]);
-              console.log(`[WorkflowRunner] Updated lead stage to ${stageValue}`);
-              // Note: runStageWorkflows might need updating to handle the new stage string logic
-              // but we'll focus on the data update first.
-            }
+            await db.query(`UPDATE contacts SET lead_status = $1 WHERE id = (SELECT contact_id FROM conversations WHERE id = $2)`, [actionValue, conversationId]);
           } else if (actionType === 'start_workflow') {
-            const targetId = actionValue;
-            if (!targetId) {
-              console.log('[WorkflowRunner] start_workflow action has no target id');
-            } else if (String(targetId) === String(id)) {
-              console.log('[WorkflowRunner] Skipping start_workflow to same workflow id');
-            } else {
-              console.log(`[WorkflowRunner] Starting linked workflow ${targetId} for ${phoneNumber}`);
-              runWorkflow(targetId, phoneNumber).catch((err) => {
-                console.error(`[WorkflowRunner] Linked workflow ${targetId} failed: ${err.message}`);
-              });
+            if (actionValue && String(actionValue) !== String(id)) {
+              runWorkflow(actionValue, phoneNumber).catch(e => console.error(`[WorkflowRunner] Linked workflow failed: ${e.message}`));
             }
           }
         } catch (err) {
-          console.error(`[WorkflowRunner] Action failed: ${err.message}`);
-          if (io) {
-            io.emit('workflow:step:error', { workflowId: id, phoneNumber, nodeId: currentNode.id, message: err.message || 'Action failed' });
+          console.error(`[WorkflowRunner] Action node failed: ${err.message}`);
+          if (io) io.emit('workflow:step:error', { workflowId: id, phoneNumber, nodeId: currentNode.id, message: err.message });
+        }
+
+      } else if (currentNode.type === 'user_replied' || currentNode.type === 'wait_for_reply') {
+        const d = currentNode.data || {};
+        const timeoutMins = parseInt(d.timeoutMins || d.timeout || '60', 10);
+        const timeoutMs = timeoutMins * 60000;
+        const sinceTime = lastTemplateSentAt || workflowStartTime;
+        if (io) io.emit('workflow:step:wait', { workflowId: id, phoneNumber, nodeId: currentNode.id, reason: 'user_replied', timeoutMins });
+
+        let hasReplied = false;
+        const waitStart = Date.now();
+        while (Date.now() - waitStart < timeoutMs) {
+          const replies = await checkUserReply(phoneNumber, sinceTime);
+          if (replies.length > 0) {
+            hasReplied = true;
+            break;
           }
+          await sleep(5000);
+        }
+
+        const handle = hasReplied ? 'true' : 'false';
+        const nextNodeId = currentNode.routes && currentNode.routes[handle];
+        if (nextNodeId) {
+          currentNode = nodes.find(n => n.id === nextNodeId);
+          continue;
+        }
+
+      } else if (currentNode.type === 'feedback') {
+        const d = currentNode.data || {};
+        const digits = parseInt(d.otpDigits || d.digits || 6, 10);
+        const saveVarRaw = d.saveVariable || 'otp';
+        const saveVar = String(saveVarRaw).replace(/[{}]/g, '').trim() || 'otp';
+        const otp = fast2sms.generateOtp(Number.isFinite(digits) ? digits : 6);
+        context[saveVar] = otp;
+        try {
+          await fast2sms.sendOtpSms({ phoneNumber, otp });
+        } catch (err) {
+          console.error(`[WorkflowRunner] Feedback node failed: ${err.message}`);
         }
       } else if (currentNode.type === 'xolox_event') {
         // ── XOLOX CRM webhook call ──────────────────────────────────────────
