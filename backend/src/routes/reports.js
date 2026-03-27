@@ -202,7 +202,7 @@ router.get('/campaign-leads', auth.requireAuth, async (req, res, next) => {
                     ORDER BY t.scheduled_time ASC LIMIT 1
                 ) as next_trigger
             FROM contacts c
-            JOIN lead_stages s ON (c.lead_stage_id::text = s.id::text OR c.lead_stage::text = s.name::text)
+            JOIN lead_stages s ON (c.lead_stage_id = s.id)
             WHERE s.id::text = $1
             ORDER BY c.created_at DESC
             LIMIT $2

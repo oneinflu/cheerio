@@ -712,6 +712,24 @@ async function runMigrations() {
             console.log('[migrate] workflow_scheduled_tasks table already exists.');
         }
 
+        // New Fixes for Leads and Templates (0037)
+        try {
+            const hasCourseGroupRes = await client.query("SELECT column_name FROM information_schema.columns WHERE table_name = 'template_settings' AND column_name = 'course_group'");
+            const hasLeadStageIdRes = await client.query("SELECT column_name FROM information_schema.columns WHERE table_name = 'contacts' AND column_name = 'lead_stage_id'");
+            
+            if (hasCourseGroupRes.rowCount === 0 || hasLeadStageIdRes.rowCount === 0) {
+                console.log('[migrate] Detected missing columns (0037)... applying fix...');
+                await client.query('BEGIN');
+                await runSQLFile(client, path.join(__dirname, '..', 'db', 'migrations', '0037_fix_leads_and_templates.sql'));
+                await client.query('COMMIT');
+                console.log('[migrate] Applied 0037_fix_leads_and_templates migration.');
+            } else {
+                console.log('[migrate] 0037 schema fixes already present.');
+            }
+        } catch (e) {
+            console.warn('[migrate] 0037 check skipped or failed:', e.message);
+        }
+
         return;
 
 
