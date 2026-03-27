@@ -356,6 +356,25 @@ const PaymentReminderNode = ({ data, selected }) => (
   </NodeWrapper>
 );
 
+const UserRepliedNode = ({ data, selected }) => {
+  return (
+    <NodeWrapper selected={selected} title="User Replied?" icon={UserCheck} colorClass="bg-blue-600" status={data.nodeStatus}>
+      <div className="text-xs text-slate-600 mb-2 font-medium italic">Wait for any reply...</div>
+      <div className="text-[10px] text-slate-500 mb-1 flex items-center gap-1">
+        <Clock size={10} />
+        <span>Timeout: {data.timeoutMins || data.timeout || 60}m</span>
+      </div>
+      <div className="flex justify-between text-[10px] font-bold text-slate-500 px-1 mt-2">
+        <span className="text-green-600">REPLIED</span>
+        <span className="text-red-500">TIMEOUT</span>
+      </div>
+      <Handle type="target" position={Position.Top} className="w-3 h-3 bg-slate-400" />
+      <Handle type="source" position={Position.Bottom} id="true" style={{ left: '30%' }} className="w-3 h-3 bg-green-500" />
+      <Handle type="source" position={Position.Bottom} id="false" style={{ left: '70%' }} className="w-3 h-3 bg-red-500" />
+    </NodeWrapper>
+  );
+};
+
 
 const CustomCodeNode = ({ data, selected }) => {
   return (
@@ -796,6 +815,8 @@ const nodeTypes = {
   razorpay_status: PaymentReminderNode,
   campaign_trigger: CampaignTriggerNode,
   campaign_condition: CampaignConditionNode,
+  user_replied: UserRepliedNode,
+  wait_for_reply: UserRepliedNode,
   incoming_webhook: IncomingWebhookNode,
   new_contact: NewContactCreatedNode,
   xolox_event: XoloxEventNode,
@@ -1911,6 +1932,13 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
           };
         }
 
+        if (type === 'user_replied') {
+          data = {
+            label: 'User Replied?',
+            timeoutMins: 60,
+          };
+        }
+
         if (
           viewMode === 'list' &&
           branchTarget &&
@@ -2285,11 +2313,25 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
       };
 
       // Find connections for each node type
-      if (node.type === 'condition' || node.type === 'campaign_condition') {
-        const yesEdge = edges.find(e => e.source === node.id && e.sourceHandle === 'yes');
-        const noEdge = edges.find(e => e.source === node.id && e.sourceHandle === 'no');
-        if (yesEdge) nodeDef.yes = yesEdge.target;
-        if (noEdge) nodeDef.no = noEdge.target;
+      if (node.type === 'condition' || node.type === 'campaign_condition' || node.type === 'user_replied' || node.type === 'wait_for_reply') {
+        const yesEdge = edges.find(e => e.source === node.id && (e.sourceHandle === 'yes' || e.sourceHandle === 'true'));
+        const noEdge = edges.find(e => e.source === node.id && (e.sourceHandle === 'no' || e.sourceHandle === 'false'));
+        if (yesEdge) {
+          if (node.type === 'user_replied' || node.type === 'wait_for_reply') {
+            if (!nodeDef.routes) nodeDef.routes = {};
+            nodeDef.routes['true'] = yesEdge.target;
+          } else {
+            nodeDef.yes = yesEdge.target;
+          }
+        }
+        if (noEdge) {
+          if (node.type === 'user_replied' || node.type === 'wait_for_reply') {
+            if (!nodeDef.routes) nodeDef.routes = {};
+            nodeDef.routes['false'] = noEdge.target;
+          } else {
+            nodeDef.no = noEdge.target;
+          }
+        }
       } else if (node.type === 'send_template' && node.data.buttons && node.data.buttons.length > 0) {
         nodeDef.routes = {};
         node.data.buttons.forEach((btn, idx) => {
@@ -3797,6 +3839,26 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
             )}
             {viewMode === 'canvas' && (
               <div
+                className="flex items-center gap-3 p-3 rounded-md bg-blue-50 border border-blue-200 cursor-pointer hover:bg-blue-100 transition-colors"
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.setData('application/reactflow', 'user_replied');
+                  e.dataTransfer.effectAllowed = 'move';
+                }}
+                onClick={() => handleAddNodeFromPalette('user_replied')}
+                title="Wait for contact to reply before continuing; branches on reply/timeout"
+              >
+                <div className="w-9 h-9 rounded-md bg-blue-600 flex items-center justify-center shrink-0">
+                  <UserCheck size={16} className="text-white" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-blue-800">User Replied?</div>
+                  <div className="text-xs text-blue-600">Wait for engagement</div>
+                </div>
+              </div>
+            )}
+            {viewMode === 'canvas' && (
+              <div
                 className="flex items-center gap-3 p-3 rounded-md bg-slate-50 border border-slate-200 cursor-pointer hover:bg-slate-100 transition-colors"
                 draggable
                 onDragStart={(e) => {
@@ -4848,6 +4910,55 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 );
               })()}
 
+
+              {selectedNode.type === 'user_replied' && (
+                <div className="space-y-4">
+                  <div className="bg-blue-50 border border-blue-100 text-blue-700 rounded-lg p-3">
+                    <div className="flex items-center gap-2 mb-1">
+                      <UserCheck size={14} className="text-blue-600" />
+                      <span className="text-xs font-semibold text-blue-800">User Replied? Check</span>
+                    </div>
+                    <p className="text-[11px] text-blue-600 leading-relaxed">
+                      Waits for an incoming message from the contact. Branch your workflow based on whether they reply or not.
+                    </p>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">Timeout (Minutes)</label>
+                    <div className="flex items-center gap-2">
+                       <input
+                        type="number"
+                        min="1"
+                        max="1440"
+                        className="w-full border border-slate-300 rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-300 outline-none"
+                        value={selectedNode.data.timeoutMins || selectedNode.data.timeout || '60'}
+                        onChange={(e) => updateNodeData('timeoutMins', e.target.value)}
+                      />
+                      <span className="text-xs text-slate-400 shrink-0">mins</span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-1">
+                       Wait for up to this many minutes before following the <b>TIMEOUT</b> branch.
+                    </p>
+                  </div>
+
+                  <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-3">
+                    <div className="flex items-start gap-3">
+                      <div className="w-5 h-5 rounded-full bg-green-500 text-white flex items-center justify-center shrink-0 mt-0.5 font-bold text-[10px]">✓</div>
+                      <div>
+                        <div className="text-xs font-bold text-slate-800">REPLIED Branch (true)</div>
+                        <p className="text-[10px] text-slate-500">Contact sent a message. Use this for conversions or manual handling.</p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <div className="w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center shrink-0 mt-0.5 font-bold text-[10px]">✗</div>
+                      <div>
+                        <div className="text-xs font-bold text-slate-800">TIMEOUT Branch (false)</div>
+                        <p className="text-[10px] text-slate-500">No reply received. Use this for automated follow-up templates.</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {selectedNode.type === 'send_template' && (() => {
                 const d = selectedNode.data;

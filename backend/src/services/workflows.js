@@ -81,6 +81,15 @@ async function processScheduledTasks() {
 }
 
 /**
+ * Starts the interval-based queue processor
+ */
+function initQueueWorker(intervalMs = 30000) {
+  console.log(`[WorkflowQueue] Initializing Worker (interval=${intervalMs}ms)`);
+  processScheduledTasks(); // Run once immediately
+  setInterval(processScheduledTasks, intervalMs);
+}
+
+/**
  * Finds the next workflow in a stage sequence and schedules it.
  */
 async function scheduleNextStageWorkflow(stageId, phoneNumber, currentPosition) {
@@ -98,1705 +107,341 @@ async function scheduleNextStageWorkflow(stageId, phoneNumber, currentPosition) 
         console.log(`[WorkflowQueue] Chaining next workflow: ${next.name} (Position ${next.position}) after ${phoneNumber} finished previous`);
         
         // Wait! We should check if the contact still matches the NEW workflow's label/course triggers if any
-        // For now, we schedule it and the workflow runner will handle internal triggers or we can check here.
-        await scheduleWorkflowTask(next.workflow_id, phoneNumber, stageId, next.delay_minutes, next.target_time, next.position);
-    } else {
-        console.log(`[WorkflowQueue] End of sequence reached for ${phoneNumber} in stage ${stageId}`);
+        // But for Lead Stage sequences, it's usually unconditional since they are literally IN that stage.
+        
+        await scheduleWorkflowTask(
+            next.workflow_id, 
+            phoneNumber, 
+            stageId, 
+            next.delay_minutes, 
+            next.target_time, 
+            next.position
+        );
     }
 }
 
-// Initialize worker check
-if (process.env.NODE_ENV !== 'test') {
-    setInterval(processScheduledTasks, 60000);
-    console.log('[WorkflowQueue] Background worker (persistent) initialized.');
-}
-
-/**
- * Resolve {{variable}} placeholders in a string against a context object.
-
- * e.g. resolvePlaceholders('Hello {{name}}', { name: 'John' }) => 'Hello John'
- */
-function resolvePlaceholders(str, context) {
-  if (!str || typeof str !== 'string') return str;
-  return str.replace(/\{\{([^}]+)\}\}/g, (_, key) => {
-    const k = key.trim();
-    if (Object.prototype.hasOwnProperty.call(context, k)) return String(context[k]);
-    
-    // Support dotted paths (e.g. xolox_response.assignedTo)
-    const segments = k.split('.');
-    if (segments.length > 1) {
-      let val = context;
-      for (const seg of segments) {
-        if (val && typeof val === 'object' && seg in val) {
-          val = val[seg];
-        } else {
-          val = undefined;
-          break;
-        }
-      }
-      if (val !== undefined) return String(val ?? '');
-    }
-    
-    return `{{${k}}}`;
-  });
-}
-
-function buildContextPreview(context) {
-  const out = {};
-  const src = context && typeof context === 'object' ? context : {};
-  const preferred = ['phone', 'name', 'email', 'contact_id', 'course', 'tags'];
-  const keys = [...preferred, ...Object.keys(src)].filter((v, i, a) => a.indexOf(v) === i);
-  for (const k of keys.slice(0, 15)) {
-    if (!Object.prototype.hasOwnProperty.call(src, k)) continue;
-    const v = src[k];
-    if (v === null || v === undefined) continue;
-    let s;
-    if (typeof v === 'string') s = v;
-    else if (typeof v === 'number' || typeof v === 'boolean') s = String(v);
-    else if (Array.isArray(v)) s = v.slice(0, 5).map((x) => String(x)).join(', ');
-    else s = JSON.stringify(v);
-    if (typeof s === 'string' && s.length > 160) s = s.slice(0, 157) + '...';
-    out[k] = s;
-  }
-  return out;
-}
-
-/**
- * Service: Workflows
- * Manage automation workflows.
- */
-
-// Helper to resolve conversationId for a phone number
-async function ensureConversation(phoneNumber) {
-  // Find contact
-  let contactRes = await db.query('SELECT id, external_id, channel_id FROM contacts WHERE external_id = $1', [phoneNumber]);
-
-  if (contactRes.rows.length === 0) {
-    const altPhone = phoneNumber.startsWith('+') ? phoneNumber.slice(1) : `+${phoneNumber}`;
-    contactRes = await db.query('SELECT id, external_id, channel_id FROM contacts WHERE external_id = $1', [altPhone]);
-  }
-
-  if (contactRes.rows.length === 0) {
-    // If contact doesn't exist, we can't create a conversation easily without knowing the channel.
-    // However, if we assume a default channel exists, we could try.
-    // For now, let's try to find ANY whatsapp channel to link to.
-    // Prefer the real configured channel (numeric external_id = Meta Phone Number ID), not the demo seed
-    const configuredPhoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
-    let channelRes;
-    if (configuredPhoneId) {
-      channelRes = await db.query("SELECT id FROM channels WHERE type = 'whatsapp' AND external_id = $1 LIMIT 1", [configuredPhoneId]);
-    }
-    if (!channelRes || channelRes.rowCount === 0) {
-      channelRes = await db.query("SELECT id FROM channels WHERE type = 'whatsapp' AND external_id ~ '^[0-9]+$' ORDER BY created_at DESC LIMIT 1");
-    }
-    if (!channelRes || channelRes.rowCount === 0) {
-      channelRes = await db.query("SELECT id FROM channels WHERE type = 'whatsapp' LIMIT 1");
-    }
-    if (channelRes.rowCount === 0) throw new Error('No WhatsApp channel configured');
-    const channelId = channelRes.rows[0].id;
-
-    // Create contact
-    const createContact = await db.query(
-      `INSERT INTO contacts (id, channel_id, external_id, display_name, profile, lead_status, lead_stage)
-       VALUES (gen_random_uuid(), $1, $2, 'Unknown', '{}'::jsonb, 'new', 'N2 Fresh Leads')
-       RETURNING id`,
-      [channelId, phoneNumber]
-    );
-    const contactId = createContact.rows[0].id;
-
-    // Create conversation
-    const createConv = await db.query(
-      `INSERT INTO conversations (id, channel_id, contact_id, status, created_at, updated_at)
-       VALUES (gen_random_uuid(), $1, $2, 'open', NOW(), NOW())
-       RETURNING id`,
-      [channelId, contactId]
-    );
-    return createConv.rows[0].id;
-  }
-
-  const contact = contactRes.rows[0];
-  const contactId = contact.id;
-  const channelId = contact.channel_id;
-
-  // Find conversation
-  const convRes = await db.query('SELECT id FROM conversations WHERE contact_id = $1', [contactId]);
-  if (convRes.rows.length > 0) {
-    return convRes.rows[0].id;
-  }
-
-  // Create new conversation if missing
-  const createConv = await db.query(
-    `INSERT INTO conversations (id, channel_id, contact_id, status, created_at, updated_at)
-     VALUES (gen_random_uuid(), $1, $2, 'open', NOW(), NOW())
-     RETURNING id`,
-    [channelId, contactId]
-  );
-  return createConv.rows[0].id;
-}
-
-// Ensure a contact exists and update basic fields; returns contact_id
-async function ensureContact({ external_id, name, email, attributes, skipGlobalTriggers = false }) {
-  let contactRes = await db.query('SELECT id, channel_id, display_name, profile FROM contacts WHERE external_id = $1', [external_id]);
-  if (contactRes.rowCount === 0) {
-    const alt = external_id.startsWith('+') ? external_id.slice(1) : `+${external_id}`;
-    contactRes = await db.query('SELECT id, channel_id, display_name, profile FROM contacts WHERE external_id = $1', [alt]);
-  }
-
-  if (contactRes.rowCount === 0) {
-    // Prefer the real configured channel (numeric external_id = Meta Phone Number ID), not the demo seed
-    const configuredPhoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
-    let chanRes;
-    if (configuredPhoneId) {
-      chanRes = await db.query("SELECT id FROM channels WHERE type='whatsapp' AND external_id = $1 LIMIT 1", [configuredPhoneId]);
-    }
-    if (!chanRes || chanRes.rowCount === 0) {
-      chanRes = await db.query("SELECT id FROM channels WHERE type='whatsapp' AND external_id ~ '^[0-9]+$' ORDER BY created_at DESC LIMIT 1");
-    }
-    if (!chanRes || chanRes.rowCount === 0) {
-      chanRes = await db.query("SELECT id FROM channels WHERE type='whatsapp' LIMIT 1");
-    }
-    if (chanRes.rowCount === 0) throw new Error('No WhatsApp channel configured');
-    const channelId = chanRes.rows[0].id;
-    const ins = await db.query(
-      `INSERT INTO contacts (id, channel_id, external_id, display_name, profile, lead_status, lead_stage)
-       VALUES (gen_random_uuid(), $1, $2, $3, $4::jsonb, 'new', 'N2 Fresh Leads')
-       RETURNING *`,
-      [channelId, external_id, name || 'User', JSON.stringify({ email: email || '', attributes: attributes || {} })]
-    );
-    const newContact = ins.rows[0];
-
-    // Trigger NEW CONTACT workflows if not skipped
-    if (!skipGlobalTriggers) {
-      triggerContactCreatedWorkflows({
-        id: newContact.id,
-        external_id: newContact.external_id,
-        name: newContact.display_name,
-        email: newContact.profile?.email || '',
-        attributes: newContact.profile?.attributes || {}
-      }).catch(err => console.error('[ensureContact] Trigger failed:', err));
-    }
-
-    return newContact.id;
-  }
-
-  const contactId = contactRes.rows[0].id;
-  const displayName = name || contactRes.rows[0].display_name || 'User';
-  const attrJson = JSON.stringify(attributes || {});
-
-  await db.query(
-    `
-    UPDATE contacts
-    SET display_name = $2,
-        profile = COALESCE(profile, '{}'::jsonb) ||
-                 jsonb_build_object(
-                   'email', COALESCE($3, (profile->>'email')),
-                   'attributes', (COALESCE(profile->'attributes','{}'::jsonb) || $4::jsonb)
-                 )
-    WHERE id = $1
-    `,
-    [contactId, displayName, email || null, attrJson]
-  );
-
-  return contactId;
-}
-
-
-async function listWorkflows() {
-  const res = await db.query(`
-    SELECT * FROM workflows 
-    ORDER BY created_at DESC
-  `);
+async function listWorkflows(teamId) {
+  const res = await db.query('SELECT * FROM workflows WHERE team_id = $1 ORDER BY created_at DESC', [teamId]);
   return res.rows;
 }
 
 async function getWorkflow(id) {
-  const res = await db.query(`
-    SELECT * FROM workflows WHERE id = $1
-  `, [id]);
+  const res = await db.query('SELECT * FROM workflows WHERE id = $1', [id]);
   return res.rows[0];
 }
 
-async function createWorkflow(data) {
-  const { name, description, status, steps } = data;
-  const res = await db.query(`
-    INSERT INTO workflows (name, description, status, steps)
-    VALUES ($1, $2, $3, $4)
-    RETURNING *
-  `, [name, description, status || 'active', steps || []]);
-  return res.rows[0];
-}
-
-async function updateWorkflow(id, data) {
-  const { name, description, status, steps } = data;
-  const res = await db.query(`
-    UPDATE workflows 
-    SET name = COALESCE($2, name),
-        description = COALESCE($3, description),
-        status = COALESCE($4, status),
-        steps = COALESCE($5, steps)
-    WHERE id = $1
-    RETURNING *
-  `, [id, name, description, status, steps]);
-  return res.rows[0];
-}
-
-async function runStageWorkflows(stageId, phoneNumber) {
-  console.log(`[runStageWorkflows] Starting orchestration for Stage=${stageId}, Phone=${phoneNumber}`);
+async function createWorkflow(workflowData) {
+  const { team_id, name, trigger, nodes, edges, status = 'active' } = workflowData;
   const res = await db.query(
-    `SELECT lsw.workflow_id, lsw.delay_minutes, lsw.is_independent, lsw.target_time, w.steps, w.name
-     FROM lead_stage_workflows lsw
-     JOIN workflows w ON w.id = lsw.workflow_id
-     WHERE lsw.stage_id = $1 AND w.status = 'active'
-     ORDER BY lsw.position ASC, w.created_at ASC`,
-    [stageId]
+    'INSERT INTO workflows (team_id, name, trigger, nodes, edges, status) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+    [team_id, name, trigger, JSON.stringify(nodes), JSON.stringify(edges), status]
   );
-  
-  if (res.rowCount === 0) {
-    console.log(`[runStageWorkflows] No active workflows found for stage ${stageId}`);
-    return;
-  }
-
-  // Fetch contact labels to check conditions
-  let contactLabels = [];
-  try {
-    const contactRes = await db.query(
-      `SELECT cl.name 
-       FROM contacts c
-       JOIN contact_label_maps clm ON clm.contact_id = c.id
-       JOIN contact_labels cl ON cl.id = clm.label_id
-       WHERE c.external_id = $1`,
-      [phoneNumber]
-    );
-    if (contactRes.rowCount === 0) {
-        const altPhone = phoneNumber.startsWith('+') ? phoneNumber.slice(1) : `+${phoneNumber}`;
-        const contactRes2 = await db.query('SELECT cl.name FROM contacts c JOIN contact_label_maps clm ON clm.contact_id = c.id JOIN contact_labels cl ON cl.id = clm.label_id WHERE c.external_id = $1', [altPhone]);
-        contactLabels = contactRes2.rows.map(r => r.name);
-    } else {
-        contactLabels = contactRes.rows.map(r => r.name);
-    }
-  } catch (e) {
-    console.error(`[runStageWorkflows] Label check failed: ${e.message}`);
-  }
-
-  // PERSISTENCE CHANGE: 
-  // Instead of a simple loop with many sleeps, we now use the workflow_scheduled_tasks QUEUE.
-  
-  const independent = res.rows.filter(r => r.is_independent === true);
-  const sequential = res.rows.filter(r => r.is_independent !== true);
-
-  // 1. Independent workflows: Execute immediately (mostly in parallel)
-  for (const row of independent) {
-    const wfId = row.workflow_id;
-    const delayMins = parseInt(row.delay_minutes || 0, 10);
-    const targetT = row.target_time;
-    
-    // We schedule them with their own entry-relative delay
-    await scheduleWorkflowTask(wfId, phoneNumber, stageId, delayMins, targetT, -1);
-  }
-
-  // 2. Sequential (Linked) workflows: 
-  // Schedule ONLY THE FIRST one. Its completion will trigger the second.
-  for (let i = 0; i < sequential.length; i++) {
-    const row = sequential[i];
-    const steps = row.steps || {};
-
-    // Filter check: If label mismatch, we must SKIP this one and try to schedule the NEXT one in line
-    if (steps.triggerLabel && !contactLabels.includes(steps.triggerLabel)) {
-      console.log(`[runStageWorkflows] Skipping "${row.workflow_id}" (Label Mismatch) - seeking fallback...`);
-      continue; // The next iteration of THIS loop will pick up the next available sequential
-    }
-
-    // Schedule the entry of the sequence
-    console.log(`[runStageWorkflows] Initiating sequence for ${phoneNumber} starting with ${row.workflow_id}`);
-    await scheduleWorkflowTask(row.workflow_id, phoneNumber, stageId, row.delay_minutes, row.target_time, row.position);
-    break; // Only start the first valid one
-  }
+  return res.rows[0];
 }
+
+async function updateWorkflow(id, workflowData) {
+  const { name, trigger, nodes, edges, status } = workflowData;
+  const res = await db.query(
+    'UPDATE workflows SET name = $1, trigger = $2, nodes = $3, edges = $4, status = $5, updated_at = NOW() WHERE id = $6 RETURNING *',
+    [name, trigger, JSON.stringify(nodes), JSON.stringify(edges), status, id]
+  );
+  return res.rows[0];
+}
+
 async function deleteWorkflow(id) {
-  await db.query(`DELETE FROM workflows WHERE id = $1`, [id]);
+  await db.query('DELETE FROM workflows WHERE id = $1', [id]);
   return { success: true };
 }
 
-async function triggerWorkflowsForEvent(triggerType, phoneNumber, context = {}, excludeWorkflowId = null) {
-  if (!triggerType) return;
-  console.log(`[WorkflowEvents] Checking workflows for trigger type: ${triggerType}`);
-  try {
-    const res = await db.query(
-      `SELECT id, steps FROM workflows WHERE status = 'active'`
-    );
-    const rows = res.rows || [];
-    for (const row of rows) {
-      const id = row.id;
-      if (excludeWorkflowId && String(id) === String(excludeWorkflowId)) continue;
-      const steps = row.steps || {};
-      // steps might be stored as { trigger: 'new_contact', nodes: [...], edges: [...] }
-      const wfTrigger = steps.trigger || steps.event || null;
-      
-      // Basic event type match
-      let isMatch = (wfTrigger === triggerType);
-
-      // Enhanced Keyword matching for WhatsApp Incoming
-      if (triggerType === 'incoming_whatsapp' && !isMatch) {
-          // Check if this workflow intended to trigger on incoming_whatsapp
-          // Some legacies use 'trigger' or 'incoming_whatsapp'
-          const nodes = steps.nodes || [];
-          const triggerNode = nodes.find(n => n.type === 'trigger' || n.type === 'incoming_whatsapp');
-          
-          if (triggerNode) {
-              const keywords = triggerNode.data?.keywords || '';
-              const incomingText = (context.text || '').toLowerCase().trim();
-
-              if (!keywords.trim()) {
-                  // Catch-all: blank keywords match EVERYTHING
-                  isMatch = true;
-                  console.log(`[WorkflowEvents] Catch-all match for workflow ${id} (blank keywords)`);
-              } else {
-                  // Split by comma and match
-                  const tokens = keywords.split(',').map(v => v.trim().toLowerCase()).filter(Boolean);
-                  isMatch = tokens.some(t => incomingText.includes(t));
-                  if (isMatch) console.log(`[WorkflowEvents] Keyword match for workflow ${id}: "${incomingText}" in [${tokens}]`);
-              }
-          }
-      }
-
-      if (isMatch) {
-          console.log(`[WorkflowEvents] Triggering workflow ${id} for event ${triggerType}`);
-          // For new_contact and incoming_webhook triggers, phone may be null; still execute
-          const phone = phoneNumber || 'unknown';
-          runWorkflow(id, phone, context).catch((err) => {
-              console.error(`[WorkflowEvents] Workflow ${id} failed for event ${triggerType}: ${err.message}`);
-          });
-      }
-    }
-  } catch (err) {
-    console.error(`[WorkflowEvents] Failed to trigger workflows for event ${triggerType}:`, err);
-  }
-}
-
 /**
- * Called when a new contact is created.
- * Finds and runs all workflows triggered by 'new_contact'.
+ * Triggers workflows for a contact based on an event type.
  */
-async function triggerContactCreatedWorkflows(contactData) {
-  const phoneNumber = contactData.phone || contactData.external_id || null;
-  const context = {
-    name: contactData.name || contactData.display_name || '',
-    phone: contactData.phone || contactData.external_id || '',
-    email: contactData.email || '',
-    tags: Array.isArray(contactData.tags) ? contactData.tags.join(',') : (contactData.tags || ''),
-    source: contactData.source || '',
-    course: contactData.course || '',
-    contact_id: contactData.id || contactData.contact_id || '',
-  };
-  console.log(`[WorkflowEvents] New contact created: ${phoneNumber}. Context:`, context);
-  await triggerWorkflowsForEvent('new_contact', phoneNumber, context);
-}
+async function triggerWorkflowsForEvent(teamId, phoneNumber, eventType, payload = {}) {
+  console.log(`[Workflows] Triggering event=${eventType} for phone=${phoneNumber}`);
+  const res = await db.query(
+    "SELECT * FROM workflows WHERE team_id = $1 AND trigger = $2 AND status = 'active'",
+    [teamId, eventType]
+  );
 
-async function checkUserReply(phoneNumber, sinceTime) {
-  if (!sinceTime) {
-    console.log('[WorkflowRunner] checkUserReply: No sinceTime provided');
-    return [];
-  }
-
-  try {
-    console.log(`[WorkflowRunner] checkUserReply: Checking for reply from ${phoneNumber} since ${sinceTime.toISOString()}`);
-
-    // Find contact
-    let contactRes = await db.query('SELECT id, external_id FROM contacts WHERE external_id = $1', [phoneNumber]);
-
-    // Fallback: Try with/without '+' prefix if not found
-    if (contactRes.rows.length === 0) {
-      const altPhone = phoneNumber.startsWith('+') ? phoneNumber.slice(1) : `+${phoneNumber}`;
-      contactRes = await db.query('SELECT id, external_id FROM contacts WHERE external_id = $1', [altPhone]);
-    }
-
-    if (contactRes.rows.length === 0) {
-      console.log(`[WorkflowRunner] checkUserReply: Contact not found for ${phoneNumber}`);
-      return [];
-    }
-    const contactId = contactRes.rows[0].id;
-    console.log(`[WorkflowRunner] checkUserReply: Found contactId ${contactId}`);
-
-    // Find conversation
-    const convRes = await db.query('SELECT id FROM conversations WHERE contact_id = $1', [contactId]);
-    if (convRes.rows.length === 0) {
-      console.log(`[WorkflowRunner] checkUserReply: Conversation not found for contactId ${contactId}`);
-      return [];
-    }
-    const conversationId = convRes.rows[0].id;
-    console.log(`[WorkflowRunner] checkUserReply: Found conversationId ${conversationId}`);
-
-    // Check messages
-    const msgRes = await db.query(
-      `SELECT id, created_at, text_body FROM messages 
-       WHERE conversation_id = $1 
-         AND direction = 'inbound' 
-         AND created_at >= $2
-       ORDER BY created_at DESC`,
-      [conversationId, sinceTime]
-    );
-
-    console.log(`[WorkflowRunner] checkUserReply: Found ${msgRes.rowCount} messages`);
-    if (msgRes.rowCount > 0) {
-      console.log(`[WorkflowRunner] checkUserReply: First message: ${JSON.stringify(msgRes.rows[0])}`);
-    }
-
-    return msgRes.rows;
-  } catch (err) {
-    console.error('[WorkflowRunner] Error checking user reply:', err);
-    return [];
-  }
-}
-
-/**
- * Called when a webhook triggers a workflow.
- * Finds and runs all workflows triggered by 'incoming_webhook'.
- */
-async function triggerWebhookWorkflows(payload) {
-  // Extract contact info from payload
-  const phone = payload.phone || payload.mobile || payload.whatsapp || payload.contact || '';
-  const name = payload.name || payload.full_name || payload.username || '';
-  const email = payload.email || payload.mail || '';
-  
-  if (!phone) {
-    console.log('[WorkflowEvents] Webhook received but no phone number found in payload. Skipping workflow.');
-    return;
-  }
-
-  // Normalize phone (remove + if present, ensuring lookup works)
-  const normalizedPhone = String(phone).replace(/[+\s-]/g, '');
-
-  console.log(`[WorkflowEvents] Webhook triggered for ${normalizedPhone}. Payload:`, payload);
-
-  // Initial Context from Payload
-  const initialContext = { ...payload };
-  if (name) initialContext.name = name;
-  if (email) initialContext.email = email;
-  if (normalizedPhone) initialContext.phone = normalizedPhone;
-
-  // Find all active workflows with 'incoming_webhook' trigger
-  const res = await db.query(`
-    SELECT id, steps FROM workflows 
-    WHERE status = 'active' 
-    AND steps->'nodes' @> '[{"type":"incoming_webhook"}]'
-  `);
-
-  console.log(`[WorkflowEvents] Found ${res.rowCount} workflows with incoming_webhook trigger.`);
-
+  const results = [];
   for (const wf of res.rows) {
-    const nodes = wf.steps.nodes || [];
-    const triggerNode = nodes.find(n => n.type === 'incoming_webhook');
-    
-    // Check if this specific webhook ID matches (if we support multiple webhook endpoints per workflow)
-    // For now, we assume global webhook trigger or filtered by workflow ID in the route handler.
-    // If the route handler calls this specific function for a specific workflow ID, we should pass it.
-    
-    // However, if this is a generic broadcast, we run all.
-    // BUT, usually webhook URLs are unique per workflow (e.g. /webhooks/workflow/:id).
-    // If so, the caller (route) should call runWorkflow directly.
-    
-    // Let's assume this function is for GENERIC webhooks or when we want to match payload criteria.
-    // For specific workflow webhooks, the route handler calls runWorkflow(id, phone, payload).
-    
-    // We will still run it here for completeness if used that way.
-    runWorkflow(wf.id, normalizedPhone, initialContext).catch(err => {
-      console.error(`[WorkflowEvents] Failed to run workflow ${wf.id}:`, err);
-    });
+    results.push(runWorkflow(wf.id, phoneNumber, payload));
   }
+  return Promise.all(results);
 }
 
-async function runWorkflow(id, phoneNumber, context = {}) {
-  const workflowStartTime = new Date();
+/**
+ * Triggers workflows for a contact when a contact is created
+ */
+async function triggerContactCreatedWorkflows(teamId, phoneNumber, contactData = {}) {
+    return triggerWorkflowsForEvent(teamId, phoneNumber, 'new_contact', contactData);
+}
+
+/**
+ * Triggers workflows for a generic incoming webhook
+ */
+async function triggerWebhookWorkflows(teamId, workflowId, payload = {}) {
+    // Only run the SPECIFIC workflow requested by the webhook ID
+    const res = await db.query(
+        "SELECT * FROM workflows WHERE id = $1 AND status = 'active' AND team_id = $2",
+        [workflowId, teamId]
+    );
+
+    if (res.rowCount === 0) {
+        console.warn(`[Workflows] Webhook received for non-existent or inactive workflow ID: ${workflowId}`);
+        return [];
+    }
+
+    const wf = res.rows[0];
+    const phone = payload.phone || payload.whatsapp || payload.contact || payload.mobile || '';
+    
+    if (!phone) {
+        console.error(`[Workflows] Webhook payload missing phone number. Workflow ID: ${workflowId}`);
+        return [];
+    }
+
+    return [runWorkflow(wf.id, phone, payload)];
+}
+
+/**
+ * Utility: Polls for inbound messages after a certain date
+ */
+async function checkUserReply(phoneNumber, sinceDate) {
+    const res = await db.query(`
+        SELECT id, body, created_at 
+        FROM messages 
+        WHERE contact_phone = $1 
+          AND direction = 'inbound' 
+          AND created_at > $2
+        ORDER BY created_at DESC 
+        LIMIT 1
+    `, [phoneNumber, sinceDate]);
+    
+    return res.rows[0];
+}
+
+/**
+ * Main execution engine for a workflow instance.
+ */
+async function runWorkflow(id, phoneNumber, initialContext = {}) {
+  const workflow = await getWorkflow(id);
+  if (!workflow) throw new Error('Workflow not found');
+
+  const nodes = workflow.nodes;
   const executionLog = [];
-  let io = null;
-  let status = 'started';
+  const io = require('../realtime/io').getIO();
+
+  // Find start node
+  let currentNode = nodes.find((n) =>
+    n.type === 'trigger' || n.type === 'incoming_webhook' ||
+    n.type === 'new_contact' || n.type === 'campaign_trigger'
+  );
+
+  let context = { ...initialContext, phone: phoneNumber };
   let hasError = false;
+  const workflowStartTime = new Date();
 
-  // Add standardized variables to context
-  context.phone = phoneNumber;
-  context.mobile = phoneNumber; // Alias for mobile
-  if (!context.name) context.name = 'User';
+  console.log(`[WorkflowRunner] Starting WF=${id} for phone=${phoneNumber}`);
 
-  try {
-    const workflow = await getWorkflow(id);
-    if (!workflow) throw new Error('Workflow not found');
-
-    const { steps } = workflow;
-    if (!steps || !steps.nodes) throw new Error('Invalid workflow definition: no steps found');
-
-    const { nodes, edges = [] } = steps;
-    
-    // Find trigger node (formal)
-    let currentNode = nodes.find(n => n.type === 'trigger' || n.type === 'incoming_webhook' || n.type === 'new_contact' || n.type === 'campaign_trigger');
-    
-    // FALLBACK: If no formal trigger but part of a Drip Sequence (or manual run), 
-    // find the first "Entry Node" (no incoming edges)
-    if (!currentNode && nodes.length > 0) {
-      console.log(`[WorkflowRunner] No formal trigger found for workflow ${id}. Seeking entry point...`);
-      const targetIds = new Set(edges.map(e => e.target));
-      currentNode = nodes.find(n => !targetIds.has(n.id));
-      
-      if (currentNode) {
-        console.log(`[WorkflowRunner] Using entry point node: ${currentNode.type} (${currentNode.id})`);
-      }
-    }
-
-    if (!currentNode) {
-        throw new Error('No trigger node or entry point found in workflow steps');
-    }
-
-    // Ensure contact exists or update it with new info
-  try {
-      // If we don't have a name in context (e.g. inbound message trigger), try to fetch it from DB
-          const contactRes = await db.query('SELECT id, display_name, profile FROM contacts WHERE external_id = $1', [phoneNumber]);
-          if (contactRes.rowCount > 0) {
-              const row = contactRes.rows[0];
-              context.contact_id = row.id;
-              context.name = row.display_name || row.profile?.name || 'User';
-              
-              // Load attributes into context for {{variable}} resolution
-              const attributes = row.profile?.attributes || {};
-              if (typeof attributes === 'object') {
-                Object.assign(context, attributes);
-              }
-
-              console.log(`[WorkflowRunner] Fetched contact ${context.name}. Loaded attributes: ${Object.keys(attributes).join(', ')}`);
-          } else {
-              // Contact doesn't exist (e.g. manual run without prior inbound msg). Create it.
-              console.log(`[WorkflowRunner] Contact ${phoneNumber} not found. Creating placeholder.`);
-              // We need a channel_id. Try to find a whatsapp channel.
-              const chanRes = await db.query("SELECT id FROM channels WHERE type='whatsapp' LIMIT 1");
-              if (chanRes.rowCount > 0) {
-                  const channelId = chanRes.rows[0].id;
-                  const newContact = await db.query(`
-                      INSERT INTO contacts (id, channel_id, external_id, display_name, profile)
-                      VALUES (gen_random_uuid(), $1, $2, 'User', '{}'::jsonb)
-                      ON CONFLICT (channel_id, external_id) DO UPDATE SET updated_at = NOW()
-                      RETURNING display_name
-                  `, [channelId, phoneNumber]);
-                  context.name = newContact.rows[0].display_name;
-              } else {
-                  context.name = 'User';
-              }
-          }
-      } catch (err) {
-          console.error(`[WorkflowRunner] Failed to ensure/fetch contact for ${phoneNumber}:`, err);
-      }
-
-      // If incoming_webhook has name/email, we update the contact
-      if (currentNode.type === 'incoming_webhook') {
-          const contactId = await ensureContact({
-              external_id: phoneNumber,
-              name: context.name || undefined,
-              email: context.email || undefined,
-              attributes: context, // Save full payload as attributes
-              skipGlobalTriggers: true // CRITICAL: Avoid infinite loop or double-send if "New Contact" workflow is also active
-          });
-          context.contact_id = contactId;
-          console.log(`[WorkflowRunner] Webhook run context prepared for contact ${contactId}.`);
-      }
-
-  // If trigger is incoming_webhook, map payload to variables
-  if (currentNode.type === 'incoming_webhook') {
-    const paramMapping = currentNode.data?.paramMapping || {};
-    // paramMapping: { "name": "user_name", "email": "user_email" } 
-    // where key is payload field, value is variable name
-    
-    Object.entries(paramMapping).forEach(([payloadKey, varName]) => {
-      if (context[payloadKey] !== undefined) {
-        context[varName] = context[payloadKey];
-      }
-    });
-
-    // Also auto-map standard fields if not explicitly mapped but present
-    if (!context['name'] && context['name']) context['name'] = context['name']; // already in context
-    
-    // Contact update already handled above
-  } else if (currentNode.type === 'new_contact' || (currentNode.type === 'trigger' && currentNode.data?.triggerType === 'new_contact')) {
-      const fieldMapping = currentNode.data?.fieldMapping || {};
-      // Map contact fields to variables based on mapping
-      // Standard fields: contact_name, contact_phone, contact_email, contact_course, contact_tags, contact_source, contact_id
-      const mappingTable = [
-        { key: 'contact_name', contextKey: 'name', defaultVar: 'name' },
-        { key: 'contact_phone', contextKey: 'phone', defaultVar: 'phone' },
-        { key: 'contact_email', contextKey: 'email', defaultVar: 'email' },
-        { key: 'contact_course', contextKey: 'course', defaultVar: 'course' },
-        { key: 'contact_tags', contextKey: 'tags', defaultVar: 'tags' },
-        { key: 'contact_source', contextKey: 'source', defaultVar: 'source' },
-        { key: 'contact_id', contextKey: 'contact_id', defaultVar: 'contact_id' }
-      ];
-
-      mappingTable.forEach(entry => {
-        const varName = fieldMapping[entry.key] || entry.defaultVar;
-        if (context[entry.contextKey] !== undefined) {
-           context[varName] = context[entry.contextKey];
-        }
-      });
-  }
-
-  // Context state
-  let lastTemplateSentAt = null;
-
-  console.log(`[WorkflowRunner] Starting workflow ${id} for ${phoneNumber}`);
-  console.log(`[WorkflowRunner] Context variables:`, JSON.stringify(context));
-  const MAX_STEPS = 50;
-  let stepCount = 0;
-
-  try {
-    const { getIO } = require('../realtime/io');
-    io = getIO();
-    if (io) {
-      io.emit('workflow:run:start', { workflowId: id, phoneNumber, startedAt: workflowStartTime });
-    }
-  } catch (e) {}
-
-  while (currentNode && stepCount < MAX_STEPS) {
-    stepCount++;
-    const edges = (steps && Array.isArray(steps.edges)) ? steps.edges : [];
-    
-    executionLog.push({
-      step: stepCount,
-      nodeId: currentNode.id,
-      type: currentNode.type,
-      status: 'started'
-    });
-    if (io) {
-      io.emit('workflow:step:start', { workflowId: id, phoneNumber, nodeId: currentNode.id, type: currentNode.type, step: stepCount, contextPreview: buildContextPreview(context) });
-    }
+  while (currentNode) {
+    executionLog.push({ nodeId: currentNode.id, type: currentNode.type, timestamp: new Date() });
 
     try {
-      // 1. Check for node-level delay (common in AI-generated flows)
-      // This allows any node to have a 'wait' before it fires
-      const nodeData = currentNode.data || {};
-      const scheduleType = nodeData.scheduleType || nodeData.ScheduleType;
-      const delayValue = nodeData.delayValue || nodeData.DelayValue || nodeData.timeValue;
-      
-      if (currentNode.type !== 'delay' && scheduleType === 'delay' && delayValue) {
-        const val = parseInt(delayValue, 10);
-        if (!isNaN(val) && val > 0) {
-          const unit = (nodeData.delayUnit || nodeData.DelayUnit || 'minutes').toLowerCase();
-          let ms = val * 60000;
-          if (unit === 'hours') ms = val * 3600000;
-          if (unit === 'days') ms = val * 86400000;
-          if (unit.startsWith('sec')) ms = val * 1000;
-          
-          console.log(`[WorkflowRunner] Node-level delay detected on ${currentNode.id}: Waiting ${val} ${unit}...`);
-          await sleep(ms);
-        }
-      }
-
-      // 1. Execute Node Logic
-      if (currentNode.type === 'send_template') {
-        const nodeData = currentNode.data || {};
-        const templateName = nodeData.template;
-        if (templateName) {
-          let components = Array.isArray(nodeData.components) ? JSON.parse(JSON.stringify(nodeData.components)) : [];
-          const languageCode = nodeData.languageCode || 'en_US';
-          
-          // 0. Auto-inject header component if missing but data exists in nodeData
-          const headerUrl = nodeData.headerUrl || '';
-          const headerType = nodeData.headerType || 'none';
-          const hasHeaderComp = components.some(c => c.type === 'header' || c.type === 'HEADER');
-          
-          if (!hasHeaderComp && ['image', 'video', 'document'].includes(headerType) && headerUrl) {
-              console.log(`[WorkflowRunner] Auto-injecting missing ${headerType} header. URL: ${headerUrl.slice(0, 30)}...`);
-              components.unshift({
-                  type: 'header',
-                  parameters: [{
-                      type: headerType,
-                      [headerType]: { link: headerUrl }
-                  }]
-              });
-          }
-
-          // Resolve variables in components while preserving parameter_name for NAMED templates
-          components = components.map(comp => {
-            if (comp.parameters && Array.isArray(comp.parameters)) {
-              comp.parameters = comp.parameters.map(param => {
-                const next = { ...param };
-                
-                // 1. Resolve text parameters
-                if (param.type === 'text') {
-                  next.text = param.text ? resolvePlaceholders(param.text, context) : '';
-                }
-                
-                // 2. Resolve media parameters (image, video, document)
-                if (['image', 'video', 'document'].includes(param.type)) {
-                  // If it's already wrapped in a sub-object (Meta format), resolve inside it
-                  if (param[param.type]) {
-                    const mediaSub = { ...param[param.type] };
-                    if (mediaSub.link) mediaSub.link = resolvePlaceholders(mediaSub.link, context);
-                    if (mediaSub.id) mediaSub.id = resolvePlaceholders(mediaSub.id, context);
-                    next[param.type] = mediaSub;
-                  } 
-                  // If it's flat (old format), resolve and then we'll wrap it below or just leave it for the wrapper to handle
-                  else {
-                    if (param.link) next.link = resolvePlaceholders(param.link, context);
-                    if (param.id) next.id = resolvePlaceholders(param.id, context);
-                  }
-                  
-                  // Wrap into Meta Cloud API format: { "type": "image", "image": { "link": "..." } }
-                  if (!param[param.type]) {
-                    const mediaPayload = {};
-                    if (next.link) mediaPayload.link = next.link;
-                    if (next.id) mediaPayload.id = next.id;
-                    
-                    if (Object.keys(mediaPayload).length > 0) {
-                      next[param.type] = mediaPayload;
-                      delete next.link;
-                      delete next.id;
-                    }
-                  }
-                }
-                
-                // 3. Resolve button payloads (payload type)
-                if (param.type === 'payload' && param.payload) {
-                   next.payload = resolvePlaceholders(param.payload, context);
-                }
-                
-                return next;
-              });
-            }
-            return comp;
-          });
-
-          console.log(`[WorkflowRunner] Sending template ${templateName} to ${phoneNumber}. Resolved payload:`, JSON.stringify(components, null, 2));
-          // Resolve conversation and send via outbound service (persists to DB)
-          try {
-            const conversationId = await ensureConversation(phoneNumber);
-            await outboundWhatsApp.sendTemplate(conversationId, templateName, languageCode, components);
-            lastTemplateSentAt = new Date();
-          } catch (err) {
-            console.error(`[WorkflowRunner] Failed to send template ${templateName}: ${err.message}`);
-            // Do NOT fallback and retry via direct client if it's already sent or is a hard error
-            // Fallbacks often cause double-sends if the DB just failed but Meta succeeded.
-            throw err; 
-          }
-
-          // Handle Quick Reply Buttons (Branching)
-          if (currentNode.routes && Object.keys(currentNode.routes).length > 0) {
-            console.log(`[WorkflowRunner] Waiting for user reply to match buttons: ${Object.keys(currentNode.routes).join(', ')}`);
-            const pollingStart = Date.now();
-            const TIMEOUT = 5 * 60 * 1000; // 5 mins wait max
-            let matchedRoute = null;
-            if (io) {
-              io.emit('workflow:step:wait', { workflowId: id, phoneNumber, nodeId: currentNode.id, reason: 'await_reply' });
-            }
-
-            while (Date.now() - pollingStart < TIMEOUT) {
-              const replies = await checkUserReply(phoneNumber, lastTemplateSentAt);
-              if (replies && replies.length > 0) {
-                for (const msg of replies) {
-                  const text = (msg.text_body || '').trim();
-                  // Find matching route key (case insensitive)
-                  const matchedKey = Object.keys(currentNode.routes).find(k => k.toLowerCase() === text.toLowerCase());
-                  if (matchedKey) {
-                    matchedRoute = currentNode.routes[matchedKey];
-                    console.log(`[WorkflowRunner] Matched reply '${text}' to route -> ${matchedRoute}`);
-                    break;
-                  }
-                }
-              }
-              if (matchedRoute) break;
-              await sleep(3000); // Poll every 3 seconds
-            }
-
-            if (matchedRoute) {
-              currentNode = nodes.find(n => n.id === matchedRoute);
-              continue; // Skip default next logic
-            } else {
-              console.log('[WorkflowRunner] Timed out waiting for button reply.');
-              if (io) {
-                io.emit('workflow:step:timeout', { workflowId: id, phoneNumber, nodeId: currentNode.id, reason: 'await_reply_timeout' });
-              }
-            }
-          }
-        }
-      } else if (currentNode.type === 'send_message') {
-        const text = currentNode.data.message;
-        if (text) {
-          console.log(`[WorkflowRunner] Sending text message to ${phoneNumber}`);
-          try {
-            const conversationId = await ensureConversation(phoneNumber);
-            await outboundWhatsApp.sendText(conversationId, text);
-          } catch (err) {
-            console.error(`[WorkflowRunner] Failed to send text message: ${err.message}`);
-          }
-        }
-
-      } else if (currentNode.type === 'response_message' || currentNode.type === 'feedback') {
-        const isFeedback = currentNode.type === 'feedback';
-        const d = currentNode.data || {};
-        const text = isFeedback ? (d.question || 'Your feedback matters! Please rate this chat on scale of 1-5') : d.message;
-        const buttonsData = isFeedback ? [1, 2, 3, 4, 5] : (d.buttons || []);
-        const style = d.buttonStyle || 'numbers';
-
-        const getDisplay = (val) => {
-          if (!isFeedback) return val;
-          if (style === 'emojis') {
-            const emojis = ['😠', '🙁', '😐', '🙂', '😄'];
-            return emojis[val - 1] || `${val}`;
-          }
-          if (style === 'stars') return `${val} ⭐`;
-          return `${val}`;
-        };
-
-        const buttonLabels = buttonsData.map(v => getDisplay(v));
-
-        try {
-          const conversationId = await ensureConversation(phoneNumber);
-
-          let interactivePayload;
-          if (buttonLabels.length > 0 && buttonLabels.length <= 3) {
-            interactivePayload = {
-              type: 'button',
-              body: { text: text },
-              action: {
-                buttons: buttonLabels.map((lbl, idx) => ({
-                  type: 'reply',
-                  reply: { id: `btn_${idx}`, title: lbl.length > 20 ? lbl.slice(0, 17) + '...' : lbl }
-                }))
-              }
-            };
-          } else if (buttonLabels.length > 3) {
-            interactivePayload = {
-              type: 'list',
-              header: { type: 'text', text: isFeedback ? 'Feedback' : 'Select Option' },
-              body: { text: resolvePlaceholders(text, context) },
-              action: {
-                button: isFeedback ? 'Rate' : 'Select',
-                sections: [{
-                  title: isFeedback ? 'Ratings' : 'Options',
-                  rows: buttonLabels.map((lbl, idx) => ({
-                    id: `row_${idx}`,
-                    title: lbl.length > 24 ? lbl.slice(0, 21) + '...' : lbl,
-                  }))
-                }]
-              }
-            };
-          } else {
-            const resolvedText = resolvePlaceholders(text, context);
-            await outboundWhatsApp.sendText(conversationId, resolvedText);
-            interactivePayload = null;
-          }
-
-          if (interactivePayload) {
-            await outboundWhatsApp.sendInteractive(conversationId, interactivePayload);
-            const sentAt = new Date();
-
-            let matchedValue = null;
-            const waitStart = Date.now();
-            const timeout = isFeedback ? 120000 : 300000; // 2 or 5 mins
-
-            while (Date.now() - waitStart < timeout) {
-              const replies = await checkUserReply(phoneNumber, sentAt);
-              if (replies.length > 0) {
-                // Pick most recent reply (sorted DESC in checkUserReply)
-                const lastReply = (replies[0].text_body || '').trim();
-                console.log(`[WorkflowRunner] checking reply: "${lastReply}" against [${buttonLabels.join(', ')}]`);
-                
-                for (let i = 0; i < buttonLabels.length; i++) {
-                  if (lastReply.toLowerCase() === buttonLabels[i].toLowerCase() || lastReply === String(i + 1)) {
-                    matchedValue = isFeedback ? (i + 1) : buttonLabels[i];
-                    console.log(`[WorkflowRunner] Match FOUND: ${matchedValue}`);
-                    break;
-                  }
-                }
-              }
-              if (matchedValue !== null) break;
-              if (!isFeedback && d.skipReply) break;
-              await sleep(3000);
-            }
-
-            if (matchedValue !== null) {
-              if (isFeedback) {
-                const convRes = await db.query('SELECT contact_id FROM conversations WHERE id = $1', [conversationId]);
-                const contactId = convRes.rows[0]?.contact_id;
-                await db.query(`
-                  INSERT INTO csat_scores (workflow_id, contact_id, conversation_id, score)
-                  VALUES ($1, $2, $3, $4)
-                `, [id, contactId, conversationId, matchedValue]);
-              } else if (d.saveVariable) {
-                const varName = d.saveVariable.replace(/[{}]/g, '');
-                context[varName] = matchedValue;
-                const contactRes = await db.query('SELECT id FROM contacts WHERE external_id = $1', [phoneNumber]);
-                if (contactRes.rowCount > 0) {
-                  await db.query(`
-                    UPDATE contacts 
-                    SET profile = jsonb_set(
-                        COALESCE(profile, '{}'::jsonb), 
-                        '{attributes}', 
-                        (COALESCE(profile->'attributes', '{}'::jsonb) || jsonb_build_object($1::text, $2::text))
-                    )
-                    WHERE id = $3
-                  `, [varName, matchedValue, contactRes.rows[0].id]);
-                }
-              }
-
-              if (!isFeedback && currentNode.routes) {
-                const matchedKey = Object.keys(currentNode.routes).find(k => k.toLowerCase() === String(matchedValue).toLowerCase());
-                if (matchedKey) {
-                  currentNode = nodes.find(n => n.id === currentNode.routes[matchedKey]);
-                  continue;
-                }
-              }
-            } else {
-              // TIMEOUT fallback or NO MATCH:
-              // If we didn't match and it's NOT a feedback, we might want to stay on THIS node 
-              // or proceed to default path.
-              // IF the user wanted it to block until match, we should break the loop or set currentNode to null.
-              // However, most flows have a 'default' path.
-              // To prevent infinite loop if no reply, we move on.
-              console.log('[WorkflowRunner] No reply or timeout in Response Message. Continuing to default path.');
-            }
-          }
-        } catch (err) {
-          console.error(`[WorkflowRunner] Feedback/Response node failed: ${err.message}`);
-        }
-
-
-      } else if (currentNode.type === 'payment_request' || currentNode.type === 'razorpay_link') {
-        const d = currentNode.data || {};
-        const amount = parseFloat(d.amount || '0');
-        const type = d.requestType || 'course';
-        const course = d.course || '';
-        const webinar = d.webinarName || '';
-        const papers = Array.isArray(d.papers) ? d.papers.join(', ') : '';
-        const summary = d.paymentSummary || '';
-
-        let displayTitle = (type === 'course') ? `Course: ${course}` : `Webinar: ${webinar}`;
-        let messageBody = `💳 *Payment Request*\n\n`;
-        if (type === 'course') {
-          messageBody += `*Course:* ${course}\n`;
-          if (papers) messageBody += `*Papers:* ${papers}\n`;
-          if (d.packageName) messageBody += `*Package:* ${d.packageName}\n`;
-        } else {
-          messageBody += `*Webinar:* ${webinar}\n`;
-        }
-        messageBody += `*Amount:* ₹${amount}\n`;
-        if (summary) messageBody += `\n*Summary:* ${summary}`;
-
-        try {
-          const conversationId = await ensureConversation(phoneNumber);
-          // Fetch contact and associated teamId (via channel -> whatsapp_settings)
-          const contactRes = await db.query(`
-            SELECT c.id, c.external_id, c.profile, ws.team_id
-            FROM contacts c
-            JOIN channels ch ON ch.id = c.channel_id
-            LEFT JOIN whatsapp_settings ws ON ws.phone_number_id = ch.external_id
-            WHERE c.external_id = $1
-            LIMIT 1
-          `, [phoneNumber]);
-          
-          const contact = contactRes.rows[0] || {};
-          const contactId = contact.id;
-          const teamId = contact.team_id || 'default';
-
-          // Generate Razorpay Link
-          console.log(`[WorkflowRunner] Creating Razorpay link for ₹${amount} (Team: ${teamId})...`);
-          const payLink = await razorpay.createPaymentLink({
-            amount,
-            description: displayTitle,
-            contact: phoneNumber.replace(/\+/g, ''),
-            email: contact.profile?.email || '',
-            teamId, // Pass teamId for multi-tenant keys
-            notes: {
-              teamId, // Include in notes for webhook return
-              workflow_id: id,
-              contact_id: contactId,
-              conversation_id: conversationId,
-              request_type: type
-            }
-          });
-
-          // Save to DB
-          await db.query(`
-            INSERT INTO payment_requests (workflow_id, contact_id, conversation_id, amount, request_type, details, status, external_reference)
-            VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7)
-          `, [id, contactId, conversationId, amount, type, JSON.stringify(d), payLink.id]);
-
-          // Send Interactive CTA URL Button
-          const interactive = {
-            type: 'cta_url',
-            header: { type: 'text', text: d.headerText || 'Checkout Securely' },
-            body: { text: messageBody },
-            footer: { text: d.footerText || 'Click below to pay' },
-            action: {
-              name: 'cta_url',
-              parameters: {
-                display_text: d.buttonText || 'Pay Now',
-                url: payLink.short_url
-              }
-            }
-          };
-
-          await outboundWhatsApp.sendInteractive(conversationId, interactive);
-          console.log(`[WorkflowRunner] Payment request CTA sent. Link: ${payLink.short_url}`);
-        } catch (err) {
-          console.error(`[WorkflowRunner] Payment request node failed: ${err.message}`);
-          try {
-            const conversationId = await ensureConversation(phoneNumber);
-            const errMsg = err.message.includes('not configured')
-              ? '⚠️ Razorpay is not connected yet. Please go to *Integrations > Payments* to set up your account and come back.'
-              : `⚠️ Payment link generation failed: ${err.message}`;
-            await outboundWhatsApp.sendText(conversationId, errMsg);
-          } catch (e) { }
-        }
-
-      } else if (currentNode.type === 'payment_reminder' || currentNode.type === 'razorpay_status') {
-        const d = currentNode.data || {};
-        const duration = parseInt(d.duration || '24', 10);
-        const unit = d.unit || 'hours';
-
-        let waitMs = duration * 60 * 60 * 1000; // default hours
-        if (unit === 'minutes') waitMs = duration * 60 * 1000;
-        if (unit === 'days') waitMs = duration * 24 * 60 * 60 * 1000;
-
-        console.log(`[WorkflowRunner] Payment reminder: waiting ${duration} ${unit}...`);
-        await sleep(waitMs);
-
-        try {
-          const conversationId = await ensureConversation(phoneNumber);
-          const paymentRes = await db.query(`
-            SELECT status FROM payment_requests 
-            WHERE conversation_id = $1 
-            ORDER BY created_at DESC LIMIT 1
-          `, [conversationId]);
-
-          const status = paymentRes.rows[0]?.status || 'unpaid';
-          const branch = (status === 'paid') ? 'paid' : 'unpaid';
-
-          if (currentNode.routes && currentNode.routes[branch]) {
-            currentNode = nodes.find(n => n.id === currentNode.routes[branch]);
-            continue;
-          } else {
-            console.log(`[WorkflowRunner] No route found for branch: ${branch}`);
-          }
-        } catch (err) {
-          console.error(`[WorkflowRunner] Payment reminder node failed: ${err.message}`);
-        }
-
-      } else if (currentNode.type === 'campaign_condition') {
-        const d = currentNode.data || {};
-        const mode = d.timingMode || 'after';
-        let ms = 0;
-
-        if (mode === 'specific' && d.specificTime) {
-          const target = new Date(d.specificTime).getTime();
-          if (!Number.isNaN(target)) ms = target - Date.now();
-        } else {
-          const days = parseInt(d.checkDays || 0, 10);
-          const hours = parseInt(d.checkHours || 0, 10);
-          const minutes = parseInt(d.checkMinutes || 0, 10);
-          ms = (days * 24 * 60 * 60 * 1000) + (hours * 60 * 60 * 1000) + (minutes * 60 * 1000);
-        }
-
-        if (ms > 0) {
-          console.log(`[WorkflowRunner] Campaign condition delay: waiting ${ms}ms for node ${currentNode.id}`);
-          if (io) {
-            io.emit('workflow:step:wait', { workflowId: id, phoneNumber, nodeId: currentNode.id, reason: 'campaign_wait', ms });
-          }
-          await sleep(ms);
-        }
-
-        // Proceed to evaluation logic (mocked for now, defaults to success)
-        console.log(`[WorkflowRunner] Campaign condition reached for node ${currentNode.id}. Proceeding.`);
-      } else if (currentNode.type === 'notification') {
-        const d = currentNode.data || {};
-        const message = d.message || 'Workflow notification alert';
-
-        try {
-          const { getIO } = require('../realtime/io');
-          const io = getIO();
-          if (io) {
-            io.emit('staff:notification', {
-              type: 'workflow_alert',
-              title: 'Workflow Alert',
-              message: message,
-              phoneNumber: phoneNumber,
-              workflowId: id,
-              nodeId: currentNode.id
-            });
-            console.log(`[WorkflowRunner] Notification sent for node ${currentNode.id}`);
-          }
-        } catch (err) {
-          console.error(`[WorkflowRunner] Notification node failed: ${err.message}`);
-        }
-
-      } else if (currentNode.type === 'custom_code') {
-        console.log(`[WorkflowRunner] Executing custom code (mock): ${currentNode.data.code}`);
-        // In a real system, use vm2 or isolated sandbox
-      } else if (currentNode.type === 'delay') {
-        const d = currentNode.data || {};
-        let ms = 0;
-
-        const mode = d.delayMode || (d.targetAt ? 'specific' : 'relative');
-        if (mode === 'specific' && d.targetAt) {
-          const target = new Date(d.targetAt).getTime();
-          if (!Number.isNaN(target)) {
-            ms = target - Date.now();
-          }
-        } else if (mode === 'relative' && (d.days != null || d.hours != null || d.minutes != null)) {
-          const days = parseInt(d.days || 0, 10);
-          const hours = parseInt(d.hours || 0, 10);
-          const minutes = parseInt(d.minutes || 0, 10);
-          ms = (days * 24 * 60 * 60 * 1000) + (hours * 60 * 60 * 1000) + (minutes * 60 * 1000);
-        } else {
-          const duration = parseInt(d.duration || 0, 10);
-          const unit = d.unit || 'minutes';
-
-          if (unit === 'seconds') ms = duration * 1000;
-          else if (unit === 'minutes') ms = duration * 60 * 1000;
-          else if (unit === 'hours') ms = duration * 60 * 60 * 1000;
-          else if (unit === 'days') ms = duration * 24 * 60 * 60 * 1000;
-        }
-
-        if (!Number.isFinite(ms)) ms = 0;
-        if (ms < 0) ms = 0;
-
-        console.log(`[WorkflowRunner] Waiting ${ms}ms (delay node)`);
-        if (io) {
-          io.emit('workflow:step:wait', { workflowId: id, phoneNumber, nodeId: currentNode.id, reason: 'delay', ms });
-        }
-        if (ms > 0) await sleep(ms);
-      } else if (currentNode.type === 'attribute_condition') {
-        let attrs = {};
-        try {
-          const conversationId = await ensureConversation(phoneNumber);
-          const res = await db.query(`
-            SELECT c.profile->'attributes' AS attrs
-            FROM conversations v
-            JOIN contacts c ON c.id = v.contact_id
-            WHERE v.id = $1
-          `, [conversationId]);
-          attrs = res.rows[0]?.attrs || {};
-        } catch (e) {}
-        attrs = { ...(attrs || {}), ...(context || {}) };
-
-        const groups = Array.isArray(currentNode.data?.groups) ? currentNode.data.groups : [];
-        const normalize = (v) => {
-          if (v == null) return '';
-          if (typeof v === 'string') return v;
-          if (typeof v === 'number' || typeof v === 'boolean') return String(v);
-          return JSON.stringify(v);
-        };
-        const cmp = (leftRaw, op, rightRaw) => {
-          const left = normalize(leftRaw);
-          const right = normalize(rightRaw);
-          const li = left.toLowerCase();
-          const ri = right.toLowerCase();
-          if (op === 'eq') return left === right;
-          if (op === 'neq') return left !== right;
-          if (op === 'gt') return parseFloat(left) > parseFloat(right);
-          if (op === 'lt') return parseFloat(left) < parseFloat(right);
-          if (op === 'contains') return li.includes(ri);
-          if (op === 'not_contains') return !li.includes(ri);
-          if (op === 'starts_with') return li.startsWith(ri);
-          if (op === 'ends_with') return li.endsWith(ri);
-          return false;
-        };
-
-        let matchedRoute = null;
-        for (let gi = 0; gi < groups.length; gi++) {
-          const g = groups[gi];
-          const clauses = Array.isArray(g.clauses) ? g.clauses : [];
-          let acc = null;
-          for (let ci = 0; ci < clauses.length; ci++) {
-            const cl = clauses[ci];
-            const key = cl.key || '';
-            const op = cl.op || 'eq';
-            const val = cl.value || '';
-            const left = attrs?.[key];
-            const res = cmp(left, op, val);
-            if (acc === null) acc = res;
-            else {
-              const join = (clauses[ci - 1]?.join || 'AND').toUpperCase();
-              if (join === 'OR') acc = acc || res;
-              else acc = acc && res;
-            }
-          }
-          if (acc) {
-            matchedRoute = currentNode.routes && currentNode.routes[`group-${gi}`];
-            break;
-          }
-        }
-        if (!matchedRoute) {
-          matchedRoute = currentNode.routes && currentNode.routes['default'];
-        }
-        if (matchedRoute) {
-          currentNode = nodes.find((n) => n.id === matchedRoute);
-          continue;
-        }
+      if (currentNode.type === 'trigger' || currentNode.type === 'incoming_webhook' || currentNode.type === 'new_contact') {
+        // Triggers have no logic other than passing through
+        currentNode = nodes.find((n) => n.id === currentNode.next);
       } else if (currentNode.type === 'action') {
-        const actionType = currentNode.data.actionType;
-        const actionValue = currentNode.data.actionValue;
-        console.log(`[WorkflowRunner] Executing action: ${actionType} = ${actionValue}`);
+        const { actionType, actionValue } = currentNode.data;
 
-        try {
-          const conversationId = await ensureConversation(phoneNumber);
-
-          if (actionType === 'add_tag') {
-            const convRes = await db.query('SELECT contact_id FROM conversations WHERE id = $1', [conversationId]);
-            if (convRes.rowCount > 0) {
-              const contactId = convRes.rows[0].contact_id;
-              await db.query(`
-                        UPDATE contacts 
-                        SET profile = jsonb_set(
-                            COALESCE(profile, '{}'::jsonb), 
-                            '{tags}', 
-                            (
-                              (SELECT COALESCE(jsonb_agg(elem), '[]'::jsonb)
-                               FROM jsonb_array_elements(COALESCE(profile->'tags', '[]'::jsonb)) elem
-                               WHERE elem::text <> to_jsonb($1::text)::text)
-                              || to_jsonb($1::text)
-                            )
-                        )
-                        WHERE id = $2
-                    `, [actionValue, contactId]);
+        if (actionType === 'update_chat_status') {
+          // Change chat status in DB
+          await db.query('UPDATE conversations SET status = $1 WHERE phone_number = $2', [actionValue, phoneNumber]);
+        } else if (actionType === 'add_to_label') {
+          // Label logic
+          await db.query('INSERT INTO contact_labels (contact_phone, label_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [phoneNumber, actionValue]);
+        } else if (actionType === 'update_lead_stage') {
+          // Lead stage update
+          await db.query('UPDATE conversations SET lead_stage_id = $1 WHERE phone_number = $2', [actionValue, phoneNumber]);
+        } else if (actionType === 'send_email') {
+          const { emailTemplateId, toVarKey, variableMapping } = currentNode.data;
+          const toEmail = context[toVarKey] || context['email'];
+          if (toEmail) {
+            const mappedVars = {};
+            if (variableMapping) {
+              Object.entries(variableMapping).forEach(([tplVar, ctxVar]) => {
+                mappedVars[tplVar] = context[ctxVar] || '';
+              });
             }
-            try {
-              triggerWorkflowsForEvent('tag_added', phoneNumber, { tag: actionValue }, id);
-            } catch (e) {
-              console.error(
-                `[WorkflowRunner] Failed to trigger tag_added workflows: ${e.message}`
-              );
-            }
-          } else if (actionType === 'add_to_label') {
-            const convRes = await db.query('SELECT contact_id FROM conversations WHERE id = $1', [conversationId]);
-            if (convRes.rowCount > 0) {
-              const contactId = convRes.rows[0].contact_id;
-              const labelId = actionValue;
-              if (labelId) {
-                await db.query(
-                  `INSERT INTO contact_label_maps (label_id, contact_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
-                  [labelId, contactId]
-                );
-              }
-            }
-          } else if (actionType === 'send_email') {
-            const templateId = currentNode.data.emailTemplateId || actionValue;
-            const toVarKey = currentNode.data.toVarKey || 'email';
-            const variableMapping = currentNode.data.variableMapping || {};
-
-            let contactName = '';
-            let baseAttrs = {};
-            try {
-              const convRes = await db.query('SELECT contact_id FROM conversations WHERE id = $1', [conversationId]);
-              const contactId = convRes.rows[0]?.contact_id;
-              if (contactId) {
-                const contactRes = await db.query(
-                  `SELECT display_name, profile FROM contacts WHERE id = $1`,
-                  [contactId]
-                );
-                contactName = contactRes.rows[0]?.display_name || '';
-                baseAttrs = contactRes.rows[0]?.profile?.attributes || {};
-                if (!baseAttrs || typeof baseAttrs !== 'object') baseAttrs = {};
-                if (contactRes.rows[0]?.profile?.email && !baseAttrs.email) {
-                  baseAttrs.email = contactRes.rows[0].profile.email;
-                }
-              }
-            } catch (e) {
-              baseAttrs = {};
-            }
-
-            const localContext = { ...(baseAttrs || {}), ...(context || {}) };
-
-            Object.entries(variableMapping || {}).forEach(([tplVar, srcVar]) => {
-              const key = String(srcVar || '').replace(/[{}]/g, '').trim();
-              if (!tplVar) return;
-              if (!key) return;
-              if (Object.prototype.hasOwnProperty.call(localContext, key)) {
-                localContext[tplVar] = localContext[key];
-              }
-            });
-
-            const toKey = String(toVarKey || '').replace(/[{}]/g, '').trim();
-            const toEmail = localContext[toKey] || localContext.email || baseAttrs.email || '';
-            if (!toEmail) {
-              console.log('[WorkflowRunner] send_email skipped: no recipient email found');
-            } else if (!templateId) {
-              console.log('[WorkflowRunner] send_email skipped: no emailTemplateId configured');
-            } else {
-              const tmplRes = await db.query(
-                `SELECT id, name, subject, html_body, text_body, variables FROM email_templates WHERE id = $1`,
-                [templateId]
-              );
-              if (tmplRes.rowCount === 0) {
-                console.log('[WorkflowRunner] send_email skipped: template not found');
-              } else {
-                const tmpl = tmplRes.rows[0];
-                const subject = resolvePlaceholders(String(tmpl.subject || ''), localContext);
-                const htmlbody = resolvePlaceholders(String(tmpl.html_body || ''), localContext);
-                const textbody = resolvePlaceholders(String(tmpl.text_body || ''), localContext);
-                await zeptoMail.sendEmail({
-                  toEmail: String(toEmail),
-                  toName: contactName ? String(contactName) : undefined,
-                  subject,
-                  htmlbody: htmlbody || undefined,
-                  textbody: textbody || undefined,
-                });
-              }
-            }
-          } else if (actionType === 'update_lead_stage') {
-            const stageId = actionValue;
-            if (!stageId) {
-              console.log('[WorkflowRunner] update_lead_stage skipped: no stage id');
-            } else {
-              await db.query('UPDATE conversations SET lead_stage_id = $1 WHERE id = $2', [stageId, conversationId]);
-              console.log(`[WorkflowRunner] Updated lead stage to ${stageId}. Triggering sequence...`);
-              // Trigger sequestration for the new stage (background)
-              runStageWorkflows(stageId, phoneNumber).catch(e => console.error('[WorkflowRunner] Drip sequence failed:', e.message));
-            }
-          } else if (actionType === 'send_sms_otp') {
-            const smsBody = resolvePlaceholders(actionValue || 'Your OTP is {{otp}}', localContext);
-            await fast2sms.sendSMS(phoneNumber, smsBody);
-          } else if (actionType === 'remove_tag') {
-            const convRes = await db.query('SELECT contact_id FROM conversations WHERE id = $1', [conversationId]);
-            if (convRes.rowCount > 0) {
-              const contactId = convRes.rows[0].contact_id;
-              await db.query(`
-                        UPDATE contacts 
-                        SET profile = jsonb_set(
-                            COALESCE(profile, '{}'::jsonb), 
-                            '{tags}', 
-                            (SELECT COALESCE(jsonb_agg(elem), '[]'::jsonb)
-                             FROM jsonb_array_elements(COALESCE(profile->'tags', '[]'::jsonb)) elem
-                             WHERE elem::text <> to_jsonb($1::text)::text)
-                        )
-                        WHERE id = $2
-                    `, [actionValue, contactId]);
-            }
-          } else if (actionType === 'set_variable') {
-            const convRes = await db.query('SELECT contact_id FROM conversations WHERE id = $1', [conversationId]);
-            if (convRes.rowCount > 0) {
-              const contactId = convRes.rows[0].contact_id;
-              const varName = currentNode.data.variableName;
-              const varValue = currentNode.data.variableValue;
-              if (varName) {
-                await db.query(`
-                            UPDATE contacts 
-                            SET profile = jsonb_set(
-                                COALESCE(profile, '{}'::jsonb), 
-                                '{attributes}', 
-                                (COALESCE(profile->'attributes', '{}'::jsonb) || jsonb_build_object($1::text, $2::text))
-                            )
-                            WHERE id = $3
-                        `, [varName, varValue, contactId]);
-              }
-            }
-          } else if (actionType === 'assign_agent' || actionType === 'assign_agent_xolox') {
-            let assignedUserId = null;
-            let teamId = null;
-            let resolvedValue = typeof actionValue === 'string' ? resolvePlaceholders(actionValue, context).trim() : actionValue;
-            if ((!resolvedValue || resolvedValue === 'null')) {
-                const xr = context.xolox_response || context.xolox_event_response;
-                if (xr) {
-                  const leadData = xr.data || xr;
-                  const assignedTo = leadData.assignedTo || leadData.assignedId || leadData.counselorId;
-                  if (assignedTo) resolvedValue = typeof assignedTo === 'object' ? (assignedTo.id || assignedTo._id) : assignedTo;
-                }
-            }
-            if (resolvedValue) {
-                const userRes = await db.query('SELECT id FROM users WHERE id::text = $1 OR email = $1 LIMIT 1', [resolvedValue]);
-                if (userRes.rowCount > 0) {
-                  assignedUserId = userRes.rows[0].id;
-                  const teamRes = await db.query('SELECT team_id FROM team_members WHERE user_id = $1 LIMIT 1', [assignedUserId]);
-                  teamId = teamRes.rows[0]?.team_id;
-                }
-            }
-            if (assignedUserId) {
-                await db.query(`
-                   INSERT INTO conversation_assignments (conversation_id, team_id, assignee_user_id, claimed_at)
-                   VALUES ($1, $2, $3, NOW())
-                   ON CONFLICT (conversation_id) WHERE released_at IS NULL DO UPDATE SET
-                   assignee_user_id = EXCLUDED.assignee_user_id, team_id = EXCLUDED.team_id, claimed_at = NOW()
-                `, [conversationId, teamId, assignedUserId]);
-                console.log(`[WorkflowRunner] Assigned conversation to user ${assignedUserId}`);
-            }
-          } else if (actionType === 'update_chat_status') {
-            if (['open', 'closed', 'snoozed'].includes(actionValue)) {
-              await db.query('UPDATE conversations SET status = $1 WHERE id = $2', [actionValue, conversationId]);
-            }
-          } else if (actionType === 'update_lead_status') {
-            await db.query(`UPDATE contacts SET lead_status = $1 WHERE id = (SELECT contact_id FROM conversations WHERE id = $2)`, [actionValue, conversationId]);
-          } else if (actionType === 'start_workflow') {
-            if (actionValue && String(actionValue) !== String(id)) {
-              runWorkflow(actionValue, phoneNumber).catch(e => console.error(`[WorkflowRunner] Linked workflow failed: ${e.message}`));
-            }
+            await zeptoMail.sendTemplate(toEmail, emailTemplateId, mappedVars);
           }
-        } catch (err) {
-          console.error(`[WorkflowRunner] Action node failed: ${err.message}`);
-          if (io) io.emit('workflow:step:error', { workflowId: id, phoneNumber, nodeId: currentNode.id, message: err.message });
-        }
-
-      } else if (currentNode.type === 'user_replied' || currentNode.type === 'wait_for_reply') {
-        const d = currentNode.data || {};
-        const timeoutMins = parseInt(d.timeoutMins || d.timeout || '60', 10);
-        const timeoutMs = timeoutMins * 60000;
-        const sinceTime = lastTemplateSentAt || workflowStartTime;
-        if (io) io.emit('workflow:step:wait', { workflowId: id, phoneNumber, nodeId: currentNode.id, reason: 'user_replied', timeoutMins });
-
-        let hasReplied = false;
-        const waitStart = Date.now();
-        while (Date.now() - waitStart < timeoutMs) {
-          const replies = await checkUserReply(phoneNumber, sinceTime);
-          if (replies.length > 0) {
-            hasReplied = true;
-            break;
-          }
-          await sleep(5000);
-        }
-
-        const handle = hasReplied ? 'true' : 'false';
-        const nextNodeId = currentNode.routes && currentNode.routes[handle];
-        if (nextNodeId) {
-          currentNode = nodes.find(n => n.id === nextNodeId);
-          continue;
-        }
-
-      } else if (currentNode.type === 'feedback') {
-        const d = currentNode.data || {};
-        const digits = parseInt(d.otpDigits || d.digits || 6, 10);
-        const saveVarRaw = d.saveVariable || 'otp';
-        const saveVar = String(saveVarRaw).replace(/[{}]/g, '').trim() || 'otp';
-        const otp = fast2sms.generateOtp(Number.isFinite(digits) ? digits : 6);
-        context[saveVar] = otp;
-        try {
-          await fast2sms.sendOtpSms({ phoneNumber, otp });
-        } catch (err) {
-          console.error(`[WorkflowRunner] Feedback node failed: ${err.message}`);
-        }
-      } else if (currentNode.type === 'xolox_event') {
-        // ── XOLOX CRM webhook call ──────────────────────────────────────────
-        const xd = currentNode.data || {};
-        const webhookUrl = xd.webhookUrl;
-        const method = (xd.method || 'POST').toUpperCase();
-        const payloadFields = Array.isArray(xd.payloadFields) ? xd.payloadFields : [];
-        const successCondition = xd.successCondition || 'status_2xx';
-
-        if (!webhookUrl) {
-          console.warn(`[WorkflowRunner] xolox_event node ${currentNode.id} has no webhookUrl — skipping`);
-        } else {
-          // Build payload by resolving {{variable}} placeholders against context
-          const payload = {};
-          for (const { field, variable } of payloadFields) {
-            if (field) {
-              payload[field] = resolvePlaceholders(variable || '', context);
+        } else if (actionType === 'send_sms_otp') {
+          const { otpDigits, saveVariable } = currentNode.data;
+          const otp = Math.floor(Math.random() * Math.pow(10, otpDigits)).toString().padStart(otpDigits, '0');
+          await fast2sms.sendOTP(phoneNumber, otp);
+          context[saveVariable || 'otp'] = otp;
+        } else if (actionType === 'assign_agent') {
+            const { assignMode, actionValue: agentId } = currentNode.data;
+            let finalAgentId = agentId;
+            if (assignMode === 'round_robin') {
+                finalAgentId = await findAgentForAssignment(workflow.team_id);
             }
-          }
-          console.log(`[WorkflowRunner] Calling XOLOX webhook ${method} ${webhookUrl} with payload:`, payload);
-
-          let xoloxSuccess = false;
-          try {
-            const axiosConfig = {
-              method,
-              url: webhookUrl,
-              timeout: 15000,
-              headers: { 'Content-Type': 'application/json' },
-            };
-            if (method === 'GET') {
-              axiosConfig.params = payload;
-            } else {
-              axiosConfig.data = payload;
+            if (finalAgentId) {
+                await db.query('UPDATE conversations SET assigned_agent_id = $1 WHERE phone_number = $2', [finalAgentId, phoneNumber]);
             }
-            const xoloxRes = await axios(axiosConfig);
-            console.log(`[WorkflowRunner] XOLOX response status: ${xoloxRes.status}`);
-            const responseBody = xoloxRes.data || {};
-
-            if (successCondition === 'status_2xx') {
-              xoloxSuccess = xoloxRes.status >= 200 && xoloxRes.status < 300;
-            } else if (successCondition === 'field_true') {
-              const fieldKey = xd.successField || '';
-              const expectedValue = String(xd.successValue || 'true');
-              const actualValue = String(responseBody[fieldKey] ?? '');
-              xoloxSuccess = actualValue === expectedValue;
-              console.log(`[WorkflowRunner] XOLOX field check: ${fieldKey}=${actualValue} vs expected=${expectedValue} => ${xoloxSuccess}`);
+        } else if (actionType === 'start_workflow') {
+            const targetWfId = currentNode.data.actionValue;
+            if (targetWfId) {
+                // Kick off another workflow asynchronously
+                runWorkflow(targetWfId, phoneNumber, context);
             }
-            
-            // Store response in context so user can see it or use it
-            context.xolox_response = responseBody;
-          } catch (xoloxErr) {
-            console.error(`[WorkflowRunner] XOLOX webhook call failed: ${xoloxErr.message}`);
-            xoloxSuccess = false;
-            context.xolox_error = xoloxErr.message;
-            if (xoloxErr.response) {
-               context.xolox_response = xoloxErr.response.data;
+        }
+
+        currentNode = nodes.find((n) => n.id === currentNode.next);
+      } else if (currentNode.type === 'send_template') {
+        const { template, languageCode, components, variables } = currentNode.data;
+
+        // Replace placeholders in components if needed
+        const processedComponents = (components || []).map((comp) => {
+          if (!comp || !comp.parameters) return comp;
+          const nextParameters = comp.parameters.map((param) => {
+            if (param.type === 'text' && param.text && param.text.includes('{{')) {
+              let replaced = param.text;
+              Object.entries(context).forEach(([k, v]) => {
+                replaced = replaced.replace(`{{${k}}}`, v);
+              });
+              return { ...param, text: replaced };
             }
-          }
-
-          console.log(`[WorkflowRunner] XOLOX event result: ${xoloxSuccess ? 'SUCCESS' : 'FAIL'}`);
-          context.xolox_success = xoloxSuccess ? 'true' : 'false';
-
-          // Emit transition event for UI tracking
-          let nextId = xoloxSuccess ? currentNode.onSuccess : currentNode.onFail;
-          if (!nextId) {
-              const h = xoloxSuccess ? 'success' : 'fail';
-              const edge = edges.find(e => e.source === currentNode.id && (e.sourceHandle === h || e.sourceHandle === `on${h.charAt(0).toUpperCase() + h.slice(1)}`));
-              if (edge) nextId = edge.target;
-          }
-
-          if (io && nextId) {
-            io.emit('workflow:step:transition', { 
-              workflowId: id, 
-              phoneNumber, 
-              fromNodeId: currentNode.id, 
-              toNodeId: nextId, 
-              contextPreview: buildContextPreview(context),
-              xoloxResponse: context.xolox_response // Add explicit response for UI
-            });
-          }
-          
-          currentNode = nextId ? nodes.find(n => n.id === nextId) : null;
-          continue; // Skip the standard next-node logic below
-        }
-      }
-
-      // 2. Move to Next Node
-      let nextNodeId = null;
-
-      if (currentNode.type === 'condition') {
-        const conditionType = currentNode.data.conditionType || 'user_replied';
-        console.log(`[WorkflowRunner] Evaluating condition type: ${conditionType}`);
-
-        let result = false;
-
-        if (conditionType === 'user_replied') {
-          // Default to checking if user replied
-          // Use lastTemplateSentAt if available, else workflowStartTime
-          const since = lastTemplateSentAt || workflowStartTime;
-          const replies = await checkUserReply(phoneNumber, since);
-          result = replies.length > 0;
-        } else if (conditionType === 'has_tag') {
-          const tagName = currentNode.data.tagName;
-          if (tagName) {
-            // Check if contact has tag
-            const contactRes = await db.query('SELECT profile FROM contacts WHERE external_id = $1', [phoneNumber]);
-            if (contactRes.rowCount > 0) {
-              const profile = contactRes.rows[0].profile || {};
-              const tags = profile.tags || [];
-              // tags is array of strings in JSON
-              result = Array.isArray(tags) && tags.includes(tagName);
-            } else {
-              // Try with/without +
-              const altPhone = phoneNumber.startsWith('+') ? phoneNumber.slice(1) : `+${phoneNumber}`;
-              const altRes = await db.query('SELECT profile FROM contacts WHERE external_id = $1', [altPhone]);
-              if (altRes.rowCount > 0) {
-                const profile = altRes.rows[0].profile || {};
-                const tags = profile.tags || [];
-                result = Array.isArray(tags) && tags.includes(tagName);
-              }
-            }
-          }
-        } else if (conditionType === 'variable_match') {
-          const varName = currentNode.data.variableName;
-          const varValue = currentNode.data.variableValue;
-
-          if (varName) {
-            // Check if contact has variable matching value
-            const contactRes = await db.query('SELECT profile FROM contacts WHERE external_id = $1', [phoneNumber]);
-            if (contactRes.rowCount > 0) {
-              const profile = contactRes.rows[0].profile || {};
-              const attributes = profile.attributes || {};
-              result = attributes[varName] == varValue; // loose equality for string/number match
-            } else {
-              const altPhone = phoneNumber.startsWith('+') ? phoneNumber.slice(1) : `+${phoneNumber}`;
-              const altRes = await db.query('SELECT profile FROM contacts WHERE external_id = $1', [altPhone]);
-              if (altRes.rowCount > 0) {
-                const profile = altRes.rows[0].profile || {};
-                const attributes = profile.attributes || {};
-                result = attributes[varName] == varValue;
-              }
-            }
-          }
-        }
-
-        console.log(`[WorkflowRunner] Condition result: ${result ? 'YES' : 'NO'}`);
-
-        nextNodeId = result ? currentNode.yes : currentNode.no;
-        if (!nextNodeId) {
-            const h = result ? 'yes' : 'no';
-            const edge = edges.find(e => e.source === currentNode.id && e.sourceHandle === h);
-            if (edge) nextNodeId = edge.target;
-        }
-
-        if (io && nextNodeId) {
-          io.emit('workflow:step:transition', { workflowId: id, phoneNumber, fromNodeId: currentNode.id, toNodeId: nextNodeId, contextPreview: buildContextPreview(context) });
-        }
-        currentNode = nextNodeId ? nodes.find(n => n.id === nextNodeId) : null;
-      } else if (currentNode.type === 'end') {
-        currentNode = null;
-      } else {
-        nextNodeId = currentNode.next;
-        if (!nextNodeId) {
-            const edge = edges.find(e => e.source === currentNode.id && (!e.sourceHandle || e.sourceHandle === 'default' || e.sourceHandle === 'next'));
-            if (edge) nextNodeId = edge.target;
-        }
-
-        if (io && nextNodeId) {
-          io.emit('workflow:step:transition', { workflowId: id, phoneNumber, fromNodeId: currentNode.id, toNodeId: nextNodeId, contextPreview: buildContextPreview(context) });
-        }
-        currentNode = nextNodeId ? nodes.find(n => n.id === nextNodeId) : null;
-      }
-      if (io) {
-        const last = executionLog[executionLog.length - 1];
-        io.emit('workflow:step:complete', { workflowId: id, phoneNumber, nodeId: last?.nodeId, contextPreview: buildContextPreview(context) });
-      }
-
-    } catch (err) {
-      console.error(`[WorkflowRunner] Error at node ${currentNode.id}:`, err);
-      
-      // Update last execution log entry with error details
-      const lastIdx = executionLog.length - 1;
-      if (lastIdx >= 0 && executionLog[lastIdx].nodeId === currentNode.id) {
-          executionLog[lastIdx].status = 'failed';
-          executionLog[lastIdx].error = err.message;
-          
-          // Provide specialized hints for Meta API errors
-          if (err.message.includes('132012')) {
-              executionLog[lastIdx].details = "HINT: Template parameters didn't match. This often happens when (1) the template expects a Media Header (Image/Doc/Video) which was missing or improperly formatted, or (2) the number of variables mapped doesn't match the template's placeholders. ACTION: Try re-selecting the template in the workflow node to refresh the variable list, and ensure the 'Header' section is configured if your template has one.";
-          } else if (err.message.includes('131030')) {
-              executionLog[lastIdx].details = "HINT: Out of 24h service window. You can only send basic text/media if the user replied in the last 24h. Use a Template instead.";
-          }
-      } else {
-          executionLog.push({ 
-            nodeId: currentNode.id, 
-            type: currentNode.type, 
-            status: 'failed',
-            error: err.message 
+            return param;
           });
-      }
+          return { ...comp, parameters: nextParameters };
+        });
 
-      if (io) {
-        io.emit('workflow:step:error', { workflowId: id, phoneNumber, nodeId: currentNode.id, message: err.message || 'Node failed' });
+        await outboundWhatsApp.sendTemplateMessage(phoneNumber, template, languageCode, processedComponents);
+        currentNode = nodes.find((n) => n.id === currentNode.next);
+      } else if (currentNode.type === 'response_message') {
+        const { message, buttons, headerType, headerUrl } = currentNode.data;
+        let finalMessage = message;
+        Object.entries(context).forEach(([k, v]) => {
+          finalMessage = finalMessage.replace(`{{${k}}}`, v);
+        });
+
+        const buttonsConfig = (buttons || []).map((b) => ({ type: 'reply', reply: { id: b, title: b } }));
+        await outboundWhatsApp.sendMessage(phoneNumber, finalMessage, buttonsConfig, headerType, headerUrl);
+        currentNode = nodes.find((n) => n.id === currentNode.next);
+      } else if (currentNode.type === 'delay') {
+        // Since we are now using a persistent queue for the MAIN orchestration loops, 
+        // internal node-level delays should also ideally be rescheduled.
+        // But for simplicity during one workflow run, we sleep if short, or exit if long.
+        const { days = 0, hours = 0, minutes = 0 } = currentNode.data;
+        const totalMinutes = (days * 1440) + (hours * 60) + parseInt(minutes, 10);
+        
+        if (totalMinutes > 5) {
+            // Schedule it via the task table and EXIT this execution
+            console.log(`[WorkflowRunner] Long delay (${totalMinutes}m) detected. Rescheduling via DB queue.`);
+            await scheduleWorkflowTask(id, phoneNumber, -1, totalMinutes, null, -1, context);
+            currentNode = null;
+        } else {
+            console.log(`[WorkflowRunner] Short delay (${totalMinutes}m) - sleeping in-process.`);
+            await sleep(totalMinutes * 60 * 1000);
+            currentNode = nodes.find((n) => n.id === currentNode.next);
+        }
+      } else if (currentNode.type === 'condition') {
+        const { variable, operator, value } = currentNode.data;
+        const ctxValue = context[variable];
+        let match = false;
+        if (operator === 'eq') match = String(ctxValue) === String(value);
+        if (operator === 'neq') match = String(ctxValue) !== String(value);
+
+        const nextId = match ? currentNode.yes : currentNode.no;
+        currentNode = nodes.find((n) => n.id === nextId);
+      } else if (currentNode.type === 'user_replied' || currentNode.type === 'wait_for_reply') {
+          const timeoutMins = parseInt(currentNode.data.timeoutMins || currentNode.data.timeout, 10) || 60;
+          const startTime = new Date();
+          const targetNodeId = currentNode.id;
+          
+          let hasReplied = false;
+          let replyMessage = null;
+          
+          console.log(`[WorkflowRunner] Waiting for reply from ${phoneNumber} (timeout ${timeoutMins}m)`);
+          
+          // Poll every 5 seconds for the timeout duration
+          const iterations = (timeoutMins * 60) / 5;
+          for (let i = 0; i < iterations; i++) {
+              replyMessage = await checkUserReply(phoneNumber, startTime);
+              if (replyMessage) {
+                  hasReplied = true;
+                  break;
+              }
+              await sleep(5000); // 5 sec poll
+          }
+          
+          const handle = hasReplied ? 'true' : 'false';
+          const nextNodeId = currentNode.routes && currentNode.routes[handle];
+          
+          if (hasReplied) {
+              context.last_reply = replyMessage.body;
+              context.replied_at = replyMessage.created_at;
+          }
+          
+          currentNode = nodes.find(n => n.id === nextNodeId);
+      } else if (currentNode.type === 'feedback') {
+          const { question } = currentNode.data;
+          await outboundWhatsApp.sendMessage(phoneNumber, question);
+          currentNode = nodes.find((n) => n.id === currentNode.next);
+      } else if (currentNode.type === 'xolox_event') {
+          const { webhookUrl, method, payloadFields, eventName } = currentNode.data;
+          const payload = { event: eventName, phone: phoneNumber };
+          
+          if (payloadFields && Array.isArray(payloadFields)) {
+              payloadFields.forEach(f => {
+                  let val = f.variable;
+                  if (val.startsWith('{{') && val.endsWith('}}')) {
+                      const key = val.substring(2, val.length - 2);
+                      payload[f.field] = context[key] || '';
+                  } else {
+                      payload[f.field] = val;
+                  }
+              });
+          }
+
+          let success = false;
+          try {
+              const xr = await axios({
+                  method: method || 'POST',
+                  url: webhookUrl,
+                  data: payload,
+                  timeout: 10000
+              });
+              success = xr.status >= 200 && xr.status < 300;
+              context.xolox_response = xr.data;
+          } catch (err) {
+              console.error('[WorkflowRunner] XOLOX Event Failed:', err.message);
+          }
+
+          const nextId = success ? currentNode.onSuccess : currentNode.onFail;
+          currentNode = nodes.find(n => n.id === nextId);
+      } else {
+        // Unknown or terminal node
+        currentNode = null;
       }
-      // Stop execution on error
-      break;
+    } catch (err) {
+      console.error(`[WorkflowRunner] Error in node ${currentNode.id} (${currentNode.type}):`, err.message);
+      hasError = true;
+      currentNode = null;
     }
   }
 
-  } catch (err) {
-    console.error(`[WorkflowRunner] Fatal error in workflow ${id}:`, err);
-    executionLog.push({ error: err.message || 'Fatal error' });
-    if (io) {
-      io.emit('workflow:step:error', { workflowId: id, phoneNumber, message: err.message || 'Workflow crashed' });
-    }
-  } finally {
-    const endedAt = new Date();
-    const durationMs = endedAt.getTime() - workflowStartTime.getTime();
-    hasError = executionLog.some(l => l.error);
-    status = hasError ? 'failed' : 'success';
-
-    // Persist run to database for reporting
+  // Finalize
+  const endedAt = new Date();
+  const durationMs = endedAt.getTime() - workflowStartTime.getTime();
+  
+  if (db) {
     try {
       await db.query(`
-        INSERT INTO workflow_runs (
-          workflow_id, phone_number, status, execution_log, 
-          context_preview, error_message, started_at, ended_at, duration_ms
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        INSERT INTO workflow_runs (workflow_id, contact_phone, status, execution_log, started_at, ended_at, duration_ms)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
       `, [
-        id, phoneNumber, status, JSON.stringify(executionLog),
-        JSON.stringify(buildContextPreview(context)), hasError ? executionLog.find(l => l.error)?.error : null,
+        id, phoneNumber, hasError ? 'failed' : 'completed', JSON.stringify(executionLog),
         workflowStartTime, endedAt, durationMs
       ]);
     } catch (dbErr) {
@@ -2215,6 +860,31 @@ async function buildWorkflowFromSimpleDescription(description) {
   return { nodes, edges };
 }
 
+async function runStageWorkflows(phoneNumber, stageId, teamId) {
+    const res = await db.query(`
+        SELECT lsw.workflow_id, lsw.delay_minutes, lsw.target_time, lsw.position, w.name, w.steps
+        FROM lead_stage_workflows lsw
+        JOIN workflows w ON w.id = lsw.workflow_id
+        WHERE lsw.stage_id = $1 AND lsw.is_independent = FALSE AND w.status = 'active'
+        ORDER BY lsw.position ASC
+        LIMIT 1
+    `, [stageId]);
+
+    if (res.rowCount > 0) {
+        const first = res.rows[0];
+        console.log(`[Workflows] Scheduling first workflow for stage=${stageId}: ${first.name} (Position ${first.position})`);
+        
+        await scheduleWorkflowTask(
+            first.workflow_id, 
+            phoneNumber, 
+            stageId, 
+            first.delay_minutes, 
+            first.target_time, 
+            first.position
+        );
+    }
+}
+
 module.exports = {
   listWorkflows,
   getWorkflow,
@@ -2227,4 +897,7 @@ module.exports = {
   triggerWebhookWorkflows,
   generateWorkflowFromDescription,
   runStageWorkflows,
+  initQueueWorker,
+  processScheduledTasks,
+  scheduleWorkflowTask,
 };

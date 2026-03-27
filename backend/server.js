@@ -50,6 +50,10 @@ async function start() {
     console.log(`[server] Listening on port ${PORT} (env=${NODE_ENV})`);
     // Initialize Socket.IO after HTTP server starts.
     initIO(server);
+
+    // Start background worker for drip campaigns and scheduled tasks
+    const workflows = require('./src/services/workflows');
+    workflows.initQueueWorker();
   });
 }
 
