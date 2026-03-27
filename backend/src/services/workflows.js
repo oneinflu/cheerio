@@ -240,8 +240,9 @@ async function updateWorkflow(id, data) {
 }
 
 async function runStageWorkflows(stageId, phoneNumber) {
+  console.log(`[runStageWorkflows] Starting orchestration for Stage=${stageId}, Phone=${phoneNumber}`);
   const res = await db.query(
-    `SELECT lsw.workflow_id, lsw.delay_minutes, lsw.is_independent, lsw.target_time, w.steps
+    `SELECT lsw.workflow_id, lsw.delay_minutes, lsw.is_independent, lsw.target_time, w.steps, w.name
      FROM lead_stage_workflows lsw
      JOIN workflows w ON w.id = lsw.workflow_id
      WHERE lsw.stage_id = $1 AND w.status = 'active'
@@ -249,6 +250,11 @@ async function runStageWorkflows(stageId, phoneNumber) {
     [stageId]
   );
   
+  if (res.rowCount === 0) {
+    console.log(`[runStageWorkflows] No active workflows found for stage ${stageId}`);
+    return;
+  }
+
   // Fetch contact labels to check conditions
   let contactLabels = [];
   try {
@@ -262,91 +268,106 @@ async function runStageWorkflows(stageId, phoneNumber) {
     );
     if (contactRes.rowCount === 0) {
         const altPhone = phoneNumber.startsWith('+') ? phoneNumber.slice(1) : `+${phoneNumber}`;
-        const contactRes2 = await db.query(
-          `SELECT cl.name 
-           FROM contacts c
-           JOIN contact_label_maps clm ON clm.contact_id = c.id
-           JOIN contact_labels cl ON cl.id = clm.label_id
-           WHERE c.external_id = $1`,
-          [altPhone]
-        );
+        const contactRes2 = await db.query('SELECT cl.name FROM contacts c JOIN contact_label_maps clm ON clm.contact_id = c.id JOIN contact_labels cl ON cl.id = clm.label_id WHERE c.external_id = $1', [altPhone]);
         contactLabels = contactRes2.rows.map(r => r.name);
     } else {
         contactLabels = contactRes.rows.map(r => r.name);
     }
   } catch (e) {
-    console.error(`[runStageWorkflows] Error fetching contact labels: ${e.message}`);
+    console.error(`[runStageWorkflows] Label check failed: ${e.message}`);
   }
 
-  for (const row of res.rows) {
+  // Orchestration Logic:
+  // 1. Independent workflows: Execute immediately (in parallelish)
+  // 2. Sequential (Linked) workflows: Execute one after another respecting delays
+  
+  const independent = res.rows.filter(r => r.is_independent === true);
+  const sequential = res.rows.filter(r => r.is_independent !== true);
+
+  // Trigger Independent ones (Parallel execution from stage entry)
+  for (const row of independent) {
+    const wfName = row.name || row.workflow_id;
+    const wfId = row.workflow_id;
+    const delayMins = parseInt(row.delay_minutes || 0, 10);
+    const targetT = row.target_time;
+
+    // Execute in background so they don't block each other or the sequence
+    (async () => {
+      try {
+        if (!isNaN(delayMins) && delayMins > 0) {
+          console.log(`[runStageWorkflows] Independent WF "${wfName}" waiting ${delayMins}m from entry...`);
+          await sleep(delayMins * 60 * 1000);
+        }
+        
+        if (targetT) {
+          const [h, m] = targetT.split(':').map(v => parseInt(v, 10) || 0);
+          const now = new Date();
+          let target = new Date(now);
+          target.setHours(h, m, 0, 0);
+          if (target < now) target.setDate(target.getDate() + 1);
+          const diff = target.getTime() - now.getTime();
+          if (diff > 1000) {
+            console.log(`[runStageWorkflows] Independent WF "${wfName}" waiting until ${targetT}...`);
+            await sleep(diff);
+          }
+        }
+
+        console.log(`[runStageWorkflows] Independent WF "${wfName}" starting now`);
+        await runWorkflow(wfId, phoneNumber);
+      } catch (err) {
+        console.error(`[runStageWorkflows] Independent WF "${wfName}" failed: ${err.message}`);
+      }
+    })();
+  }
+
+  // Run Sequential ones (Strict sequence, one after another completion)
+  for (let i = 0; i < sequential.length; i++) {
+    const row = sequential[i];
     const wfId = row.workflow_id;
     const steps = row.steps || {};
+    const wfName = row.name || wfId;
 
-    if (row.is_independent) {
-      console.log(`[runStageWorkflows] Skipping workflow ${wfId}: Marked as independent (unlinked)`);
+    // Filters
+    if (steps.triggerLabel && !contactLabels.includes(steps.triggerLabel)) {
+      console.log(`[runStageWorkflows] Skipping "${wfName}": Label mismatch`);
       continue;
     }
-    
-    // Check label filter if present
-    if (steps.triggerLabel) {
-      if (!contactLabels.includes(steps.triggerLabel)) {
-        console.log(`[runStageWorkflows] Skipping workflow ${wfId}: Lead does not have label "${steps.triggerLabel}"`);
-        continue;
-      }
-    }
 
-    // Check course/attribute filter if present
-    if (steps.triggerCourse) {
-        // We need to fetch contact profile for course check
-        try {
-            const profileRes = await db.query(
-                `SELECT profile FROM contacts WHERE external_id = $1 OR external_id = $2 LIMIT 1`,
-                [phoneNumber, phoneNumber.startsWith('+') ? phoneNumber.slice(1) : `+${phoneNumber}`]
-            );
-            const profile = profileRes.rows[0]?.profile || {};
-            const contactCourse = profile.course || profile.Course || '';
-            
-            // Loose matching for course name
-            if (!contactCourse || !contactCourse.toLowerCase().includes(steps.triggerCourse.toLowerCase())) {
-                console.log(`[runStageWorkflows] Skipping workflow ${wfId}: Lead course "${contactCourse}" does not match "${steps.triggerCourse}"`);
-                continue;
-            }
-        } catch (e) {
-            console.error(`[runStageWorkflows] Error checking course: ${e.message}`);
-            continue; // Skip if we can't verify course
-        }
-    }
     const delayMinutes = parseInt(row.delay_minutes || 0, 10);
       
     try {
+      // 1. Relative Delay (after previous)
       if (!isNaN(delayMinutes) && delayMinutes > 0) {
-        console.log(`[runStageWorkflows] Delaying workflow ${wfId} for ${delayMinutes} mins (Target Phone: ${phoneNumber})`);
+        console.log(`[runStageWorkflows] Executing ${delayMinutes} minute wait for "${wfName}"...`);
         await sleep(delayMinutes * 60 * 1000);
+        console.log(`[runStageWorkflows] Wait finished for "${wfName}"`);
       }
       
+      // 2. Target Time Wait
       if (row.target_time) {
-        const [targetH, targetM] = row.target_time.split(':').map(val => parseInt(val, 10) || 0);
-        if (!isNaN(targetH)) {
-          const now = new Date();
-          let targetDate = new Date(now);
-          targetDate.setHours(targetH, targetM || 0, 0, 0);
-          
-          if (targetDate < now) {
-            targetDate.setDate(targetDate.getDate() + 1);
-          }
-          
-          const waitMs = targetDate.getTime() - now.getTime();
-          if (waitMs > 0) {
-            console.log(`[runStageWorkflows] Waiting ${Math.round(waitMs/1000)}s until scheduled time ${row.target_time} for ${phoneNumber}`);
-            await sleep(waitMs);
-          }
+        // format: HH:mm or HH:mm:ss
+        const [targetH, targetM] = row.target_time.split(':').map(v => parseInt(v, 10) || 0);
+        const now = new Date();
+        let targetDate = new Date(now);
+        targetDate.setHours(targetH, targetM, 0, 0);
+        
+        if (targetDate < now) {
+          // If time passed, wait until tomorrow
+          targetDate.setDate(targetDate.getDate() + 1);
+        }
+        
+        const waitMs = targetDate.getTime() - now.getTime();
+        if (waitMs > 1000) {
+          console.log(`[runStageWorkflows] Waiting until ${row.target_time} for "${wfName}" (${Math.round(waitMs/1000/60)} mins to go)...`);
+          await sleep(waitMs);
         }
       }
 
-      console.log(`[runStageWorkflows] Triggering workflow ${wfId} for ${phoneNumber}`);
+      console.log(`[runStageWorkflows] Running workflow "${wfName}"`);
       await runWorkflow(wfId, phoneNumber);
+      console.log(`[runStageWorkflows] Finished workflow "${wfName}"`);
     } catch (e) {
-      console.error(`[runStageWorkflows] Workflow ${wfId} execution path failed: ${e.message}`);
+      console.error(`[runStageWorkflows] Sequential path broken at "${wfName}": ${e.message}`);
       break; 
     }
   }
