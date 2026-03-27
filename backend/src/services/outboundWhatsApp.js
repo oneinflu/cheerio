@@ -659,12 +659,39 @@ async function sendMessage(conversationId, text, buttons, headerType, headerUrl)
   }
 }
 
+async function sendListMenu(conversationId, bodyText, buttonText, sections, headerText, footerText) {
+  const interactive = {
+    type: 'list',
+    body: { text: bodyText },
+    action: {
+      button: (buttonText || 'Select Option').slice(0, 20),
+      sections: sections.map(sec => ({
+        ...sec,
+        rows: (sec.rows || []).map(r => ({
+          ...r,
+          id: String(r.id || r.title).slice(0, 200),
+          title: String(r.title || 'Option').slice(0, 24),
+          description: r.description ? String(r.description).slice(0, 72) : undefined
+        })).slice(0, 10)
+      })).slice(0, 10)
+    }
+  };
+  if (headerText) {
+    interactive.header = { type: 'text', text: headerText.slice(0, 60) };
+  }
+  if (footerText) {
+    interactive.footer = { text: footerText.slice(0, 60) };
+  }
+  return sendInteractive(conversationId, interactive);
+}
+
 module.exports = {
   sendMessage,
   sendText,
   sendMedia,
   sendTemplate,
   sendInteractive,
+  sendListMenu,
   sendTypingIndicator,
   uploadMedia,
 };

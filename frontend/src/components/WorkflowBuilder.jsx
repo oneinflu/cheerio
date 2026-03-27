@@ -15,7 +15,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { Button } from './ui/Button';
-import { Save, ArrowLeft, Plus, Clock, MessageSquare, GitBranch, Zap, StopCircle, Loader2, Play, MessageCircle, Code, UserCheck, Tag, Mic, Workflow as WorkflowIcon, Megaphone, Filter, Link, Copy, Check, RefreshCw, Trash2, Globe, Send, ChevronDown, ChevronUp, Image, Video, FileText as FileIcon, Upload, X, Star, CreditCard, BellRing, Bell, Mail, ListChecks, Phone, Download, Settings, Keyboard, Info, Table as TableIcon, XCircle, FileDown } from 'lucide-react'; const LinkIcon = Link;
+import { Save, ArrowLeft, Plus, Clock, MessageSquare, GitBranch, Zap, StopCircle, Loader2, Play, MessageCircle, Code, UserCheck, Tag, Mic, Workflow as WorkflowIcon, Megaphone, Filter, Link, Copy, Check, RefreshCw, Trash2, Globe, Send, ChevronDown, ChevronUp, Image, Video, FileText as FileIcon, Upload, X, Star, CreditCard, BellRing, Bell, Mail, ListChecks, List, Phone, Download, Settings, Keyboard, Info, Table as TableIcon, XCircle, FileDown } from 'lucide-react'; const LinkIcon = Link;
 import { getTemplates, runWorkflow, aiGenerateWorkflow, getWorkflows, getCampaigns, getWebhookEvents, clearWebhookEvents, fetchMediaLibrary, uploadFlowMedia, createPaymentLink, getLabels, getEmailTemplates, getLeadStages } from '../api';
 import { GallerySelectModal } from './GallerySelectModal';
 import { connectSocket } from '../socket';
@@ -225,6 +225,45 @@ const SendMessageNode = ({ data, selected }) => {
       <div className="text-xs text-slate-600 mb-2 truncate max-w-[180px]">{data.message || 'Enter message...'}</div>
       <Handle type="target" position={Position.Top} className="w-3 h-3 bg-slate-400" />
       <Handle type="source" position={Position.Bottom} className="w-3 h-3 bg-slate-400" />
+    </NodeWrapper>
+  );
+};
+
+const ListMessageNode = ({ data, selected }) => {
+  const items = data.items || [];
+  return (
+    <NodeWrapper selected={selected} title="List Menu" icon={List} colorClass="bg-teal-700" status={data.nodeStatus}>
+      <div className="text-xs font-bold text-teal-800 mb-1 truncate px-1 border-b border-teal-50 bg-teal-50/50 rounded py-1">
+        {data.buttonText || 'Select Option'}
+      </div>
+      <div className="text-[10px] text-slate-500 mb-2 truncate line-clamp-2 px-1">
+        {data.body || 'Choose an option...'}
+      </div>
+
+      <Handle type="target" position={Position.Top} className="w-3 h-3 bg-slate-400" />
+
+      <div className="space-y-1.5 mt-2 pt-2 border-t border-slate-100">
+        {(items.slice(0, 10)).map((it, idx) => {
+          const label = typeof it === 'object' ? it.title : it;
+          return (
+            <div key={idx} className="relative flex items-center justify-end">
+              <span className="text-[9px] text-teal-600 font-medium mr-2 bg-teal-50 border border-teal-100 px-1.5 py-0.5 rounded truncate max-w-[140px]">
+                {label}
+              </span>
+              <Handle
+                type="source"
+                position={Position.Right}
+                id={`item-${idx}`}
+                className="w-3 h-3 bg-teal-500 !right-[-6px] border-2 border-white"
+                style={{ top: '50%', transform: 'translateY(-50%)' }}
+              />
+            </div>
+          );
+        })}
+        {items.length === 0 && (
+            <div className="text-[9px] text-slate-300 italic text-center py-2">No options added</div>
+        )}
+      </div>
     </NodeWrapper>
   );
 };
@@ -807,6 +846,7 @@ const nodeTypes = {
   custom_code: CustomCodeNode,
   action: ActionNode,
   end: EndNode,
+  list_message: ListMessageNode,
   response_message: ResponseMessageNode,
   feedback: FeedbackNode,
   payment_request: PaymentRequestNode,
@@ -1417,6 +1457,10 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
         data = { label: 'Time Delay', delayMode: 'relative', days: 0, hours: 0, minutes: 1, targetAt: null };
       }
 
+      if (type === 'list_message') {
+        data = { label: 'List Menu', header: '', body: '', footer: '', buttonText: 'View Options', items: [] };
+      }
+
       if (type === 'user_replied') {
         data = { label: 'User Replied?', timeoutMins: 60 };
       }
@@ -1944,6 +1988,17 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
           };
         }
 
+        if (type === 'list_message') {
+          data = {
+            label: 'List Menu',
+            header: '',
+            body: '',
+            footer: '',
+            buttonText: 'Select Option',
+            items: [],
+          };
+        }
+
         if (type === 'user_replied') {
           data = {
             label: 'User Replied?',
@@ -2129,6 +2184,25 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
         headerType: 'none',
         headerUrl: '',
         headerFileName: '',
+      },
+    };
+    setNodes(nds => [...nds, node]);
+    setSelectedNode(node);
+  }, [setNodes]);
+
+  const handleAddListMenuAction = useCallback(() => {
+    const nodeId = getId();
+    const node = {
+      id: nodeId,
+      type: 'list_message',
+      position: { x: 0, y: 300 },
+      data: {
+        label: 'List Menu',
+        header: '',
+        body: '',
+        footer: '',
+        buttonText: 'Select Option',
+        items: [],
       },
     };
     setNodes(nds => [...nds, node]);
@@ -3514,6 +3588,26 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                 <div className="min-w-0">
                   <div className="text-sm font-semibold text-teal-800">Response Message</div>
                   <div className="text-xs text-teal-600">Direct message + Quick replies</div>
+                </div>
+              </div>
+            )}
+            {viewMode === 'canvas' && (
+              <div
+                className="flex items-center gap-3 p-3 rounded-md bg-teal-50 border border-teal-200 cursor-pointer hover:bg-teal-100 transition-colors"
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.setData('application/reactflow', 'list_message');
+                  e.dataTransfer.effectAllowed = 'move';
+                }}
+                onClick={handleAddListMenuAction}
+                title="Sends a popup menu with up to 10 options"
+              >
+                <div className="w-9 h-9 rounded-md bg-teal-800 flex items-center justify-center shrink-0">
+                  <List size={16} className="text-white" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-teal-800">List Menu</div>
+                  <div className="text-xs text-teal-600">Pop-up menu (up to 10 opt)</div>
                 </div>
               </div>
             )}
@@ -5429,6 +5523,114 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
                           <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-teal-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-teal-600"></div>
                         </label>
                       </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {selectedNode.type === 'list_message' && (() => {
+                const d = selectedNode.data;
+                const items = d.items || [];
+                const setField = (key, val) => updateNodeFields(selectedNode.id, { [key]: val });
+                const upstreamVars = getUpstreamVariables(selectedNode.id, nodes, edges, precedingVariables);
+
+                return (
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                       <label className="text-sm font-medium text-slate-700">Menu Button Text</label>
+                       <input
+                         className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-teal-300 focus:outline-none"
+                         placeholder="e.g. View Options"
+                         maxLength={20}
+                         value={d.buttonText || ''}
+                         onChange={e => setField('buttonText', e.target.value)}
+                       />
+                       <p className="text-[10px] text-slate-400">This is what the user clicks to open the menu. (Max 20 chars)</p>
+                    </div>
+
+                    <div className="space-y-2">
+                       <label className="text-sm font-medium text-slate-700">Body Text</label>
+                       <textarea
+                         className="w-full border border-slate-300 rounded-md p-2.5 text-sm min-h-[80px] focus:ring-2 focus:ring-teal-300 focus:outline-none"
+                         placeholder="Select an option from the menu below..."
+                         value={d.body || ''}
+                         onChange={e => setField('body', e.target.value)}
+                       />
+                        <div className="flex flex-wrap gap-1 mt-1">
+                            {upstreamVars.map(v => (
+                                <span key={v} onClick={() => setField('body', (d.body || '') + v)} className="text-[10px] bg-white text-slate-600 px-1.5 py-0.5 rounded cursor-pointer hover:bg-teal-50 hover:text-teal-700 border border-slate-200">{v}</span>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                            <label className="text-sm font-medium text-slate-700">Menu Options ({items.length}/10)</label>
+                            <button
+                                onClick={() => {
+                                    if (items.length < 10) {
+                                        const newItems = [...items, { title: `Option ${items.length + 1}`, description: '' }];
+                                        setField('items', newItems);
+                                    }
+                                }}
+                                className="text-[10px] bg-teal-600 text-white px-2 py-1 rounded font-bold hover:bg-teal-700"
+                            >
+                                + Add Option
+                            </button>
+                        </div>
+                        <div className="space-y-2 mt-2">
+                            {items.map((it, idx) => (
+                                <div key={idx} className="bg-slate-50 border border-slate-100 rounded-md p-2 space-y-1">
+                                    <div className="flex gap-2 items-center">
+                                        <input
+                                            className="flex-1 border border-slate-200 rounded px-2 py-1 text-xs focus:ring-1 focus:ring-teal-300 outline-none"
+                                            placeholder="Option title (Max 24)"
+                                            maxLength={24}
+                                            value={typeof it === 'object' ? it.title : it}
+                                            onChange={(e) => {
+                                                const newItems = [...items];
+                                                if (typeof it === 'object') newItems[idx] = { ...newItems[idx], title: e.target.value };
+                                                else newItems[idx] = e.target.value;
+                                                setField('items', newItems);
+                                            }}
+                                        />
+                                        <button
+                                            onClick={() => {
+                                                const newItems = items.filter((_, i) => i !== idx);
+                                                setField('items', newItems);
+                                            }}
+                                            className="text-slate-400 hover:text-red-500"
+                                        >
+                                            <Trash2 size={12} />
+                                        </button>
+                                    </div>
+                                    <input
+                                        className="w-full border border-slate-200 rounded px-2 py-1 text-[10px] focus:ring-1 focus:ring-teal-300 outline-none"
+                                        placeholder="Option description (Max 72, Optional)"
+                                        maxLength={72}
+                                        value={typeof it === 'object' ? it.description : ''}
+                                        onChange={(e) => {
+                                            const newItems = [...items];
+                                            if (typeof it === 'object') newItems[idx] = { ...newItems[idx], description: e.target.value };
+                                            else newItems[idx] = { title: it, description: e.target.value };
+                                            setField('items', newItems);
+                                        }}
+                                    />
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-100 space-y-3">
+                         <div className="space-y-1">
+                             <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Footer Text (Optional)</label>
+                             <input
+                               className="w-full border border-slate-200 rounded px-2 py-1 text-xs focus:ring-1 focus:ring-teal-300"
+                               placeholder="e.g. Choose one to continue"
+                               value={d.footer || ''}
+                               onChange={e => setField('footer', e.target.value)}
+                             />
+                         </div>
                     </div>
                   </div>
                 );

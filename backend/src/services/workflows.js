@@ -377,6 +377,31 @@ async function runWorkflow(id, phoneNumber, initialContext = {}) {
         const conversationId = await getOrCreateConversation(phoneNumber, workflow.team_id || 'default');
         await outboundWhatsApp.sendMessage(conversationId, finalMessage, buttonsConfig, headerType, headerUrl);
         currentNode = nodes.find((n) => n.id === currentNode.next);
+      } else if (currentNode.type === 'list_message') {
+        const { header, body, footer, buttonText, items } = currentNode.data;
+        let finalBody = body || '';
+        Object.entries(context).forEach(([k, v]) => {
+          finalBody = finalBody.replace(`{{${k}}}`, v);
+        });
+
+        const sections = [
+          {
+            title: 'Options',
+            rows: (items || []).map((it) => {
+              const itemTitle = typeof it === 'object' ? it.title : it;
+              const itemId = typeof it === 'object' ? it.id : it;
+              const itemDesc = typeof it === 'object' ? it.description : undefined;
+              return {
+                id: itemId || itemTitle,
+                title: itemTitle,
+                description: itemDesc
+              };
+            })
+          }
+        ];
+        const conversationId = await getOrCreateConversation(phoneNumber, workflow.team_id || 'default');
+        await outboundWhatsApp.sendListMenu(conversationId, finalBody, buttonText, sections, header, footer);
+        currentNode = nodes.find((n) => n.id === currentNode.next);
       } else if (currentNode.type === 'delay') {
         // Since we are now using a persistent queue for the MAIN orchestration loops, 
         // internal node-level delays should also ideally be rescheduled.
