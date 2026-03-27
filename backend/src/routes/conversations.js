@@ -122,12 +122,16 @@ router.put('/:conversationId/lead-stage', auth.requireRole('admin', 'super_admin
       const contactId = upd.rows[0].contact_id;
       // Sync text stage back to contacts table for Registry visibility
       await db.query(`UPDATE contacts SET lead_stage = $1 WHERE id = $2`, [stageRes.rows[0].name, contactId]);
+      console.log(`[lead-stage] Stage updated to ${stageRes.rows[0].name} (${stageId}) for conversation ${conversationId}`);
       try {
         const { runStageWorkflows } = require('../services/workflows');
         const phoneRes = await db.query('SELECT contacts.external_id FROM conversations JOIN contacts ON contacts.id = conversations.contact_id WHERE conversations.id = $1', [conversationId]);
         const phoneNumber = phoneRes.rows[0]?.external_id;
-        // Run sequence in background to prevent API hang
-        if (phoneNumber) runStageWorkflows(stageId, phoneNumber).catch(e => console.error('[lead-stage] Drip error:', e.message));
+        
+        if (phoneNumber) {
+          console.log(`[lead-stage] Triggering automated sequence (Drip) for ${phoneNumber} in stage ${stageId}`);
+          runStageWorkflows(stageId, phoneNumber).catch(e => console.error('[lead-stage] Drip error:', e.message));
+        }
       } catch (e) {
         console.error('[lead-stage] Failed to trigger stage workflows:', e.message);
       }

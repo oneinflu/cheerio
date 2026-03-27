@@ -319,35 +319,35 @@ async function runStageWorkflows(stageId, phoneNumber) {
     const delayMinutes = parseInt(row.delay_minutes || 0, 10);
       
     try {
-      if (delayMinutes > 0) {
-        console.log(`[runStageWorkflows] Delaying workflow ${wfId} for ${delayMinutes} mins for ${phoneNumber}`);
+      if (!isNaN(delayMinutes) && delayMinutes > 0) {
+        console.log(`[runStageWorkflows] Delaying workflow ${wfId} for ${delayMinutes} mins (Target Phone: ${phoneNumber})`);
         await sleep(delayMinutes * 60 * 1000);
       }
       
       if (row.target_time) {
-        const [targetH, targetM] = row.target_time.split(':').map(Number);
+        const [targetH, targetM] = row.target_time.split(':').map(val => parseInt(val, 10) || 0);
         if (!isNaN(targetH)) {
           const now = new Date();
           let targetDate = new Date(now);
           targetDate.setHours(targetH, targetM || 0, 0, 0);
           
           if (targetDate < now) {
-            // If the time has already passed today, wait until tomorrow
             targetDate.setDate(targetDate.getDate() + 1);
           }
           
           const waitMs = targetDate.getTime() - now.getTime();
           if (waitMs > 0) {
-            console.log(`[runStageWorkflows] Waiting ${Math.round(waitMs/1000)}s until ${row.target_time} for ${phoneNumber}`);
+            console.log(`[runStageWorkflows] Waiting ${Math.round(waitMs/1000)}s until scheduled time ${row.target_time} for ${phoneNumber}`);
             await sleep(waitMs);
           }
         }
       }
 
+      console.log(`[runStageWorkflows] Triggering workflow ${wfId} for ${phoneNumber}`);
       await runWorkflow(wfId, phoneNumber);
     } catch (e) {
-      console.error(`[runStageWorkflows] Workflow ${wfId} failed: ${e.message}`);
-      break; // stop sequence on error
+      console.error(`[runStageWorkflows] Workflow ${wfId} execution path failed: ${e.message}`);
+      break; 
     }
   }
 }
@@ -703,26 +703,23 @@ async function runWorkflow(id, phoneNumber, context = {}) {
     }
 
     try {
-      // 1. Check for node-level delay (common for AI-generated nodes)
-      // skip for explicit delay nodes to avoid double-delay
+      // 1. Check for node-level delay (common in AI-generated flows)
+      // This allows any node to have a 'wait' before it fires
       const nodeData = currentNode.data || {};
-      if (currentNode.type !== 'delay' && nodeData.scheduleType === 'delay' && (nodeData.delayValue > 0 || typeof nodeData.delayValue === 'string')) {
-        const val = parseInt(nodeData.delayValue, 10);
-        if (val > 0) {
-          const unit = nodeData.delayUnit || 'minutes';
-          let ms = 0;
-          if (unit === 'seconds') ms = val * 1000;
-          else if (unit === 'minutes') ms = val * 60 * 1000;
-          else if (unit === 'hours') ms = val * 60 * 60 * 1000;
-          else if (unit === 'days') ms = val * 24 * 60 * 60 * 1000;
+      const scheduleType = nodeData.scheduleType || nodeData.ScheduleType;
+      const delayValue = nodeData.delayValue || nodeData.DelayValue || nodeData.timeValue;
+      
+      if (currentNode.type !== 'delay' && scheduleType === 'delay' && delayValue) {
+        const val = parseInt(delayValue, 10);
+        if (!isNaN(val) && val > 0) {
+          const unit = (nodeData.delayUnit || nodeData.DelayUnit || 'minutes').toLowerCase();
+          let ms = val * 60000;
+          if (unit === 'hours') ms = val * 3600000;
+          if (unit === 'days') ms = val * 86400000;
+          if (unit.startsWith('sec')) ms = val * 1000;
           
-          if (ms > 0) {
-            console.log(`[WorkflowRunner] Node-level delay: waiting ${ms}ms (${val} ${unit}) for node ${currentNode.id}`);
-            if (io) {
-              io.emit('workflow:step:wait', { workflowId: id, phoneNumber, nodeId: currentNode.id, reason: 'delay', ms });
-            }
-            await sleep(ms);
-          }
+          console.log(`[WorkflowRunner] Node-level delay detected on ${currentNode.id}: Waiting ${val} ${unit}...`);
+          await sleep(ms);
         }
       }
 

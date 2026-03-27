@@ -184,7 +184,32 @@ router.put('/:id', auth.requireRole('admin', 'supervisor', 'agent'), async (req,
             return res.status(404).json({ success: false, error: 'Contact not found' });
         }
 
-        return res.json({ success: true, contact: result.rows[0] });
+        const updatedContact = result.rows[0];
+
+        // SYNC: If lead_stage was updated, we need to find the Stage ID and update associated conversations
+        if (lead_stage) {
+            try {
+                const stageRes = await db.query('SELECT id FROM lead_stages WHERE name = $1 LIMIT 1', [lead_stage]);
+                if (stageRes.rowCount > 0) {
+                    const stageId = stageRes.rows[0].id;
+                    // Update ALL open/active conversations for this contact to this stage
+                    const convUpdate = await db.query(
+                        `UPDATE conversations SET lead_stage_id = $1 WHERE contact_id = $2 RETURNING id`,
+                        [stageId, updatedContact.id]
+                    );
+                    
+                    // Trigger workflows for the first matched conversation if any
+                    if (convUpdate.rowCount > 0) {
+                        const { runStageWorkflows } = require('../services/workflows');
+                        runStageWorkflows(stageId, updatedContact.external_id).catch(e => console.error('[RegistrySync] Workflow error:', e.message));
+                    }
+                }
+            } catch (e) {
+                console.error('[RegistrySync] Failed to sync stage to conversations:', e.message);
+            }
+        }
+
+        return res.json({ success: true, contact: updatedContact });
     } catch (err) {
         next(err);
     }
