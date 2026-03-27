@@ -102,7 +102,7 @@ async function enforce24hWindow(clientConn, conversationId, isTemplate) {
     [conversationId]
   );
   if (res.rowCount === 0) {
-    const err = new Error('No inbound history; only template messages allowed');
+    const err = new Error("No customer message history found. Meta policy requires a 'Send Template' node for the first outreach to a new lead. 'Response Message' nodes only work for active conversations (replies).");
     err.status = 400;
     err.expose = true;
     throw err;
@@ -110,7 +110,7 @@ async function enforce24hWindow(clientConn, conversationId, isTemplate) {
   const lastInboundAt = new Date(res.rows[0].created_at).getTime();
   const now = Date.now();
   if (now - lastInboundAt > H24_MS) {
-    const err = new Error('24-hour window expired; send a template message');
+    const err = new Error("24-hour service window is closed. Meta policy requires a Template for outbound messages until the user replies. Please use a 'Send Template' node with buttons instead of 'Response Message' for cold outreach.");
     err.status = 400;
     err.expose = true;
     throw err;
