@@ -227,8 +227,10 @@ async function runWorkflow(id, phoneNumber, initialContext = {}) {
   const workflow = await getWorkflow(id);
   if (!workflow) throw new Error('Workflow not found');
 
-  const nodes = workflow.nodes || workflow.steps || [];
-  const edges = workflow.edges || [];
+  const nodesRaw = workflow.nodes || workflow.steps || [];
+  const nodes = Array.isArray(nodesRaw) ? nodesRaw : (nodesRaw.nodes || []);
+  const edgesRaw = workflow.edges || (workflow.steps && workflow.steps.edges) || [];
+  const edges = Array.isArray(edgesRaw) ? edgesRaw : [];
   const executionLog = [];
   const io = require('../realtime/io').getIO();
 
