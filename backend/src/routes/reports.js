@@ -165,4 +165,54 @@ router.get('/scheduled-tasks', auth.requireAuth, async (req, res, next) => {
     }
 });
 
+/**
+ * GET /api/reports/campaign-leads
+ * Returns contacts in a specific stage with their drip progress.
+ */
+router.get('/campaign-leads', auth.requireAuth, async (req, res, next) => {
+    try {
+        const { stageId, limit = 100 } = req.query;
+        if (!stageId) return res.status(400).json({ error: 'stageId is required' });
+
+        const query = `
+            SELECT 
+                c.id, c.external_id as phone, c.display_name, c.profile,
+                s.name as current_stage,
+                (
+                    SELECT w.name 
+                    FROM workflow_runs r 
+                    JOIN workflows w ON r.workflow_id = w.id 
+                    WHERE (r.phone_number = c.external_id OR r.phone_number = SUBSTRING(c.external_id FROM 2)) 
+                      AND r.status='success' 
+                    ORDER BY r.started_at DESC LIMIT 1
+                ) as last_workflow,
+                (
+                    SELECT w.name 
+                    FROM workflow_scheduled_tasks t 
+                    JOIN workflows w ON t.workflow_id = w.id 
+                    WHERE (t.contact_phone = c.external_id OR t.contact_phone = SUBSTRING(c.external_id FROM 2)) 
+                      AND t.status='pending' 
+                    ORDER BY t.scheduled_time ASC LIMIT 1
+                ) as next_workflow,
+                (
+                    SELECT t.scheduled_time 
+                    FROM workflow_scheduled_tasks t 
+                    WHERE (t.contact_phone = c.external_id OR t.contact_phone = SUBSTRING(c.external_id FROM 2)) 
+                      AND t.status='pending' 
+                    ORDER BY t.scheduled_time ASC LIMIT 1
+                ) as next_trigger
+            FROM contacts c
+            JOIN lead_stages s ON (c.lead_stage_id::text = s.id::text OR c.lead_stage::text = s.name::text)
+            WHERE s.id::text = $1
+            ORDER BY c.created_at DESC
+            LIMIT $2
+        `;
+
+        const result = await db.query(query, [stageId, limit]);
+        res.json({ success: true, leads: result.rows });
+    } catch (err) {
+        next(err);
+    }
+});
+
 module.exports = router;

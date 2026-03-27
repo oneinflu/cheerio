@@ -23,6 +23,7 @@ export default function ReportsPage() {
   const [view, setView] = useState('workflows'); // 'workflows' | 'templates' | 'drip'
   const [runs, setRuns] = useState([]);
   const [templates, setTemplates] = useState([]);
+  const [stageLeads, setStageLeads] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedRun, setSelectedRun] = useState(null);
   const [isDetailLoading, setIsDetailLoading] = useState(false);
@@ -107,6 +108,24 @@ export default function ReportsPage() {
       console.error('Failed to fetch run detail:', err);
     } finally {
       setIsDetailLoading(false);
+    }
+  };
+
+  const fetchLeadsForStage = async (stageId) => {
+    setIsDetailLoading(true);
+    setStageLeads([]);
+    try {
+        const res = await fetch(`/api/reports/campaign-leads?stageId=${stageId}`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` }
+        });
+        const data = await res.json();
+        if (data.success) {
+            setStageLeads(data.leads || []);
+        }
+    } catch (err) {
+        console.error('Failed to fetch stage leads:', err);
+    } finally {
+        setIsDetailLoading(false);
     }
   };
 
@@ -257,7 +276,10 @@ export default function ReportsPage() {
                 <div 
                   key={col.stage.id} 
                   className={`p-3 rounded-xl border transition-all cursor-pointer hover:border-indigo-300 hover:shadow-md ${selectedRun?.stageId === col.stage.id ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-slate-100'}`}
-                  onClick={() => setSelectedRun({ type: 'drip_stage', stageId: col.stage.id, stageName: col.stage.name, workflows: col.workflows })}
+                  onClick={() => {
+                    setSelectedRun({ type: 'drip_stage', stageId: col.stage.id, stageName: col.stage.name, workflows: col.workflows });
+                    fetchLeadsForStage(col.stage.id);
+                  }}
                 >
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-xs font-bold text-slate-800">{col.stage.name}</span>
@@ -601,6 +623,92 @@ export default function ReportsPage() {
                   </div>
                </CardContent>
             </Card>
+
+            {/* Campaign Leads Breakdown */}
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+               <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+                  <div className="text-xs font-bold text-slate-700 uppercase tracking-widest flex items-center gap-2">
+                     <Clock size={14} className="text-indigo-600" /> Active Leads in Track
+                  </div>
+                  <Badge variant="outline" className="bg-white">{stageLeads.length} Total Leads</Badge>
+               </div>
+               
+               <div className="overflow-x-auto">
+                 <table className="w-full text-left text-sm">
+                    <thead className="bg-slate-50 text-slate-500 text-[10px] font-bold uppercase">
+                       <tr>
+                          <th className="px-6 py-4">Contact</th>
+                          <th className="px-6 py-4">Phone</th>
+                          <th className="px-6 py-4">Last Completed</th>
+                          <th className="px-6 py-4">Next Workflow</th>
+                          <th className="px-6 py-4">Next Trigger</th>
+                       </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                       {stageLeads.length === 0 ? (
+                         <tr>
+                            <td colSpan={5} className="px-6 py-20 text-center text-slate-400 italic">
+                               No active leads found in this stage
+                            </td>
+                         </tr>
+                       ) : (
+                         stageLeads.map(lead => {
+                            const now = new Date();
+                            const triggerAt = lead.next_trigger ? new Date(lead.next_trigger) : null;
+                            const remainMs = triggerAt ? triggerAt - now : null;
+                            const isDue = remainMs !== null && remainMs < 0;
+                            const remainMins = remainMs !== null ? Math.max(0, Math.round(remainMs / 60000)) : null;
+
+                            return (
+                               <tr key={lead.id} className="hover:bg-slate-50 transition-colors">
+                                  <td className="px-6 py-4">
+                                     <div className="font-bold text-slate-900">{lead.display_name || 'Anonymous'}</div>
+                                     <div className="text-[10px] text-slate-400 capitalize">{lead.profile?.course || 'No Course'}</div>
+                                  </td>
+                                  <td className="px-6 py-4 font-mono text-xs text-slate-500">
+                                     {lead.phone}
+                                  </td>
+                                  <td className="px-6 py-4">
+                                     {lead.last_workflow ? (
+                                        <Badge variant="outline" className="text-emerald-700 bg-emerald-50 border-emerald-100 font-bold uppercase text-[9px]">
+                                           {lead.last_workflow}
+                                        </Badge>
+                                     ) : (
+                                        <span className="text-slate-300 italic text-[10px]">None</span>
+                                     )}
+                                  </td>
+                                  <td className="px-6 py-4">
+                                     {lead.next_workflow ? (
+                                        <div className="flex flex-col">
+                                           <span className="text-xs font-bold text-slate-700">{lead.next_workflow}</span>
+                                           {isDue && <span className="text-[9px] text-amber-600 font-bold uppercase tracking-tighter">Processing...</span>}
+                                        </div>
+                                     ) : (
+                                        <Badge className="bg-slate-100 text-slate-400 border-0 font-medium text-[9px]">FINISH</Badge>
+                                     )}
+                                  </td>
+                                  <td className="px-6 py-4">
+                                     {triggerAt ? (
+                                        <div className="flex flex-col">
+                                           <span className="text-xs font-semibold text-indigo-600">
+                                              In {remainMins > 60 ? `${Math.floor(remainMins/60)}h ${remainMins%60}m` : `${remainMins}m`}
+                                           </span>
+                                           <span className="text-[9px] text-slate-400">
+                                              {triggerAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                           </span>
+                                        </div>
+                                     ) : (
+                                        <span className="text-[10px] text-slate-300">--</span>
+                                     )}
+                                  </td>
+                               </tr>
+                            )
+                         })
+                       )}
+                    </tbody>
+                 </table>
+               </div>
+            </div>
 
           </div>
         ) : (
