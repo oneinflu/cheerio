@@ -131,7 +131,11 @@ async function getWorkflow(id) {
 }
 
 async function createWorkflow(workflowData) {
-  const { team_id, name, trigger, nodes, edges, status = 'active' } = workflowData;
+  const { team_id, name, status = 'active' } = workflowData;
+  const trigger = workflowData.trigger || workflowData.steps?.trigger;
+  const nodes = workflowData.nodes || workflowData.steps?.nodes || [];
+  const edges = workflowData.edges || workflowData.steps?.edges || [];
+
   const res = await db.query(
     'INSERT INTO workflows (team_id, name, "trigger", nodes, edges, status) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
     [team_id, name, trigger, JSON.stringify(nodes), JSON.stringify(edges), status]
@@ -140,7 +144,11 @@ async function createWorkflow(workflowData) {
 }
 
 async function updateWorkflow(id, workflowData) {
-  const { name, trigger, nodes, edges, status = 'active' } = workflowData;
+  const { name, status = 'active' } = workflowData;
+  const trigger = workflowData.trigger || workflowData.steps?.trigger;
+  const nodes = workflowData.nodes || workflowData.steps?.nodes || [];
+  const edges = workflowData.edges || workflowData.steps?.edges || [];
+
   const res = await db.query(
     'UPDATE workflows SET name = $1, "trigger" = $2, nodes = $3, edges = $4, status = $5, updated_at = NOW() WHERE id = $6 RETURNING *',
     [name, trigger, JSON.stringify(nodes), JSON.stringify(edges), status, id]

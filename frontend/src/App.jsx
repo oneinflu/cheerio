@@ -774,7 +774,10 @@ export default function App() {
       if (editingWorkflow && editingWorkflow.id) {
         const updatedWorkflow = {
           ...editingWorkflow,
-          steps: workflowJson
+          trigger: workflowJson.trigger,
+          nodes: workflowJson.nodes,
+          edges: workflowJson.edges,
+          steps: workflowJson // Keep steps for legacy or local state usage
         };
         await updateWorkflow(editingWorkflow.id, updatedWorkflow);
         // CRITICAL: update local state so that refreshing the page restores all nodes
