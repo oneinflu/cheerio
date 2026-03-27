@@ -319,7 +319,7 @@ async function runWorkflow(id, phoneNumber, initialContext = {}) {
           return { ...comp, parameters: nextParameters };
         });
 
-        await outboundWhatsApp.sendTemplateMessage(phoneNumber, template, languageCode, processedComponents);
+        await outboundWhatsApp.sendTemplate(phoneNumber, template, languageCode, processedComponents);
         currentNode = nodes.find((n) => n.id === currentNode.next);
       } else if (currentNode.type === 'response_message') {
         const { message, buttons, headerType, headerUrl } = currentNode.data;
@@ -441,7 +441,7 @@ async function runWorkflow(id, phoneNumber, initialContext = {}) {
   if (db) {
     try {
       await db.query(`
-        INSERT INTO workflow_runs (workflow_id, contact_phone, status, execution_log, started_at, ended_at, duration_ms)
+        INSERT INTO workflow_runs (workflow_id, phone_number, status, execution_log, started_at, ended_at, duration_ms)
         VALUES ($1, $2, $3, $4, $5, $6, $7)
       `, [
         id, phoneNumber, hasError ? 'failed' : 'completed', JSON.stringify(executionLog),
