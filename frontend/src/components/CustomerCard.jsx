@@ -5,8 +5,9 @@ import { Input } from './ui/Input';
 import { Button } from './ui/Button';
 import { User, Copy, Check } from 'lucide-react';
 import { useToast } from './ui/use-toast';
-import { getLeadStages, updateConversationLeadStage } from '../api';
+import { getLeadStages, updateConversationLeadStage, getScheduledTasks } from '../api';
 import TagSelector from './TagSelector';
+import { Clock, Loader2 } from 'lucide-react';
 
 export default function CustomerCard({ conversationId, onLeadStageUpdated }) {
   const { toast } = useToast();
@@ -49,6 +50,8 @@ export default function CustomerCard({ conversationId, onLeadStageUpdated }) {
     leadStatus: 'new',
     tags: []
   });
+  const [scheduledTasks, setScheduledTasks] = useState([]);
+  const [loadingTasks, setLoadingTasks] = useState(false);
 
   useEffect(() => {
     if (!conversationId) return;
@@ -72,10 +75,24 @@ export default function CustomerCard({ conversationId, onLeadStageUpdated }) {
           leadStatus: data.leadStatus || 'new',
           tags: data.tags || []
         });
+        if (data.number) loadScheduledTasks(data.number);
       })
       .catch(err => console.error(err))
       .finally(() => setFetching(false));
   }, [conversationId]);
+
+  const loadScheduledTasks = async (phone) => {
+    if (!phone) return;
+    setLoadingTasks(true);
+    try {
+        const res = await getScheduledTasks(phone);
+        if (res && res.success) setScheduledTasks(res.tasks || []);
+    } catch (e) {
+        console.error('Failed to load tasks', e);
+    } finally {
+        setLoadingTasks(false);
+    }
+  };
 
   useEffect(() => {
     if (!conversationId) return;
@@ -266,6 +283,44 @@ export default function CustomerCard({ conversationId, onLeadStageUpdated }) {
               selectedLabels={formData.tags}
               onChange={(newTags) => setFormData(prev => ({ ...prev, tags: newTags }))}
             />
+
+            {/* Pending Automations Section */}
+            <div className="mt-4 pt-4 border-t border-slate-100">
+               <div className="flex items-center justify-between mb-2">
+                 <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                    <Clock className="w-3 h-3" />
+                    Pending Automations
+                 </div>
+                 {loadingTasks && <Loader2 className="w-3 h-3 text-slate-400 animate-spin" />}
+               </div>
+               
+               <div className="space-y-2">
+                 {scheduledTasks.length > 0 ? (
+                   scheduledTasks.map(task => {
+                      const remainMs = new Date(task.scheduled_time) - new Date();
+                      const remainMins = Math.max(0, Math.round(remainMs / 60000));
+                      let timeStr = remainMins > 60 ? `${Math.floor(remainMins/60)}h ${remainMins%60}m` : `${remainMins}m`;
+                      if (remainMins > 1440) timeStr = `${Math.floor(remainMins/1440)}d ${Math.floor((remainMins%1440)/60)}h`;
+
+                      return (
+                        <div key={task.id} className="bg-slate-50 rounded-md p-2 border border-slate-100 flex justify-between items-center group">
+                           <div className="flex flex-col min-w-0">
+                             <span className="text-[11px] font-medium text-slate-700 truncate">{task.workflow_name}</span>
+                             <span className="text-[9px] text-slate-400">Scheduled for {new Date(task.scheduled_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                           </div>
+                           <div className="text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded whitespace-nowrap">
+                             in {timeStr}
+                           </div>
+                        </div>
+                      )
+                   })
+                 ) : (
+                   <div className="text-[10px] text-slate-400 italic text-center py-2 bg-slate-50/50 rounded-md border border-dashed border-slate-200">
+                     No automations scheduled
+                   </div>
+                 )}
+               </div>
+            </div>
 
             <Button size="sm" className="w-full mt-2" onClick={handleSubmit} disabled={loading}>
               {loading ? 'Saving...' : 'Submit'}

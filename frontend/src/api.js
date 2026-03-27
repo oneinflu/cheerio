@@ -807,6 +807,15 @@ export async function updateWorkflowDelay(stageId, workflowId, delayMinutes, isI
   return res.json();
 }
 
+export async function getScheduledTasks(contactPhone, limit = 10) {
+  const headers = getAuthHeaders();
+  const params = new URLSearchParams();
+  if (contactPhone) params.append('contactPhone', contactPhone);
+  if (limit) params.append('limit', String(limit));
+  const res = await fetch(`/api/reports/scheduled-tasks?${params.toString()}`, { headers });
+  return res.json();
+}
+
 export async function getLabels() {
   const res = await fetch(`/api/labels`, { headers: getAuthHeaders() });
   return res.json();

@@ -1,18 +1,119 @@
 'use strict';
 const db = require('../../db');
-const whatsappClient = require('../integrations/meta/whatsappClient');
+const whatsappClient = require('./whatsapp');
 const outboundWhatsApp = require('./outboundWhatsApp');
+const fast2sms = require('./fast2sms');
+const zeptoMail = require('./zeptoMail');
 const razorpay = require('./razorpay');
 const { findAgentForAssignment } = require('./agentAssignment');
 const axios = require('axios');
-const zeptoMail = require('./zeptoMail');
-const fast2sms = require('./fast2sms');
-
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const WABA_ID = process.env.WHATSAPP_BUSINESS_ACCOUNT_ID || '';
 
 /**
+ * Persists a scheduled task to DB
+ */
+async function scheduleWorkflowTask(wfId, phone, stageId, delayMins, targetTime, sequenceOrder, payload = {}) {
+  const now = new Date();
+  let scheduledTime = new Date(now.getTime() + (parseInt(delayMins, 10) || 0) * 60 * 1000);
+  
+  if (targetTime) {
+      const [h, m] = targetTime.split(':').map(v => parseInt(v, 10) || 0);
+      let targetDate = new Date(now);
+      targetDate.setHours(h, m, 0, 0);
+      if (targetDate < now) targetDate.setDate(targetDate.getDate() + 1);
+      
+      if (targetDate > scheduledTime) {
+          scheduledTime = targetDate;
+      }
+  }
+
+  console.log(`[WorkflowQueue] Scheduling WF=${wfId} for ${phone} at ${scheduledTime.toISOString()} (Stage=${stageId}, Position=${sequenceOrder})`);
+  
+  await db.query(`
+    INSERT INTO workflow_scheduled_tasks (
+      workflow_id, contact_phone, stage_id, scheduled_time, sequence_order, payload
+    ) 
+    VALUES ($1, $2, $3, $4, $5, $6)
+    ON CONFLICT (workflow_id, contact_phone, stage_id, sequence_order) WHERE status = 'pending' 
+    DO UPDATE SET scheduled_time = EXCLUDED.scheduled_time, payload = EXCLUDED.payload
+  `, [wfId, phone, stageId, scheduledTime, sequenceOrder, JSON.stringify(payload)]);
+}
+
+/**
+ * Background Worker to process pending tasks
+ */
+async function processScheduledTasks() {
+    try {
+        const res = await db.query(`
+            UPDATE workflow_scheduled_tasks 
+            SET status = 'executing', updated_at = NOW()
+            WHERE id IN (
+                SELECT id 
+                FROM workflow_scheduled_tasks 
+                WHERE status = 'pending' AND scheduled_time <= NOW()
+                FOR UPDATE SKIP LOCKED
+                LIMIT 5
+            ) 
+            RETURNING *
+        `);
+
+        for (const task of res.rows) {
+            console.log(`[WorkflowQueue] Executing task ${task.id} for phone ${task.contact_phone} (WF=${task.workflow_id})`);
+            
+            try {
+                const result = await runWorkflow(task.workflow_id, task.contact_phone, task.payload || {});
+                
+                await db.query('UPDATE workflow_scheduled_tasks SET status = $1, updated_at = NOW() WHERE id = $2', [result.success ? 'completed' : 'failed', task.id]);
+                
+                // If it was part of a stage sequence, check for NEXT
+                if (task.stage_id && task.sequence_order !== -1) {
+                    await scheduleNextStageWorkflow(task.stage_id, task.contact_phone, task.sequence_order);
+                }
+            } catch (err) {
+                console.error(`[WorkflowQueue] Task ${task.id} exception:`, err.message);
+                await db.query('UPDATE workflow_scheduled_tasks SET status = \'failed\', error_message = $1, updated_at = NOW() WHERE id = $2', [err.message, task.id]);
+            }
+        }
+    } catch (err) {
+        console.error('[WorkflowQueue] Worker loop error:', err.message);
+    }
+}
+
+/**
+ * Finds the next workflow in a stage sequence and schedules it.
+ */
+async function scheduleNextStageWorkflow(stageId, phoneNumber, currentPosition) {
+    const res = await db.query(`
+        SELECT lsw.workflow_id, lsw.delay_minutes, lsw.target_time, lsw.position, w.name, w.steps
+        FROM lead_stage_workflows lsw
+        JOIN workflows w ON w.id = lsw.workflow_id
+        WHERE lsw.stage_id = $1 AND lsw.position > $2 AND lsw.is_independent = FALSE AND w.status = 'active'
+        ORDER BY lsw.position ASC
+        LIMIT 1
+    `, [stageId, currentPosition]);
+
+    if (res.rowCount > 0) {
+        const next = res.rows[0];
+        console.log(`[WorkflowQueue] Chaining next workflow: ${next.name} (Position ${next.position}) after ${phoneNumber} finished previous`);
+        
+        // Wait! We should check if the contact still matches the NEW workflow's label/course triggers if any
+        // For now, we schedule it and the workflow runner will handle internal triggers or we can check here.
+        await scheduleWorkflowTask(next.workflow_id, phoneNumber, stageId, next.delay_minutes, next.target_time, next.position);
+    } else {
+        console.log(`[WorkflowQueue] End of sequence reached for ${phoneNumber} in stage ${stageId}`);
+    }
+}
+
+// Initialize worker check
+if (process.env.NODE_ENV !== 'test') {
+    setInterval(processScheduledTasks, 60000);
+    console.log('[WorkflowQueue] Background worker (persistent) initialized.');
+}
+
+/**
  * Resolve {{variable}} placeholders in a string against a context object.
+
  * e.g. resolvePlaceholders('Hello {{name}}', { name: 'John' }) => 'Hello John'
  */
 function resolvePlaceholders(str, context) {
@@ -277,99 +378,38 @@ async function runStageWorkflows(stageId, phoneNumber) {
     console.error(`[runStageWorkflows] Label check failed: ${e.message}`);
   }
 
-  // Orchestration Logic:
-  // 1. Independent workflows: Execute immediately (in parallelish)
-  // 2. Sequential (Linked) workflows: Execute one after another respecting delays
+  // PERSISTENCE CHANGE: 
+  // Instead of a simple loop with many sleeps, we now use the workflow_scheduled_tasks QUEUE.
   
   const independent = res.rows.filter(r => r.is_independent === true);
   const sequential = res.rows.filter(r => r.is_independent !== true);
 
-  // Trigger Independent ones (Parallel execution from stage entry)
+  // 1. Independent workflows: Execute immediately (mostly in parallel)
   for (const row of independent) {
-    const wfName = row.name || row.workflow_id;
     const wfId = row.workflow_id;
     const delayMins = parseInt(row.delay_minutes || 0, 10);
     const targetT = row.target_time;
-
-    // Execute in background so they don't block each other or the sequence
-    (async () => {
-      try {
-        if (!isNaN(delayMins) && delayMins > 0) {
-          console.log(`[runStageWorkflows] Independent WF "${wfName}" waiting ${delayMins}m from entry...`);
-          await sleep(delayMins * 60 * 1000);
-        }
-        
-        if (targetT) {
-          const [h, m] = targetT.split(':').map(v => parseInt(v, 10) || 0);
-          const now = new Date();
-          let target = new Date(now);
-          target.setHours(h, m, 0, 0);
-          if (target < now) target.setDate(target.getDate() + 1);
-          const diff = target.getTime() - now.getTime();
-          if (diff > 1000) {
-            console.log(`[runStageWorkflows] Independent WF "${wfName}" waiting until ${targetT}...`);
-            await sleep(diff);
-          }
-        }
-
-        console.log(`[runStageWorkflows] Independent WF "${wfName}" starting now`);
-        await runWorkflow(wfId, phoneNumber);
-      } catch (err) {
-        console.error(`[runStageWorkflows] Independent WF "${wfName}" failed: ${err.message}`);
-      }
-    })();
+    
+    // We schedule them with their own entry-relative delay
+    await scheduleWorkflowTask(wfId, phoneNumber, stageId, delayMins, targetT, -1);
   }
 
-  // Run Sequential ones (Strict sequence, one after another completion)
+  // 2. Sequential (Linked) workflows: 
+  // Schedule ONLY THE FIRST one. Its completion will trigger the second.
   for (let i = 0; i < sequential.length; i++) {
     const row = sequential[i];
-    const wfId = row.workflow_id;
     const steps = row.steps || {};
-    const wfName = row.name || wfId;
 
-    // Filters
+    // Filter check: If label mismatch, we must SKIP this one and try to schedule the NEXT one in line
     if (steps.triggerLabel && !contactLabels.includes(steps.triggerLabel)) {
-      console.log(`[runStageWorkflows] Skipping "${wfName}": Label mismatch`);
-      continue;
+      console.log(`[runStageWorkflows] Skipping "${row.workflow_id}" (Label Mismatch) - seeking fallback...`);
+      continue; // The next iteration of THIS loop will pick up the next available sequential
     }
 
-    const delayMinutes = parseInt(row.delay_minutes || 0, 10);
-      
-    try {
-      // 1. Relative Delay (after previous)
-      if (!isNaN(delayMinutes) && delayMinutes > 0) {
-        console.log(`[runStageWorkflows] Executing ${delayMinutes} minute wait for "${wfName}"...`);
-        await sleep(delayMinutes * 60 * 1000);
-        console.log(`[runStageWorkflows] Wait finished for "${wfName}"`);
-      }
-      
-      // 2. Target Time Wait
-      if (row.target_time) {
-        // format: HH:mm or HH:mm:ss
-        const [targetH, targetM] = row.target_time.split(':').map(v => parseInt(v, 10) || 0);
-        const now = new Date();
-        let targetDate = new Date(now);
-        targetDate.setHours(targetH, targetM, 0, 0);
-        
-        if (targetDate < now) {
-          // If time passed, wait until tomorrow
-          targetDate.setDate(targetDate.getDate() + 1);
-        }
-        
-        const waitMs = targetDate.getTime() - now.getTime();
-        if (waitMs > 1000) {
-          console.log(`[runStageWorkflows] Waiting until ${row.target_time} for "${wfName}" (${Math.round(waitMs/1000/60)} mins to go)...`);
-          await sleep(waitMs);
-        }
-      }
-
-      console.log(`[runStageWorkflows] Running workflow "${wfName}"`);
-      await runWorkflow(wfId, phoneNumber);
-      console.log(`[runStageWorkflows] Finished workflow "${wfName}"`);
-    } catch (e) {
-      console.error(`[runStageWorkflows] Sequential path broken at "${wfName}": ${e.message}`);
-      break; 
-    }
+    // Schedule the entry of the sequence
+    console.log(`[runStageWorkflows] Initiating sequence for ${phoneNumber} starting with ${row.workflow_id}`);
+    await scheduleWorkflowTask(row.workflow_id, phoneNumber, stageId, row.delay_minutes, row.target_time, row.position);
+    break; // Only start the first valid one
   }
 }
 async function deleteWorkflow(id) {

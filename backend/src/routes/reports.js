@@ -123,4 +123,46 @@ router.get('/workflow-runs/:id', auth.requireAuth, async (req, res, next) => {
     }
 });
 
+/**
+ * GET /api/reports/scheduled-tasks
+ * Returns upcoming pending workflows.
+ */
+router.get('/scheduled-tasks', auth.requireAuth, async (req, res, next) => {
+    try {
+        const { contactPhone, status = 'pending', limit = 100 } = req.query;
+        let query = `
+            SELECT 
+                t.*,
+                w.name AS workflow_name,
+                s.name AS stage_name
+            FROM workflow_scheduled_tasks t
+            JOIN workflows w ON t.workflow_id = w.id
+            LEFT JOIN lead_stages s ON t.stage_id = s.id
+        `;
+        const params = [];
+        const conditions = [];
+
+        if (contactPhone) {
+            conditions.push(`t.contact_phone = $${params.length + 1}`);
+            params.push(contactPhone);
+        }
+        if (status) {
+            conditions.push(`t.status = $${params.length + 1}`);
+            params.push(status);
+        }
+
+        if (conditions.length > 0) {
+            query += ' WHERE ' + conditions.join(' AND ');
+        }
+
+        query += ` ORDER BY t.scheduled_time ASC LIMIT $${params.length + 1}`;
+        params.push(limit);
+
+        const result = await db.query(query, params);
+        res.json({ success: true, tasks: result.rows });
+    } catch (err) {
+        next(err);
+    }
+});
+
 module.exports = router;
