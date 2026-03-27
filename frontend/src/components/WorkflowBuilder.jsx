@@ -1414,7 +1414,19 @@ export default function WorkflowBuilder({ onBack, onSave, initialWorkflow }) {
       }
 
       if (type === 'delay') {
-        data = { label: 'Time Delay', duration: 1, unit: 'minutes' };
+        data = { label: 'Time Delay', delayMode: 'relative', days: 0, hours: 0, minutes: 1, targetAt: null };
+      }
+
+      if (type === 'user_replied') {
+        data = { label: 'User Replied?', timeoutMins: 60 };
+      }
+      
+      if (type === 'send_template') {
+          data = { label: 'Send Template', template: '', languageCode: 'en_US', variables: {}, components: [], buttons: [], headerType: 'none', headerUrl: '', headerFileName: '' };
+      }
+      
+      if (type === 'response_message') {
+          data = { label: 'Response Message', message: '', buttons: [], skipReply: false, saveVariable: '', headerType: 'none', headerUrl: '', headerFileName: '' };
       }
 
       const newNode = {

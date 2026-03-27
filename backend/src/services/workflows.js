@@ -140,7 +140,7 @@ async function createWorkflow(workflowData) {
 }
 
 async function updateWorkflow(id, workflowData) {
-  const { name, trigger, nodes, edges, status } = workflowData;
+  const { name, trigger, nodes, edges, status = 'active' } = workflowData;
   const res = await db.query(
     'UPDATE workflows SET name = $1, "trigger" = $2, nodes = $3, edges = $4, status = $5, updated_at = NOW() WHERE id = $6 RETURNING *',
     [name, trigger, JSON.stringify(nodes), JSON.stringify(edges), status, id]
@@ -289,6 +289,7 @@ async function runWorkflow(id, phoneNumber, initialContext = {}) {
   console.log(`[WorkflowRunner] Starting WF=${id} for phone=${phoneNumber}`);
 
   while (currentNode) {
+    console.log(`[WorkflowRunner] Step: ${currentNode.id} (type: ${currentNode.type})`);
     executionLog.push({ nodeId: currentNode.id, type: currentNode.type, timestamp: new Date() });
 
     try {
@@ -298,15 +299,16 @@ async function runWorkflow(id, phoneNumber, initialContext = {}) {
       } else if (currentNode.type === 'action') {
         const { actionType, actionValue } = currentNode.data;
 
+        const conversationId = await getOrCreateConversation(phoneNumber, workflow.team_id || 'default');
         if (actionType === 'update_chat_status') {
           // Change chat status in DB
-          await db.query('UPDATE conversations SET status = $1 WHERE phone_number = $2', [actionValue, phoneNumber]);
+          await db.query('UPDATE conversations SET status = $1 WHERE id = $2', [actionValue, conversationId]);
         } else if (actionType === 'add_to_label') {
           // Label logic
           await db.query('INSERT INTO contact_labels (contact_phone, label_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [phoneNumber, actionValue]);
         } else if (actionType === 'update_lead_stage') {
           // Lead stage update
-          await db.query('UPDATE conversations SET lead_stage_id = $1 WHERE phone_number = $2', [actionValue, phoneNumber]);
+          await db.query('UPDATE conversations SET lead_stage_id = $1 WHERE id = $2', [actionValue, conversationId]);
         } else if (actionType === 'send_email') {
           const { emailTemplateId, toVarKey, variableMapping } = currentNode.data;
           const toEmail = context[toVarKey] || context['email'];
@@ -380,7 +382,7 @@ async function runWorkflow(id, phoneNumber, initialContext = {}) {
         // internal node-level delays should also ideally be rescheduled.
         // But for simplicity during one workflow run, we sleep if short, or exit if long.
         const { days = 0, hours = 0, minutes = 0 } = currentNode.data;
-        const totalMinutes = (days * 1440) + (hours * 60) + parseInt(minutes, 10);
+        const totalMinutes = (Number(days) || 0) * 1440 + (Number(hours) || 0) * 60 + (Number(minutes) || 0);
         
         if (totalMinutes > 5) {
             // Schedule it via the task table and EXIT this execution
@@ -486,11 +488,11 @@ async function runWorkflow(id, phoneNumber, initialContext = {}) {
   if (db) {
     try {
       await db.query(`
-        INSERT INTO workflow_runs (workflow_id, phone_number, status, execution_log, started_at, ended_at, duration_ms)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        INSERT INTO workflow_runs (workflow_id, phone_number, status, execution_log, context_preview, started_at, ended_at, duration_ms)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       `, [
         id, phoneNumber, hasError ? 'failed' : 'completed', JSON.stringify(executionLog),
-        workflowStartTime, endedAt, durationMs
+        JSON.stringify(context), workflowStartTime, endedAt, durationMs
       ]);
     } catch (dbErr) {
       console.error('[WorkflowRunner] Failed to persist workflow run:', dbErr.message);

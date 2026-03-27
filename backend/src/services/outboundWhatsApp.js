@@ -638,20 +638,24 @@ async function uploadMedia(conversationId, fileBuffer, mimeType, filename) {
 }
 
 async function sendMessage(conversationId, text, buttons, headerType, headerUrl) {
-  if (buttons && buttons.length > 0) {
+  const safeText = (text || '').trim();
+  if (buttons && buttons.length > 0 && safeText.length > 0) {
     const interactive = {
       type: 'button',
-      body: { text },
+      body: { text: safeText },
       action: {
-        buttons: buttons.map(b => b.reply ? b : { type: 'reply', reply: { id: b, title: b } })
+        buttons: buttons
+          .map(b => b.reply ? b : { type: 'reply', reply: { id: b, title: b } })
+          .filter(b => b.reply?.title && b.reply.title.trim().length > 0)
+          .slice(0, 3) // Max 3 buttons for WhatsApp interactive
       }
     };
-    if (headerType && headerUrl) {
+    if (headerType && headerType !== 'none' && headerUrl) {
        interactive.header = { type: headerType, [headerType]: { link: headerUrl } };
     }
     return sendInteractive(conversationId, interactive);
-  } else {
-    return sendText(conversationId, text);
+  } else if (safeText.length > 0) {
+    return sendText(conversationId, safeText);
   }
 }
 
