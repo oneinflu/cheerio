@@ -47,7 +47,8 @@ router.post('/ai/generate', auth.requireRole('admin', 'super_admin', 'supervisor
 // List workflows
 router.get('/', auth.requireRole('admin', 'super_admin', 'supervisor', 'quality_manager', 'agent'), async (req, res, next) => {
   try {
-    const workflows = await svc.listWorkflows();
+    const teamId = await resolveTeamId(req);
+    const workflows = await svc.listWorkflows(teamId);
     res.json(workflows);
   } catch (err) {
     next(err);
@@ -57,8 +58,9 @@ router.get('/', auth.requireRole('admin', 'super_admin', 'supervisor', 'quality_
 // Create workflow
 router.post('/', auth.requireRole('admin', 'super_admin', 'supervisor', 'quality_manager', 'agent'), async (req, res, next) => {
   try {
+    const teamId = await resolveTeamId(req);
     const { stageId, ...workflowData } = req.body;
-    const workflow = await svc.createWorkflow(workflowData);
+    const workflow = await svc.createWorkflow({ ...workflowData, team_id: teamId });
 
     if (stageId) {
       const posRes = await db.query(

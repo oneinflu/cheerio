@@ -9,6 +9,11 @@ BEGIN
     END IF;
 END $$;
 
+-- Backfill existing workflows with the first found team
+UPDATE workflows SET team_id = (SELECT id FROM teams LIMIT 1) WHERE team_id IS NULL;
+-- If no team exists, use 'default' (matching our router logic)
+UPDATE workflows SET team_id = 'default' WHERE team_id IS NULL;
+
 -- Add trigger if missing
 DO $$ 
 BEGIN 
