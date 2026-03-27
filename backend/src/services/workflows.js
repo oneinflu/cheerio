@@ -703,6 +703,29 @@ async function runWorkflow(id, phoneNumber, context = {}) {
     }
 
     try {
+      // 1. Check for node-level delay (common for AI-generated nodes)
+      // skip for explicit delay nodes to avoid double-delay
+      const nodeData = currentNode.data || {};
+      if (currentNode.type !== 'delay' && nodeData.scheduleType === 'delay' && (nodeData.delayValue > 0 || typeof nodeData.delayValue === 'string')) {
+        const val = parseInt(nodeData.delayValue, 10);
+        if (val > 0) {
+          const unit = nodeData.delayUnit || 'minutes';
+          let ms = 0;
+          if (unit === 'seconds') ms = val * 1000;
+          else if (unit === 'minutes') ms = val * 60 * 1000;
+          else if (unit === 'hours') ms = val * 60 * 60 * 1000;
+          else if (unit === 'days') ms = val * 24 * 60 * 60 * 1000;
+          
+          if (ms > 0) {
+            console.log(`[WorkflowRunner] Node-level delay: waiting ${ms}ms (${val} ${unit}) for node ${currentNode.id}`);
+            if (io) {
+              io.emit('workflow:step:wait', { workflowId: id, phoneNumber, nodeId: currentNode.id, reason: 'delay', ms });
+            }
+            await sleep(ms);
+          }
+        }
+      }
+
       // 1. Execute Node Logic
       if (currentNode.type === 'send_template') {
         const nodeData = currentNode.data || {};
@@ -1082,6 +1105,31 @@ async function runWorkflow(id, phoneNumber, context = {}) {
           console.error(`[WorkflowRunner] Payment reminder node failed: ${err.message}`);
         }
 
+      } else if (currentNode.type === 'campaign_condition') {
+        const d = currentNode.data || {};
+        const mode = d.timingMode || 'after';
+        let ms = 0;
+
+        if (mode === 'specific' && d.specificTime) {
+          const target = new Date(d.specificTime).getTime();
+          if (!Number.isNaN(target)) ms = target - Date.now();
+        } else {
+          const days = parseInt(d.checkDays || 0, 10);
+          const hours = parseInt(d.checkHours || 0, 10);
+          const minutes = parseInt(d.checkMinutes || 0, 10);
+          ms = (days * 24 * 60 * 60 * 1000) + (hours * 60 * 60 * 1000) + (minutes * 60 * 1000);
+        }
+
+        if (ms > 0) {
+          console.log(`[WorkflowRunner] Campaign condition delay: waiting ${ms}ms for node ${currentNode.id}`);
+          if (io) {
+            io.emit('workflow:step:wait', { workflowId: id, phoneNumber, nodeId: currentNode.id, reason: 'campaign_wait', ms });
+          }
+          await sleep(ms);
+        }
+
+        // Proceed to evaluation logic (mocked for now, defaults to success)
+        console.log(`[WorkflowRunner] Campaign condition reached for node ${currentNode.id}. Proceeding.`);
       } else if (currentNode.type === 'notification') {
         const d = currentNode.data || {};
         const message = d.message || 'Workflow notification alert';
@@ -1951,13 +1999,14 @@ async function generateWorkflowFromDescription(description) {
     index += 1;
     const id = `node_${Date.now()}_${index}`;
     const schedule = step.schedule || {};
-    const scheduleType = schedule.type === 'delay' ? 'delay' : 'immediate';
+    const scheduleType = (schedule && schedule.type === 'delay') ? 'delay' : 'immediate';
+    const rawVal = schedule && schedule.value;
     const delayValue =
-      scheduleType === 'delay' && typeof schedule.value === 'number'
-        ? schedule.value
+      scheduleType === 'delay' && rawVal != null
+        ? (typeof rawVal === 'number' ? rawVal : parseInt(rawVal, 10))
         : null;
     const delayUnit =
-      scheduleType === 'delay' && typeof schedule.unit === 'string'
+      scheduleType === 'delay' && typeof (schedule && schedule.unit) === 'string'
         ? schedule.unit
         : null;
 
