@@ -1,6 +1,6 @@
 'use strict';
 const db = require('../../db');
-const whatsappClient = require('./whatsapp');
+const whatsappClient = require('../integrations/meta/whatsappClient');
 const outboundWhatsApp = require('./outboundWhatsApp');
 const fast2sms = require('./fast2sms');
 const zeptoMail = require('./zeptoMail');
