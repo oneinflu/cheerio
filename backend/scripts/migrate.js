@@ -694,6 +694,24 @@ async function runMigrations() {
           console.log('[migrate] Added target_time.');
         }
 
+        // New Persistence Queue Table (0036)
+        const scheduledTasksRes = await client.query(`
+          SELECT EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE  table_schema = 'public'
+            AND    table_name   = 'workflow_scheduled_tasks'
+          );
+        `);
+        if (!scheduledTasksRes.rows[0].exists) {
+            console.log('[migrate] Adding workflow_scheduled_tasks table...');
+            await client.query('BEGIN');
+            await runSQLFile(client, path.join(__dirname, '..', 'db', 'migrations', '0036_workflow_scheduled_tasks.sql'));
+            await client.query('COMMIT');
+            console.log('[migrate] Applied 0036_workflow_scheduled_tasks migration.');
+        } else {
+            console.log('[migrate] workflow_scheduled_tasks table already exists.');
+        }
+
         return;
 
 
