@@ -531,7 +531,8 @@ async function checkUserReply(phoneNumber, sinceTime) {
       `SELECT id, created_at, text_body FROM messages 
        WHERE conversation_id = $1 
          AND direction = 'inbound' 
-         AND created_at >= $2`,
+         AND created_at >= $2
+       ORDER BY created_at DESC`,
       [conversationId, sinceTime]
     );
 
@@ -990,10 +991,14 @@ async function runWorkflow(id, phoneNumber, context = {}) {
             while (Date.now() - waitStart < timeout) {
               const replies = await checkUserReply(phoneNumber, sentAt);
               if (replies.length > 0) {
-                const lastReply = replies[0].content.trim();
+                // Pick most recent reply (sorted DESC in checkUserReply)
+                const lastReply = (replies[0].text_body || '').trim();
+                console.log(`[WorkflowRunner] checking reply: "${lastReply}" against [${buttonLabels.join(', ')}]`);
+                
                 for (let i = 0; i < buttonLabels.length; i++) {
                   if (lastReply.toLowerCase() === buttonLabels[i].toLowerCase() || lastReply === String(i + 1)) {
                     matchedValue = isFeedback ? (i + 1) : buttonLabels[i];
+                    console.log(`[WorkflowRunner] Match FOUND: ${matchedValue}`);
                     break;
                   }
                 }
@@ -1035,6 +1040,14 @@ async function runWorkflow(id, phoneNumber, context = {}) {
                   continue;
                 }
               }
+            } else {
+              // TIMEOUT fallback or NO MATCH:
+              // If we didn't match and it's NOT a feedback, we might want to stay on THIS node 
+              // or proceed to default path.
+              // IF the user wanted it to block until match, we should break the loop or set currentNode to null.
+              // However, most flows have a 'default' path.
+              // To prevent infinite loop if no reply, we move on.
+              console.log('[WorkflowRunner] No reply or timeout in Response Message. Continuing to default path.');
             }
           }
         } catch (err) {
