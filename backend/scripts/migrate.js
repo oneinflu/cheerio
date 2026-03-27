@@ -730,6 +730,24 @@ async function runMigrations() {
             console.warn('[migrate] 0037 check skipped or failed:', e.message);
         }
 
+        // New Workflows Schema Update (0038)
+        try {
+            const hasTriggerRes = await client.query("SELECT column_name FROM information_schema.columns WHERE table_name = 'workflows' AND column_name = 'trigger'");
+            const hasTeamIdRes = await client.query("SELECT column_name FROM information_schema.columns WHERE table_name = 'workflows' AND column_name = 'team_id'");
+            
+            if (hasTriggerRes.rowCount === 0 || hasTeamIdRes.rowCount === 0) {
+                console.log('[migrate] Detected missing columns in workflows (0038)... applying update...');
+                await client.query('BEGIN');
+                await runSQLFile(client, path.join(__dirname, '..', 'db', 'migrations', '0038_update_workflows_schema.sql'));
+                await client.query('COMMIT');
+                console.log('[migrate] Applied 0038_update_workflows_schema migration.');
+            } else {
+                console.log('[migrate] 0038 workflows schema already up to date.');
+            }
+        } catch (e) {
+            console.warn('[migrate] 0038 check skipped or failed:', e.message);
+        }
+
         return;
 
 

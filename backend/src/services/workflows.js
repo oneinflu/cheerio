@@ -133,7 +133,7 @@ async function getWorkflow(id) {
 async function createWorkflow(workflowData) {
   const { team_id, name, trigger, nodes, edges, status = 'active' } = workflowData;
   const res = await db.query(
-    'INSERT INTO workflows (team_id, name, trigger, nodes, edges, status) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+    'INSERT INTO workflows (team_id, name, "trigger", nodes, edges, status) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
     [team_id, name, trigger, JSON.stringify(nodes), JSON.stringify(edges), status]
   );
   return res.rows[0];
@@ -142,7 +142,7 @@ async function createWorkflow(workflowData) {
 async function updateWorkflow(id, workflowData) {
   const { name, trigger, nodes, edges, status } = workflowData;
   const res = await db.query(
-    'UPDATE workflows SET name = $1, trigger = $2, nodes = $3, edges = $4, status = $5, updated_at = NOW() WHERE id = $6 RETURNING *',
+    'UPDATE workflows SET name = $1, "trigger" = $2, nodes = $3, edges = $4, status = $5, updated_at = NOW() WHERE id = $6 RETURNING *',
     [name, trigger, JSON.stringify(nodes), JSON.stringify(edges), status, id]
   );
   return res.rows[0];
@@ -227,7 +227,8 @@ async function runWorkflow(id, phoneNumber, initialContext = {}) {
   const workflow = await getWorkflow(id);
   if (!workflow) throw new Error('Workflow not found');
 
-  const nodes = workflow.nodes;
+  const nodes = workflow.nodes || workflow.steps || [];
+  const edges = workflow.edges || [];
   const executionLog = [];
   const io = require('../realtime/io').getIO();
 

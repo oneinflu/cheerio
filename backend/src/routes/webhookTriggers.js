@@ -63,8 +63,7 @@ publicRouter.post('/:workflowId', async (req, res) => {
 
         try {
             const wf = await workflows.getWorkflow(workflowId);
-            const steps = wf && wf.steps ? wf.steps : null;
-            const nodes = steps && Array.isArray(steps.nodes) ? steps.nodes : [];
+            const nodes = (wf && (wf.nodes || (wf.steps && wf.steps.nodes) || (Array.isArray(wf.steps) ? wf.steps : []))) || [];
             const hasIncomingWebhookNode = nodes.some((n) => n && n.type === 'incoming_webhook');
 
             if (wf && hasIncomingWebhookNode && wf.status === 'active') {
