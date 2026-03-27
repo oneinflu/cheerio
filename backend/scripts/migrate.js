@@ -564,6 +564,8 @@ async function runMigrations() {
         try {
           await client.query("ALTER TYPE message_content_type ADD VALUE IF NOT EXISTS 'template'");
           console.log('[migrate] ✅ Added "template" to message_content_type enum');
+          await client.query("ALTER TYPE message_content_type ADD VALUE IF NOT EXISTS 'interactive'");
+          console.log('[migrate] ✅ Added "interactive" to message_content_type enum');
         } catch (e) {
           // Ignore if it fails because it's already there (Postgres doesn't support IF NOT EXISTS in all versions)
         }
