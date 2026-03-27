@@ -221,6 +221,48 @@ async function checkUserReply(phoneNumber, sinceDate) {
 }
 
 /**
+ * Utility: Gets or creates a conversation for a phone number
+ */
+async function getOrCreateConversation(phoneNumber, teamId) {
+    const normalizedPhone = String(phoneNumber).replace(/[+\s-]/g, '');
+    
+    // 1. Get or create contact
+    let contactRes = await db.query('SELECT id FROM contacts WHERE external_id = $1 LIMIT 1', [normalizedPhone]);
+    let contactId;
+    if (contactRes.rowCount === 0) {
+        const ins = await db.query('INSERT INTO contacts (external_id, display_name) VALUES ($1, $2) RETURNING id', [normalizedPhone, normalizedPhone]);
+        contactId = ins.rows[0].id;
+    } else {
+        contactId = contactRes.rows[0].id;
+    }
+
+    // 2. Get or create channel (lookup bot number from settings)
+    const settingsRes = await db.query('SELECT phone_number_id FROM whatsapp_settings WHERE team_id = $1 LIMIT 1', [teamId]);
+    const botPhoneId = settingsRes.rows[0]?.phone_number_id || process.env.WHATSAPP_PHONE_NUMBER_ID;
+    
+    if (!botPhoneId) throw new Error('No WhatsApp phone number configured for team ' + teamId);
+
+    let channelRes = await db.query('SELECT id FROM channels WHERE external_id = $1 AND type = \'whatsapp\' LIMIT 1', [botPhoneId]);
+    let channelId;
+    if (channelRes.rowCount === 0) {
+        const ins = await db.query('INSERT INTO channels (type, external_id, name) VALUES (\'whatsapp\', $1, $2) RETURNING id', [botPhoneId, 'WhatsApp ' + botPhoneId]);
+        channelId = ins.rows[0].id;
+    } else {
+        channelId = channelRes.rows[0].id;
+    }
+
+    // 3. Get or create conversation
+    let convRes = await db.query('SELECT id FROM conversations WHERE contact_id = $1 AND channel_id = $2 LIMIT 1', [contactId, channelId]);
+    if (convRes.rowCount > 0) return convRes.rows[0].id;
+
+    const insConv = await db.query(
+        'INSERT INTO conversations (contact_id, channel_id, status, team_id) VALUES ($1, $2, \'open\', $3) RETURNING id',
+        [contactId, channelId, teamId]
+    );
+    return insConv.rows[0].id;
+}
+
+/**
  * Main execution engine for a workflow instance.
  */
 async function runWorkflow(id, phoneNumber, initialContext = {}) {
@@ -319,7 +361,8 @@ async function runWorkflow(id, phoneNumber, initialContext = {}) {
           return { ...comp, parameters: nextParameters };
         });
 
-        await outboundWhatsApp.sendTemplate(phoneNumber, template, languageCode, processedComponents);
+        const conversationId = await getOrCreateConversation(phoneNumber, workflow.team_id || 'default');
+        await outboundWhatsApp.sendTemplate(conversationId, template, languageCode, processedComponents);
         currentNode = nodes.find((n) => n.id === currentNode.next);
       } else if (currentNode.type === 'response_message') {
         const { message, buttons, headerType, headerUrl } = currentNode.data;
@@ -329,7 +372,8 @@ async function runWorkflow(id, phoneNumber, initialContext = {}) {
         });
 
         const buttonsConfig = (buttons || []).map((b) => ({ type: 'reply', reply: { id: b, title: b } }));
-        await outboundWhatsApp.sendMessage(phoneNumber, finalMessage, buttonsConfig, headerType, headerUrl);
+        const conversationId = await getOrCreateConversation(phoneNumber, workflow.team_id || 'default');
+        await outboundWhatsApp.sendMessage(conversationId, finalMessage, buttonsConfig, headerType, headerUrl);
         currentNode = nodes.find((n) => n.id === currentNode.next);
       } else if (currentNode.type === 'delay') {
         // Since we are now using a persistent queue for the MAIN orchestration loops, 
@@ -389,7 +433,8 @@ async function runWorkflow(id, phoneNumber, initialContext = {}) {
           currentNode = nodes.find(n => n.id === nextNodeId);
       } else if (currentNode.type === 'feedback') {
           const { question } = currentNode.data;
-          await outboundWhatsApp.sendMessage(phoneNumber, question);
+          const conversationId = await getOrCreateConversation(phoneNumber, workflow.team_id || 'default');
+          await outboundWhatsApp.sendMessage(conversationId, question);
           currentNode = nodes.find((n) => n.id === currentNode.next);
       } else if (currentNode.type === 'xolox_event') {
           const { webhookUrl, method, payloadFields, eventName } = currentNode.data;

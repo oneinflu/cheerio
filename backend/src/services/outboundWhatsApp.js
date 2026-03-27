@@ -637,7 +637,26 @@ async function uploadMedia(conversationId, fileBuffer, mimeType, filename) {
   }
 }
 
+async function sendMessage(conversationId, text, buttons, headerType, headerUrl) {
+  if (buttons && buttons.length > 0) {
+    const interactive = {
+      type: 'button',
+      body: { text },
+      action: {
+        buttons: buttons.map(b => b.reply ? b : { type: 'reply', reply: { id: b, title: b } })
+      }
+    };
+    if (headerType && headerUrl) {
+       interactive.header = { type: headerType, [headerType]: { link: headerUrl } };
+    }
+    return sendInteractive(conversationId, interactive);
+  } else {
+    return sendText(conversationId, text);
+  }
+}
+
 module.exports = {
+  sendMessage,
   sendText,
   sendMedia,
   sendTemplate,
